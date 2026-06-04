@@ -5,15 +5,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          phaser: ['phaser']
-        }
-      }
-    }
   },
   server: {
-    port: 3000
-  }
+    port: 3000,
+  },
 });
