@@ -23,9 +23,15 @@ export class BattleScene extends Phaser.Scene {
   private enterKey!: Phaser.Input.Keyboard.Key;
   private ultimateTimer = 0;
   private flashGfx!: Phaser.GameObjects.Graphics;
-  private enterLockTimer = 1200; // ms — prevents Enter from immediately dismissing on entry
+  private enterLockTimer = 1200;
 
   private aiTimer = 0;
+
+  // Debug overlay (toggle with D key)
+  private debugMode = false;
+  private debugKey!: Phaser.Input.Keyboard.Key;
+  private debugText!: Phaser.GameObjects.Text;
+  private debugBg!: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -97,6 +103,16 @@ export class BattleScene extends Phaser.Scene {
 
     this.cameras.main.fadeIn(500);
     this.time.delayedCall(600, () => this.uiSys.showAnnounce('SOUL DUEL!', 1500));
+
+    // ── Debug overlay ──
+    this.debugKey  = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.debugBg   = this.add.rectangle(0, 0, 600, 130, 0x000000, 0.75)
+                              .setOrigin(0, 0).setDepth(500).setVisible(false);
+    this.debugText = this.add.text(8, 6, '', {
+      fontSize: '11px', color: '#00ff88', fontFamily: 'monospace', lineSpacing: 4
+    }).setDepth(501).setVisible(false);
+
+    console.log('[BattleScene] Press D to toggle debug overlay.');
   }
 
   private drawArena(w: number, h: number): void {
@@ -497,6 +513,28 @@ export class BattleScene extends Phaser.Scene {
       this.player.isFormReady(), this.player.isUltimateReady(),
       this.player.formSystem.isActive, this.player.formSystem.timeRemaining
     );
+
+    // ── Debug overlay ──
+    if (Phaser.Input.Keyboard.JustDown(this.debugKey)) {
+      this.debugMode = !this.debugMode;
+      this.debugBg.setVisible(this.debugMode);
+      this.debugText.setVisible(this.debugMode);
+    }
+    if (this.debugMode) {
+      const animMode = this.registry.get('flarepaw_anim_mode') ?? 'unknown';
+      const lines = [
+        `[MONARIUM DEBUG]  press D to hide`,
+        `sprite mode: ${animMode}`,
+        `── Flarepaw (player) ──────────────────────────`,
+        this.player.debugInfo(),
+        `── Droplet (AI) ───────────────────────────────`,
+        this.enemy.debugInfo(),
+        `── Scene ──────────────────────────────────────`,
+        `phase:${this.phase}  fps:${Math.round(this.game.loop.actualFps)}  t:${Math.round(this.time.now / 1000)}s`,
+      ];
+      this.debugText.setText(lines.join('\n'));
+      this.debugBg.setSize(this.debugText.width + 16, this.debugText.height + 12);
+    }
   }
 
   shutdown(): void {

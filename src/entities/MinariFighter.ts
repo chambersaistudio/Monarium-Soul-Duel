@@ -21,8 +21,12 @@ interface AttackState {
   hitDealt: boolean;
 }
 
-// Visual scale: how large the sprite appears relative to NORM_SIZE (128px frames)
-const SPRITE_SCALE = 0.72;
+// Target display height in pixels for the sprite in-game.
+// The script normalises frames to 512×512 with ~40px baseline margin,
+// so most of the character lives in the top ~90% of the frame.
+const DISPLAY_HEIGHT = 220;
+const FRAME_SIZE     = 512; // must match process_flarepaw_sprites.py --size
+const SPRITE_SCALE   = DISPLAY_HEIGHT / FRAME_SIZE;  // ≈ 0.43
 
 export class MinariFighter extends Phaser.GameObjects.Container {
   readonly fighterId: string;
@@ -37,9 +41,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private useSprite = false;
   private lastAnim = '';
 
-  // Flame Guard state
+  // Flame Guard
   private flameGuardActive = false;
-  private flameGuardTimer = 0;
+  private flameGuardTimer  = 0;
   private flameGuardGfx: Phaser.GameObjects.Graphics | null = null;
 
   state: FighterState = 'idle';
@@ -57,10 +61,10 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private moveCooldowns: Map<string, number> = new Map();
   private selectedSlot = 0;
   private dodgeCooldown = 0;
-  private dodgeActive = false;
-  private dodgeElapsed = 0;
-  private hurtElapsed = 0;
-  private guardActive = false;
+  private dodgeActive   = false;
+  private dodgeElapsed  = 0;
+  private hurtElapsed   = 0;
+  private guardActive   = false;
 
   projectileGroup: Phaser.Physics.Arcade.Group;
   onProjectileFired?: (p: Projectile) => void;
@@ -74,30 +78,46 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     projectileGroup: Phaser.Physics.Arcade.Group
   ) {
     super(scene, x, y);
-    this.fighterId   = data.id;
-    this.isPlayer    = isPlayer;
-    this.minariData  = data;
-    this.stats       = { ...data.stats };
-    this.facing      = isPlayer ? 1 : -1;
+    this.fighterId       = data.id;
+    this.isPlayer        = isPlayer;
+    this.minariData      = data;
+    this.stats           = { ...data.stats };
+    this.facing          = isPlayer ? 1 : -1;
     this.projectileGroup = projectileGroup;
 
-    // Shadow — world-space, not parented to container
-    this.shadow = scene.add.ellipse(0, 0, data.bodyWidth * 1.3, 12, 0x000000, 0.35);
+    // Shadow — kept in world-space, not parented to container
+    this.shadow = scene.add.ellipse(0, 0, data.bodyWidth * 1.5, 14, 0x000000, 0.3);
     scene.add.existing(this.shadow);
 
-    // Try to use a real sprite for Flarepaw if texture is ready
-    if (data.id === 'flarepaw' && scene.textures.exists('flarepaw')) {
-      this.sprite = scene.add.sprite(0, 4, 'flarepaw', 0);
-      this.sprite.setScale(SPRITE_SCALE);
-      this.add(this.sprite);
+    // Attempt to use a real sprite for Flarepaw
+    const animMode  = scene.registry.get('flarepaw_anim_mode') as string | undefined;
+    const spriteKey = scene.registry.get('flarepaw_sprite_key') as string | undefined;
+
+    if (data.id === 'flarepaw' && spriteKey && animMode !== 'none') {
+      this.sprite    = scene.add.sprite(0, 0, spriteKey);
       this.useSprite = true;
+
+      // Scale to DISPLAY_HEIGHT; use bottom-centre origin so feet track the body
+      this.sprite.setScale(SPRITE_SCALE);
+      // setOrigin(0.5, 1) → pivot at bottom-centre of the frame.
+      // We then shift it up by bodyHeight/2 so that the sprite's feet land
+      // at the bottom edge of the physics body.
+      this.sprite.setOrigin(0.5, 1);
+      this.sprite.setPosition(0, data.bodyHeight / 2);
+      this.sprite.setAlpha(1);
+
+      // Antialiasing ON — this is an HD 2.5D game
+      this.sprite.setTexture(spriteKey);
+
+      this.add(this.sprite);
     }
 
-    // Placeholder graphics — always created; hidden if real sprite is used
+    // Placeholder graphics (always created; hidden when real sprite is present)
     const glowCircle = scene.add.arc(0, 0, data.bodyWidth * 0.9, 0, 360, false, data.colorPrimary, 0.12);
     this.add(glowCircle);
     this.body_gfx = scene.add.graphics();
     this.add(this.body_gfx);
+
     if (this.useSprite) {
       glowCircle.setVisible(false);
       this.body_gfx.setVisible(false);
@@ -123,52 +143,56 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.setDepth(10);
   }
 
+  // ── Placeholder body drawing ───────────────────────────────────────────────
+
   private drawBody(inForm: boolean): void {
-    const g = this.body_gfx;
+    const g  = this.body_gfx;
     g.clear();
     const d  = this.minariData;
-    const bw = d.bodyWidth;
-    const bh = d.bodyHeight;
+    const bw = d.bodyWidth, bh = d.bodyHeight;
     const primary   = inForm ? this.formSystem.glowColor : d.colorPrimary;
     const secondary = d.colorSecondary;
 
     g.fillStyle(primary, 1);
-    if (d.bodyShape === 'circle') {
-      g.fillCircle(0, 0, bw / 2);
-    } else {
-      g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 8);
-    }
+    if (d.bodyShape === 'circle') g.fillCircle(0, 0, bw / 2);
+    else g.fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 8);
 
     g.fillStyle(secondary, 0.8);
-    if (d.bodyShape === 'circle') {
-      g.fillCircle(0, -4, bw / 4);
-    } else {
-      g.fillRoundedRect(-bw / 4, -bh / 2, bw / 2, bh / 3, 4);
-    }
+    if (d.bodyShape === 'circle') g.fillCircle(0, -4, bw / 4);
+    else g.fillRoundedRect(-bw / 4, -bh / 2, bw / 2, bh / 3, 4);
 
     const eyeY = d.bodyShape === 'circle' ? -4 : -bh / 4;
     g.fillStyle(0xffffff, 1);
-    g.fillCircle(8, eyeY, 4);
-    g.fillCircle(16, eyeY, 4);
+    g.fillCircle(8, eyeY, 4); g.fillCircle(16, eyeY, 4);
     g.fillStyle(0x111111, 1);
-    g.fillCircle(9, eyeY, 2);
-    g.fillCircle(17, eyeY, 2);
+    g.fillCircle(9, eyeY, 2); g.fillCircle(17, eyeY, 2);
   }
 
-  // ── Animation playback ──────────────────────────────────────────────────────
-  private playAnim(key: string, ignoreIfPlaying = true): void {
+  // ── Animation playback ─────────────────────────────────────────────────────
+
+  private playAnim(key: string, forceRestart = false): void {
     if (!this.sprite) return;
-    if (ignoreIfPlaying && this.lastAnim === key && this.sprite.anims.isPlaying) return;
     if (!this.scene.anims.exists(key)) return;
+    if (!forceRestart && this.lastAnim === key && this.sprite.anims.isPlaying) return;
     this.lastAnim = key;
     this.sprite.play(key, true);
   }
 
   private syncAnim(): void {
     if (!this.sprite) return;
-    const isMoving = Math.abs(this.phBody.velocity.x) > 10;
+
+    // Use setFlipX on the sprite itself — NOT container scaleX.
+    // Sprite source is right-facing; flip when facing left.
+    this.sprite.setFlipX(this.facing === -1);
+
+    const velX    = Math.abs(this.phBody.velocity.x);
+    const airborne = !this.grounded;
 
     switch (this.state) {
+      case 'jump':
+      case 'fall':
+        this.playAnim('flarepaw_jump');
+        break;
       case 'run':
         this.playAnim('flarepaw_run');
         break;
@@ -176,39 +200,43 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         this.playAnim('flarepaw_guard', false);
         break;
       case 'attacking':
-        this.playAnim('flarepaw_attack', false);
+        // Attack animation mapped to jump frames until dedicated art exists
+        if (this.scene.anims.exists('flarepaw_attack')) {
+          this.playAnim('flarepaw_attack', false);
+        } else {
+          this.playAnim('flarepaw_idle');
+        }
         break;
       case 'hurt':
-        // No hurt anim yet — show idle with tint handled elsewhere
-        this.playAnim('flarepaw_idle');
+        // Tint is applied in takeDamage(); keep current anim during stun
         break;
       case 'idle':
       case 'form_active':
       default:
-        if (isMoving) this.playAnim('flarepaw_run');
-        else this.playAnim('flarepaw_idle');
+        if (airborne) {
+          this.playAnim('flarepaw_jump');
+        } else if (velX > 10) {
+          this.playAnim('flarepaw_run');
+        } else {
+          this.playAnim('flarepaw_idle');
+        }
         break;
     }
   }
 
-  // ── Public API ──────────────────────────────────────────────────────────────
+  // ── Public API ─────────────────────────────────────────────────────────────
 
   get specials(): MoveData[] {
     return this.minariData.specialSlots.map(id => MOVES[id]).filter(Boolean);
   }
-
-  get selectedSpecial(): MoveData | null {
-    return this.specials[this.selectedSlot] ?? null;
-  }
-
+  get selectedSpecial(): MoveData | null { return this.specials[this.selectedSlot] ?? null; }
   selectSlot(i: number): void {
     if (i >= 0 && i < this.specials.length) this.selectedSlot = i;
   }
-
   get selectedSlotIndex(): number { return this.selectedSlot; }
-  get isGrounded(): boolean { return this.grounded; }
-  get isGuarding(): boolean { return this.guardActive; }
-  get isDodging(): boolean { return this.dodgeActive; }
+  get isGrounded():    boolean { return this.grounded; }
+  get isGuarding():    boolean { return this.guardActive; }
+  get isDodging():     boolean { return this.dodgeActive; }
   get hasFlameGuard(): boolean { return this.flameGuardActive; }
 
   startCoreAttack(): boolean {
@@ -216,16 +244,12 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     const ca = CORE_ATTACKS[this.minariData.coreAttackId];
     if (!ca) return false;
 
-    const now = this.scene.time.now;
+    const now      = this.scene.time.now;
     const inWindow = (now - this.attackState.lastComboTime) < ca.comboWindow;
-    const nextIdx  = inWindow
-      ? (this.attackState.comboIndex + 1) % ca.comboHits.length
-      : 0;
+    const nextIdx  = inWindow ? (this.attackState.comboIndex + 1) % ca.comboHits.length : 0;
 
     this.attackState = {
-      active: true,
-      comboIndex: nextIdx,
-      lastComboTime: now,
+      active: true, comboIndex: nextIdx, lastComboTime: now,
       startupElapsed: 0, activeElapsed: 0, recoveryElapsed: 0,
       phase: 'startup', hitDealt: false
     };
@@ -244,7 +268,6 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.stats.aura -= move.auraCost;
     this.moveCooldowns.set(moveId, move.cooldown);
 
-    // Flame Guard — special defensive handler
     if (moveId === 'flame_guard') {
       this.activateFlameGuard(move.buffDuration ?? 2000);
       this.state = 'guard';
@@ -284,38 +307,33 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     return true;
   }
 
+  // Flame Guard ─────────────────────────────────────────────────────────────
+
   private activateFlameGuard(duration: number): void {
     this.flameGuardActive = true;
     this.flameGuardTimer  = duration;
 
-    // Create guard glow
     if (!this.flameGuardGfx) {
       this.flameGuardGfx = this.scene.add.graphics();
       this.add(this.flameGuardGfx);
     }
     this.flameGuardGfx.setVisible(true);
-    this.drawFlameGuardGfx();
+    this.flameGuardGfx.setDepth(20);
 
-    this.scene.tweens.add({
-      targets: this.flameGuardGfx,
-      alpha: 0.5,
-      duration: 300,
-      yoyo: true,
-      repeat: -1
-    });
-  }
-
-  private drawFlameGuardGfx(): void {
-    const g = this.flameGuardGfx!;
+    const g = this.flameGuardGfx;
     g.clear();
-    const r = this.minariData.bodyWidth * 0.9;
-    // Fiery shield ring
-    g.lineStyle(4, 0xff8800, 0.9);
+    const r = this.minariData.bodyWidth * 1.2;
+    g.lineStyle(4, 0xff8800, 0.95);
     g.strokeCircle(0, 0, r);
-    g.fillStyle(0xff4400, 0.15);
+    g.fillStyle(0xff4400, 0.18);
     g.fillCircle(0, 0, r);
     g.lineStyle(2, 0xffcc00, 0.6);
     g.strokeCircle(0, 0, r * 0.7);
+
+    this.scene.tweens.add({
+      targets: this.flameGuardGfx, alpha: 0.4,
+      duration: 280, yoyo: true, repeat: -1
+    });
   }
 
   deactivateFlameGuard(): void {
@@ -328,6 +346,8 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     }
     if (this.state === 'guard') this.state = 'idle';
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
 
   startDodge(): boolean {
     if (this.dodgeCooldown > 0 || this.state === 'hurt' || this.state === 'stunned') return false;
@@ -356,42 +376,35 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     return true;
   }
 
+  /** Returns burn counter-damage (>0) when Flame Guard is active and it's not already a burn hit. */
   takeDamage(amount: number, burnSource = false): number {
     const defense = this.stats.defense * this.formSystem.defenseMult;
     let reduced   = Math.max(1, amount - defense * 0.1);
 
-    // Flame Guard: 60% damage reduction; returns burn damage to attacker
-    if (this.flameGuardActive && !burnSource) {
-      reduced *= 0.4;
-    }
-
-    if (this.guardActive && !this.flameGuardActive) {
-      reduced *= 0.3;
-    }
+    if (this.flameGuardActive && !burnSource) reduced *= 0.4;
+    if (this.guardActive && !this.flameGuardActive) reduced *= 0.3;
 
     this.stats.hp = Math.max(0, this.stats.hp - reduced);
     this.stats.soulbond = Math.min(this.stats.maxSoulbond, this.stats.soulbond + reduced * 0.2);
 
     if (!this.guardActive) {
-      this.state        = 'hurt';
-      this.hurtElapsed  = 0;
+      this.state       = 'hurt';
+      this.hurtElapsed = 0;
       this.attackState.active = false;
       this.attackState.phase  = 'none';
       this.phBody.setVelocityX(this.facing * -200);
     }
 
-    // Flash red
+    // Flash red briefly
     const flashTarget = this.sprite ?? this.body_gfx;
+    this.scene.tweens.killTweensOf(flashTarget);
     this.scene.tweens.add({
-      targets: flashTarget,
-      alpha: 0.1,
-      duration: 70,
-      yoyo: true,
-      repeat: 3,
+      targets: flashTarget, alpha: 0.15,
+      duration: 60, yoyo: true, repeat: 3,
       onComplete: () => flashTarget.setAlpha(1)
     });
 
-    return this.flameGuardActive && !burnSource ? 8 : 0; // burn damage back
+    return (this.flameGuardActive && !burnSource) ? 8 : 0;
   }
 
   private fireProjectile(move: MoveData): void {
@@ -404,15 +417,14 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.onProjectileFired?.(p);
   }
 
-  // ── Per-frame update ────────────────────────────────────────────────────────
+  // ── Per-frame update ───────────────────────────────────────────────────────
 
   update(delta: number): void {
     // Cooldowns
-    this.moveCooldowns.forEach((cd, key) => {
-      this.moveCooldowns.set(key, Math.max(0, cd - delta));
-    });
+    this.moveCooldowns.forEach((cd, key) => this.moveCooldowns.set(key, Math.max(0, cd - delta)));
     this.dodgeCooldown = Math.max(0, this.dodgeCooldown - delta);
 
+    // Ground check
     this.grounded = this.phBody.blocked.down;
 
     // Form system
@@ -428,7 +440,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       if (this.flameGuardTimer <= 0) this.deactivateFlameGuard();
     }
 
-    // Dodge
+    // Dodge resolution
     if (this.dodgeActive) {
       this.dodgeElapsed += delta;
       if (this.dodgeElapsed >= 250) {
@@ -437,7 +449,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       }
     }
 
-    // Hurt
+    // Hurt recovery
     if (this.state === 'hurt') {
       this.hurtElapsed += delta;
       if (this.hurtElapsed >= 350) this.state = 'idle';
@@ -461,8 +473,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
             this.activeHitbox = {
               x: this.x + this.facing * hit.hitbox.offsetX,
               y: this.y + hit.hitbox.offsetY,
-              w: hit.hitbox.width,
-              h: hit.hitbox.height
+              w: hit.hitbox.width, h: hit.hitbox.height
             };
           }
         } else if (this.attackState.phase === 'active') {
@@ -483,54 +494,74 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       }
     }
 
-    // Determine run state for animation
-    if (this.state === 'idle' && Math.abs(this.phBody.velocity.x) > 10) {
-      this.state = 'run';
-    } else if (this.state === 'run' && Math.abs(this.phBody.velocity.x) <= 10) {
-      this.state = 'idle';
+    // Jump / fall state tracking
+    if (!this.grounded && this.state !== 'attacking' && this.state !== 'hurt' &&
+        this.state !== 'stunned' && this.state !== 'guard') {
+      this.state = this.phBody.velocity.y < 0 ? 'jump' : 'fall';
+    } else if (this.grounded) {
+      // Resolve run vs idle when on ground
+      if (this.state === 'jump' || this.state === 'fall') {
+        this.state = Math.abs(this.phBody.velocity.x) > 10 ? 'run' : 'idle';
+      } else if (this.state === 'idle' && Math.abs(this.phBody.velocity.x) > 10) {
+        this.state = 'run';
+      } else if (this.state === 'run' && Math.abs(this.phBody.velocity.x) <= 10) {
+        this.state = 'idle';
+      }
     }
+
+    this.guardActive = this.state === 'guard';
 
     // Aura regen
     if (this.state !== 'special' && !this.formSystem.isActive) {
       this.stats.aura = Math.min(this.stats.maxAura, this.stats.aura + 6 * delta / 1000);
     }
-
-    // Soulbond charges when attacking
     if (this.state === 'attacking') {
       this.stats.soulbond = Math.min(this.stats.maxSoulbond, this.stats.soulbond + 1 * delta / 1000);
     }
 
-    this.guardActive = this.state === 'guard';
+    // Shadow — world-space tracking
+    this.shadow.setPosition(this.x, this.y + this.minariData.bodyHeight / 2 + 5);
 
-    // Shadow position (world-space)
-    this.shadow.setPosition(this.x, this.y + this.minariData.bodyHeight / 2 + 4);
+    // Container scaleX stays 1 — facing is handled by sprite.setFlipX only
+    // (Prevents container-level mirror which would flip UI gfx and flame guard ring)
+    this.scaleX = 1;
 
-    // Flip entire container (sprite + gfx) based on facing
-    this.scaleX = this.facing;
-
-    // Sync sprite animation
+    // Sync animation + flip
     this.syncAnim();
   }
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   getCurrentAttackHit() {
-    if (!this.attackState.active || this.attackState.phase !== 'active' || this.attackState.hitDealt) {
-      return null;
-    }
+    if (!this.attackState.active || this.attackState.phase !== 'active' || this.attackState.hitDealt) return null;
     const ca = CORE_ATTACKS[this.minariData.coreAttackId];
     return ca?.comboHits[this.attackState.comboIndex] ?? null;
   }
 
-  markHitDealt(): void { this.attackState.hitDealt = true; }
-  isAttackActive(): boolean { return this.attackState.active && this.attackState.phase === 'active'; }
-  isInCooldown(moveId: string): boolean { return (this.moveCooldowns.get(moveId) ?? 0) > 0; }
-  isDead(): boolean { return this.stats.hp <= 0; }
-
-  isFormReady(): boolean { return this.formSystem.canActivate(this.stats); }
+  markHitDealt():    void    { this.attackState.hitDealt = true; }
+  isAttackActive():  boolean { return this.attackState.active && this.attackState.phase === 'active'; }
+  isInCooldown(id: string): boolean { return (this.moveCooldowns.get(id) ?? 0) > 0; }
+  isDead():          boolean { return this.stats.hp <= 0; }
+  isFormReady():     boolean { return this.formSystem.canActivate(this.stats); }
   isUltimateReady(): boolean {
     const ult = ULTIMATES[this.minariData.ultimateId];
     return ult ? this.stats.soulbond >= ult.soulbondCost : false;
   }
   get flameGuardTimeRemaining(): number { return this.flameGuardTimer; }
+
+  // Debug info string for the overlay
+  debugInfo(): string {
+    return [
+      `state:${this.state}`,
+      `anim:${this.lastAnim}`,
+      `face:${this.facing === 1 ? 'R' : 'L'}`,
+      `gnd:${this.grounded ? 'Y' : 'N'}`,
+      `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}`,
+      `aura:${Math.round(this.stats.aura)}`,
+      `sb:${Math.round(this.stats.soulbond)}`,
+      `sprite:${this.useSprite ? 'yes' : 'gfx'}`,
+    ].join('  ');
+  }
 
   override destroy(): void {
     this.shadow.destroy();
