@@ -1,32 +1,23 @@
-import Phaser from 'phaser';
-import { BootScene } from './scenes/BootScene';
-import { PreloadScene } from './scenes/PreloadScene';
-import { TitleScene } from './scenes/TitleScene';
-import { OverworldScene } from './scenes/OverworldScene';
-import { BattleScene } from './scenes/BattleScene';
+import './style.css';
+import { Input } from './input';
+import { freshState } from './model';
+import { Painter } from './painter';
+import { step } from './simulation';
 
-const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
-  width: 960,
-  height: 600,
-  backgroundColor: '#0a0a0f',
-  parent: document.body,
-  physics: {
-    default: 'arcade',
-    arcade: {
-      gravity: { x: 0, y: 800 },
-      debug: false
-    }
-  },
-  scene: [BootScene, PreloadScene, TitleScene, OverworldScene, BattleScene],
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  },
-  render: {
-    antialias: true,
-    pixelArt: false
-  }
-};
+const canvas = document.querySelector<HTMLCanvasElement>('#game');
+const context = canvas?.getContext('2d');
+if (!canvas || !context) throw new Error('Canvas rendering is unavailable.');
 
-new Phaser.Game(config);
+const state = freshState();
+const input = new Input();
+const painter = new Painter(context);
+let previous = performance.now();
+
+function frame(now: number) {
+  step(state, input, (now - previous) / 1000);
+  painter.render(state);
+  previous = now;
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
