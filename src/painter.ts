@@ -2,10 +2,20 @@ import { Fighter, GameState, SPECIALS } from './model';
 
 const W = 1280, H = 720;
 const TAU = Math.PI * 2;
+const FLAREPAW_SHEET_PATH = '/assets/characters/flarepaw/flarepaw_sheet.png';
+const FLAREPAW_COLUMNS = 5, FLAREPAW_ROWS = 4, FLAREPAW_HEIGHT = 245;
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
 export class Painter {
-  constructor(private c: CanvasRenderingContext2D) {}
+  private flarepawSheet = new Image();
+  private flarepawSheetReady = false;
+  private flarepawSheetFailed = false;
+
+  constructor(private c: CanvasRenderingContext2D) {
+    this.flarepawSheet.onload = () => { this.flarepawSheetReady = true; };
+    this.flarepawSheet.onerror = () => { this.flarepawSheetFailed = true; };
+    this.flarepawSheet.src = FLAREPAW_SHEET_PATH;
+  }
   text(text: string, x: number, y: number, size: number, color = '#fff', align: CanvasTextAlign = 'left', weight = '700') {
     const c = this.c; c.font = `${weight} ${size}px 'Space Grotesk', sans-serif`; c.textAlign = align; c.fillStyle = color; c.fillText(text, x, y);
   }
@@ -86,18 +96,33 @@ export class Painter {
   drawCreature(f: Fighter, time: number) {
     const c = this.c, fire = f.id === 'flarepaw', bob = Math.sin(time * 5 + (fire ? 0 : 2)) * (f.grounded ? 4 : 0), alpha = f.dodge > 0 ? .42 : 1; c.save(); c.globalAlpha = alpha; c.translate(f.x, f.y + bob); c.scale(f.facing, 1);
     if (f.form > 0) { c.strokeStyle = '#ffbf55'; c.lineWidth = 5; c.globalAlpha = .5 + Math.sin(time * 12) * .2; c.beginPath(); c.ellipse(0, -68, 65, 96, 0, 0, TAU); c.stroke(); c.globalAlpha = alpha; }
-    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, 66, 18, 0, 0, TAU); c.fill();
+    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, fire ? 100 : 66, fire ? 23 : 18, 0, 0, TAU); c.fill();
     if (fire) this.flarepaw(c, f, time); else this.droplet(c, f, time); c.restore();
   }
 
   flarepaw(c: CanvasRenderingContext2D, f: Fighter, time: number) {
+    if (this.flarepawSheetReady) {
+      const frameWidth = this.flarepawSheet.naturalWidth / FLAREPAW_COLUMNS;
+      const frameHeight = this.flarepawSheet.naturalHeight / FLAREPAW_ROWS;
+      const row = f.attack > 0 || f.guard ? 3 : !f.grounded ? 2 : Math.abs(f.vx) > 30 ? 1 : 0;
+      const fps = row === 0 ? 5 : 9;
+      const frame = Math.floor(time * fps) % FLAREPAW_COLUMNS;
+      const drawWidth = FLAREPAW_HEIGHT * frameWidth / frameHeight;
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(this.flarepawSheet, frame * frameWidth, row * frameHeight, frameWidth, frameHeight, -drawWidth / 2, -FLAREPAW_HEIGHT, drawWidth, FLAREPAW_HEIGHT);
+    } else if (this.flarepawSheetFailed) this.flarepawFallback(c);
+
+    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
+    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
+  }
+
+  flarepawFallback(c: CanvasRenderingContext2D) {
     c.strokeStyle = '#5b1a36'; c.lineWidth = 23; c.lineCap = 'round'; c.beginPath(); c.moveTo(-22, -42); c.lineTo(-40, -4); c.moveTo(23, -42); c.lineTo(41, -4); c.stroke();
     c.fillStyle = '#f36b49'; c.beginPath(); c.ellipse(0, -67, 48, 58, 0, 0, TAU); c.fill(); c.fillStyle = '#ffc65e'; c.beginPath(); c.ellipse(7, -57, 25, 34, .2, 0, TAU); c.fill();
     c.fillStyle = '#f36b49'; c.beginPath(); c.arc(0, -119, 43, 0, TAU); c.fill(); c.beginPath(); c.moveTo(-34, -142); c.lineTo(-48, -181); c.lineTo(-10, -153); c.moveTo(27, -145); c.lineTo(46, -178); c.lineTo(45, -132); c.fill();
     c.fillStyle = '#3a1932'; c.beginPath(); c.moveTo(-26, -133); c.lineTo(-7, -128); c.lineTo(-24, -121); c.moveTo(25, -133); c.lineTo(7, -128); c.lineTo(24, -121); c.fill();
     c.fillStyle = '#ffe56d'; c.beginPath(); c.arc(-17, -129, 4, 0, TAU); c.arc(17, -129, 4, 0, TAU); c.fill();
-    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
-    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
   }
 
   droplet(c: CanvasRenderingContext2D, f: Fighter, time: number) {
