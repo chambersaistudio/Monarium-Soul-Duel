@@ -108,16 +108,16 @@ export const MOVES: Record<string, MoveData> = {
   flame_guard: {
     id: 'flame_guard',
     name: 'Flame Guard',
-    description: 'Defensive fire aura that absorbs incoming hits.',
+    description: 'Fire aura shield — 60% damage reduction; burns enemies that hit Flarepaw.',
     category: 'buff',
     auraCost: 25,
-    damage: 0,
+    damage: 8,           // burn counter-damage returned to attacker on contact
     hitbox: { shape: 'circle', offsetX: 0, offsetY: 0, width: 60, height: 60 },
-    startupFrames: 6,
+    startupFrames: 4,
     activeFrames: 1,
-    recoveryFrames: 6,
-    cooldown: 2000,
-    buffDuration: 3000,
+    recoveryFrames: 4,
+    cooldown: 7000,
+    buffDuration: 2000,  // 2 seconds active
     range: 'self',
     colorTint: 0xff8800
   },

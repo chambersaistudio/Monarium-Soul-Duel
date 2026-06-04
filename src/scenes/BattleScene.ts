@@ -23,6 +23,7 @@ export class BattleScene extends Phaser.Scene {
   private enterKey!: Phaser.Input.Keyboard.Key;
   private ultimateTimer = 0;
   private flashGfx!: Phaser.GameObjects.Graphics;
+  private enterLockTimer = 1200; // ms — prevents Enter from immediately dismissing on entry
 
   private aiTimer = 0;
 
@@ -238,8 +239,14 @@ export class BattleScene extends Phaser.Scene {
       const sel = this.player.selectedSpecial;
       if (sel) {
         const ok = this.player.startSpecial(sel.id);
-        if (!ok && this.player.stats.aura < sel.auraCost) {
-          this.uiSys.showAnnounce('Not enough Aura!', 800);
+        if (ok && sel.id === 'flame_guard') {
+          this.uiSys.showAnnounce('Flame Guard!', 1200);
+        } else if (!ok) {
+          if (this.player.stats.aura < sel.auraCost) {
+            this.uiSys.showAnnounce('Not enough Aura!', 800);
+          } else if (this.player.isInCooldown(sel.id)) {
+            this.uiSys.showAnnounce('On cooldown!', 600);
+          }
         }
       }
     }
@@ -359,6 +366,7 @@ export class BattleScene extends Phaser.Scene {
   // ── Melee hit detection ────────────────────────────────────────────────────
 
   private checkMeleeHits(): void {
+    // Player attacks enemy
     const playerHit = this.player.getCurrentAttackHit();
     if (playerHit) {
       const hx = this.player.x + this.player.facing * playerHit.hitbox.offsetX;
@@ -373,15 +381,22 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
+    // Enemy attacks player — Flame Guard returns burn damage
     const enemyHit = this.enemy.getCurrentAttackHit();
     if (enemyHit) {
       const hx = this.enemy.x + this.enemy.facing * enemyHit.hitbox.offsetX;
       const hy = this.enemy.y + enemyHit.hitbox.offsetY;
       if (this.rectsOverlap(hx, hy, enemyHit.hitbox.width, enemyHit.hitbox.height,
           this.player.x, this.player.y, this.player.minariData.bodyWidth, this.player.minariData.bodyHeight)) {
-        this.player.takeDamage(enemyHit.damage);
+        const burnBack = this.player.takeDamage(enemyHit.damage);
         this.enemy.markHitDealt();
         this.spawnHitFX(this.player.x, this.player.y - 20, 0x00aaff);
+
+        // Flame Guard: enemy takes burn damage back
+        if (burnBack > 0) {
+          this.enemy.takeDamage(burnBack, true);
+          this.spawnHitFX(this.enemy.x, this.enemy.y - 30, 0xff8800);
+        }
       }
     }
   }
@@ -428,6 +443,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Tick down the enter-key lock so a held Enter from overworld can't skip result
+    if (this.enterLockTimer > 0) this.enterLockTimer -= delta;
+
     this.projectiles.getChildren().forEach(obj => {
       const p = obj as Projectile;
       if (p.active) p.update(delta);
@@ -449,7 +467,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.phase === 'result') {
-      if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
+      if (this.enterLockTimer <= 0 && Phaser.Input.Keyboard.JustDown(this.enterKey)) {
         this.cameras.main.fade(400, 0, 0, 0, false, (_cam: unknown, progress: number) => {
           if (progress === 1) this.scene.start('OverworldScene');
         });

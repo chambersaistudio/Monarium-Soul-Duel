@@ -4,7 +4,7 @@ import { RivalNPC } from '../entities/RivalNPC';
 import { SoulSpriteOrb } from '../entities/SoulSpriteOrb';
 import { InputSystem } from '../systems/InputSystem';
 
-type DialogueState = 'none' | 'showing' | 'done';
+type DialogueState = 'none' | 'showing' | 'transitioning';
 
 export class OverworldScene extends Phaser.Scene {
   private player!: OverworldPlayer;
@@ -23,6 +23,8 @@ export class OverworldScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
 
+    this.dialogueState = 'none';
+
     this.bgGfx = this.add.graphics();
     this.drawTrainingField(w, h);
 
@@ -31,7 +33,7 @@ export class OverworldScene extends Phaser.Scene {
 
     const orbPositions = [
       { x: w * 0.35, y: h - 200 },
-      { x: w * 0.5, y: h - 250 },
+      { x: w * 0.5,  y: h - 250 },
       { x: w * 0.65, y: h - 190 }
     ];
     orbPositions.forEach((pos, i) => {
@@ -47,7 +49,7 @@ export class OverworldScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 2, letterSpacing: 6
     }).setOrigin(0.5).setDepth(50);
 
-    this.add.text(20, 20, '← Arrow Keys to move  |  E = Interact with Rival', {
+    this.add.text(20, 20, '← Arrow Keys to move  |  E / Enter = Interact', {
       fontSize: '11px', color: '#666666', fontFamily: 'monospace'
     }).setDepth(50);
 
@@ -58,23 +60,20 @@ export class OverworldScene extends Phaser.Scene {
     const g = this.bgGfx;
     g.clear();
 
-    // Sky gradient
     for (let i = 0; i < h * 0.55; i += 3) {
       const t = i / (h * 0.55);
-      const r = Math.floor(Phaser.Math.Linear(30, 80, t));
+      const r  = Math.floor(Phaser.Math.Linear(30, 80, t));
       const gv = Math.floor(Phaser.Math.Linear(60, 130, t));
-      const b = Math.floor(Phaser.Math.Linear(120, 180, t));
+      const b  = Math.floor(Phaser.Math.Linear(120, 180, t));
       g.fillStyle(Phaser.Display.Color.GetColor(r, gv, b), 1);
       g.fillRect(0, i, w, 3);
     }
 
-    // Distant hills
     g.fillStyle(0x3a7040, 0.5);
     g.fillEllipse(w * 0.15, h * 0.52, 320, 120);
     g.fillEllipse(w * 0.55, h * 0.50, 400, 130);
     g.fillEllipse(w * 0.85, h * 0.53, 280, 110);
 
-    // Ground
     const groundY = h - 220;
     g.fillStyle(0x4a9e50, 1);
     g.fillRect(0, groundY, w, h - groundY);
@@ -84,7 +83,6 @@ export class OverworldScene extends Phaser.Scene {
     g.fillStyle(0x2a6030, 1);
     g.fillRect(0, h - 60, w, 60);
 
-    // Academy building silhouette
     g.fillStyle(0x1a2a3a, 0.7);
     g.fillRect(w * 0.72, h * 0.2, 180, h * 0.32);
     g.fillRect(w * 0.72 - 10, h * 0.18, 200, 18);
@@ -95,12 +93,10 @@ export class OverworldScene extends Phaser.Scene {
       }
     }
 
-    // Trees
     this.drawTree(g, w * 0.08, groundY - 20);
     this.drawTree(g, w * 0.92, groundY - 20);
     this.drawTree(g, w * 0.15, groundY - 10);
 
-    // Platform strip
     g.fillStyle(0x5db864, 1);
     g.fillRect(60, h - 230, w - 120, 14);
     g.fillStyle(0x3a9040, 1);
@@ -137,14 +133,14 @@ export class OverworldScene extends Phaser.Scene {
     }).setDepth(201);
 
     const dialogueText = this.add.text(boxX + 20, boxY + 18,
-      '"You ready for a Soul Duel?"\n\nStep into the arena and prove your Monari is the strongest!',
+      '"You ready for a Soul Duel?"\n\nStep into the arena — prove your Monari is the strongest!',
       {
         fontSize: '15px', color: '#e0e8ff', fontFamily: 'monospace',
         wordWrap: { width: boxW - 40 }, lineSpacing: 4
       }
     ).setDepth(201);
 
-    const promptText = this.add.text(boxX + boxW - 20, boxY + boxH - 18, '[ENTER] Battle!', {
+    const promptText = this.add.text(boxX + boxW - 20, boxY + boxH - 18, '[E / ENTER] Battle!', {
       fontSize: '12px', color: '#ffff88', fontFamily: 'monospace'
     }).setOrigin(1, 1).setDepth(201);
 
@@ -155,34 +151,44 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const oi = this.inputSys.getOverworldInput();
-
-    if (this.dialogueState === 'none') {
-      let dx = 0, dy = 0;
-      if (oi.left) dx = -1;
-      else if (oi.right) dx = 1;
-      if (oi.up) dy = -1;
-      else if (oi.down) dy = 1;
-
-      if (dx !== 0 || dy !== 0) this.player.move(dx, dy);
-      else this.player.stopMove();
-
-      const near = this.rival.isNear(this.player.x, this.player.y);
-      this.rival.showIndicator(near);
-
-      if (near && oi.interact) {
-        this.player.stopMove();
-        this.dialogueState = 'showing';
-        this.dialogueBox.setVisible(true);
-        this.cameras.main.shake(200, 0.003);
-      }
-    } else if (this.dialogueState === 'showing') {
+    // ── Dialogue showing: only check for dismiss key, do NOT move player ──
+    if (this.dialogueState === 'showing') {
+      // Use isJustDown directly — getOverworldMove() never consumes these
       if (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e')) {
-        this.dialogueState = 'done';
+        this.dialogueState = 'transitioning';
         this.cameras.main.fade(500, 0, 0, 0, false, (_cam: unknown, progress: number) => {
           if (progress === 1) this.scene.start('BattleScene');
         });
       }
+      // Still update cosmetics even while dialogue is up
+      this.rival.update();
+      this.orbs.forEach(o => o.update(delta));
+      return;
+    }
+
+    if (this.dialogueState === 'transitioning') return;
+
+    // ── Normal overworld movement ──
+    const mv = this.inputSys.getOverworldMove();
+    let dx = 0, dy = 0;
+    if (mv.left)  dx = -1;
+    else if (mv.right) dx = 1;
+    if (mv.up)   dy = -1;
+    else if (mv.down) dy = 1;
+
+    if (dx !== 0 || dy !== 0) this.player.move(dx, dy);
+    else this.player.stopMove();
+
+    const near = this.rival.isNear(this.player.x, this.player.y);
+    this.rival.showIndicator(near);
+
+    // Open dialogue — checked AFTER movement so the same press can't
+    // open AND immediately dismiss (Enter is now handled in 'showing' branch only)
+    if (near && (this.inputSys.isJustDown('e') || this.inputSys.isJustDown('enter'))) {
+      this.player.stopMove();
+      this.dialogueState = 'showing';
+      this.dialogueBox.setVisible(true);
+      this.cameras.main.shake(200, 0.003);
     }
 
     this.player.update();

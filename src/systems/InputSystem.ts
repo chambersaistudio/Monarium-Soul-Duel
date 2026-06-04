@@ -79,15 +79,14 @@ export class InputSystem {
     };
   }
 
-  getOverworldInput(): OverworldInput {
+  // Overworld movement — does NOT consume JustDown for interact keys
+  getOverworldMove(): { left: boolean; right: boolean; up: boolean; down: boolean } {
     const k = this.keys;
     return {
-      left:     k.left.isDown,
-      right:    k.right.isDown,
-      up:       k.up.isDown,
-      down:     k.down.isDown,
-      interact: Phaser.Input.Keyboard.JustDown(k.e) || Phaser.Input.Keyboard.JustDown(k.enter),
-      pause:    Phaser.Input.Keyboard.JustDown(k.esc),
+      left:  k.left.isDown,
+      right: k.right.isDown,
+      up:    k.up.isDown,
+      down:  k.down.isDown,
     };
   }
 
