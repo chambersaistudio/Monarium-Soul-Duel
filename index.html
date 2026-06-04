@@ -1,23 +1,17 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MONARIUM: Soul Duel</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0f;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      overflow: hidden;
-    }
-    canvas { display: block; }
-  </style>
-</head>
-<body>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100b2b" />
+    <meta name="description" content="MONARIUM: Soul Duel — a fast anime creature duel prototype." />
+    <title>MONARIUM: Soul Duel</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" width="1280" height="720" aria-label="MONARIUM Soul Duel game canvas"></canvas>
+      <p id="loading">TUNING SOUL FREQUENCY…</p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

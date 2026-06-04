@@ -1,134 +1,74 @@
-# MONARIUM: Soul Duel — Prototype
+# MONARIUM: Soul Duel — Codex Prototype
 
-A browser-playable 2.5D anime creature battle prototype built with **Phaser 3**, **TypeScript**, and **Vite**.
+An independent, clean-room browser prototype built from the MONARIUM Soul Duel brief. This implementation uses TypeScript and the native Canvas 2D API with a data-oriented simulation and a separate painter; it does not use the source branch's Phaser scenes, entities, or systems.
 
-## Quick Start
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open `http://localhost:3000`.
 
-## Build for Production
+## Flow
 
-```bash
-npm run build
-npm run preview   # preview the production build locally
-```
-
-Output is in the `dist/` folder — serve it as a static site.
-
-## Deploy to Vercel
-
-1. Push this repo to GitHub.
-2. Import the project on [vercel.com](https://vercel.com).
-3. Vercel auto-detects `vercel.json`; no extra config needed.
-4. Click **Deploy**.
-
-## Game Flow
-
-```
-Title Screen → Overworld (Training Field) → Talk to Rival → Battle → Victory/Defeat → Overworld
-```
+**Title → Celestial Training Field → Rival dialogue → Soul Duel → Result → Field**
 
 ## Controls
 
-### Overworld
-| Key | Action |
-|-----|--------|
-| Arrow Keys | Move Amari |
-| E / Enter | Interact with Rival |
-| Esc | Pause (placeholder) |
+### Training Field
+- **Arrow keys / WASD:** move Amari
+- **E / Enter / Space:** interact and advance dialogue
 
-### Battle
-| Key | Action |
-|-----|--------|
-| ← / → | Move left / right |
-| ↑ | Jump |
-| ↓ | Guard / Brace |
-| **J** | Core Attack (combo: J → J → J) |
-| **K** | Use Selected Special Move |
-| **L** | Dodge / Aura Step |
-| **I** | Activate Ability / Magmaforge Form |
-| **U** | Ultimate / Soulburst |
-| **1–4** | Select Special Slot (also Numpad 1–3, Numpad 0) |
+### Soul Duel
+- **← / →:** move
+- **↑:** jump
+- **↓:** guard
+- **J:** Flaming Palm combo
+- **K:** selected special
+- **L:** Aura Step
+- **I:** Magmaforge Form
+- **U:** Soulburst ultimate at full Soulbond
+- **1–4:** select Ember Claws, Blaze Charge, Flame Vortex, or Flame Guard
+## Architecture
 
-## Fighters
+- `src/model.ts` — serializable game state and move data
+- `src/simulation.ts` — functional gameplay rules and state transitions
+- `src/painter.ts` — procedural Canvas presentation and HUD
+- `src/input.ts` — small keyboard state adapter
+- `src/main.ts` — browser loop and composition root
 
-### Flarepaw (Player)
-- **Element:** Fire
-- **Style:** Fast close-range palm-strike combo fighter
-- **Core Attack:** Flaming Palm Strike (3-hit combo)
-- **Specials:**
-  1. Ember Claws — short-range fire combo (20 Aura)
-  2. Blaze Charge — dash attack (35 Aura)
-  3. Flame Vortex — projectile tornado (45 Aura)
-  4. Flame Guard — defensive fire aura (25 Aura)
-- **Ability:** Magmaforge Form (+25% damage, 8 seconds)
-- **Ultimate:** Magma Palm Barrage (requires 100 Soulbond)
+## Flarepaw sprite-sheet background removal
 
-### Droplet (AI Enemy)
-- **Element:** Water
-- **Style:** Agile mid-range projectile/control fighter
-- **Core Attack:** Aqua Swipe
-- **AI Moves:** Aqua Splash, Bubble Dance, Frost Pounce
+The existing Flarepaw source sheet is stored at:
 
-## Project Structure
+- Repository path: `public/assets/characters/flarepaw/flarepaw_sheet.png`
+- Browser/public URL (and the URL Phaser should load later): `/assets/characters/flarepaw/flarepaw_sheet.png`
 
-```
-src/
-  main.ts               # Phaser game config & boot
-  scenes/
-    BootScene.ts        # Initial boot
-    PreloadScene.ts     # Asset loading (placeholder)
-    TitleScene.ts       # Title screen
-    OverworldScene.ts   # Training field + NPC dialogue
-    BattleScene.ts      # 2.5D side-view battle
-  entities/
-    MinariFighter.ts    # Core fighter entity (player & AI)
-    Projectile.ts       # Pooled projectile entity
-    OverworldPlayer.ts  # Amari overworld movement
-    RivalNPC.ts         # Rival NPC with interaction
-    SoulSpriteOrb.ts    # Floating ambient orbs
-  systems/
-    InputSystem.ts      # Keyboard input abstraction
-    FormSystem.ts       # Ability/form mode logic
-    UISystem.ts         # Battle HUD rendering
-  data/
-    minariData.ts       # Flarepaw & Droplet stat blocks
-    moveData.ts         # Core attacks, specials, forms, ultimates
-  types/
-    minari.ts           # Minari/fighter type definitions
-    combat.ts           # Combat system type definitions
+Browser-facing source and transparent-sheet paths are centralized in
+`src/assetPaths.ts`. Battle rendering loads the transparent runtime path and
+slices it as a five-column by four-row sheet: idle, run, jump, then action. It
+draws one cropped frame at a time with smooth Canvas scaling and mirrors the
+existing fighter transform when Flarepaw changes facing direction. If the
+transparent sheet is unavailable, the procedural Flarepaw drawing remains as a
+non-breaking fallback.
 
-public/assets/          # Drop sprite sheets & art here
-  characters/
-    amari/
-    flarepaw/
-    droplet/
-  backgrounds/
-  ui/
-  vfx/
-  cutscenes/
+Add `?frames` to the game URL to display the temporary sheet/frame-dimension
+debug readout during a duel.
+
+To create the transparent version locally, install Pillow and run the reusable
+background-removal utility:
+
+```bash
+python -m pip install Pillow
+python tools/remove_white_background.py \
+  public/assets/characters/flarepaw/flarepaw_sheet.png \
+  public/assets/characters/flarepaw/flarepaw_sheet_transparent.png
 ```
 
-## Asset Replacement
-
-All visuals are procedural placeholder graphics. To add real art:
-
-1. Drop sprite sheets into `public/assets/characters/<name>/`
-2. Load them in `PreloadScene.ts` with `this.load.spritesheet(...)`
-3. Replace `body_gfx` drawing in `MinariFighter.ts` with `this.add.sprite(...)`
-4. Add animation configs and swap `drawBody()` calls
-
-## Not Yet Built (Planned)
-
-- Multiplayer
-- Full story mode / save system
-- Full Minari roster (capture, bonding, evolution)
-- Inventory, shops
-- Mobile touch controls
-- Cinematic QTE / cutscene sequences
-- Online account system
+The script preserves the original dimensions and only removes near-white pixels
+connected to the image's outer edges. Enclosed white details such as highlights,
+eyeshine, and glow remain intact. The source file is never overwritten. Use
+`--threshold 240` to explicitly set the default near-white cutoff, or adjust the
+value when processing a different sheet.
