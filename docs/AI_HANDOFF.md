@@ -59,6 +59,41 @@ Claude
 
 ## Handoff Log
 
+### 2026-06-05 — Flarepaw attack animation (4-frame PNG sequence)
+
+#### Agent
+Claude
+
+#### Summary of What Changed
+Flarepaw now plays a 4-frame sprite animation when the attack button is pressed. Animation plays once per press (no loop). Returns to idle/run/airborne state automatically. Hitbox active window aligned to frame_055 + frame_056.
+
+Files changed: `src/scenes/PreloadScene.ts`, `src/entities/MinariFighter.ts`, `src/data/moveData.ts`.
+
+#### New or Changed Game States
+- `attacking` state: no new fields, but animation now driven by `attackAnimPlaying` flag internally. UI reads `state === 'attacking'` as before.
+
+#### New or Changed Controls
+- J (attack button): unchanged. Now visually plays the 4-frame attack sequence.
+
+#### New or Changed Assets
+- `public/assets/characters/flarepaw/attack/frame_054.png` — startup frame
+- `public/assets/characters/flarepaw/attack/frame_055.png` — first active/hit frame
+- `public/assets/characters/flarepaw/attack/frame_056.png` — second active/hit frame
+- `public/assets/characters/flarepaw/attack/frame_058.png` — recovery frame
+- Naming pattern: `frame_NNN.png` where NNN is a zero-padded video frame number; skipped numbers are allowed.
+- Same 512×512 transparent PNG normalization as all other Flarepaw frames.
+- Registry key added: `flarepaw_attack_loaded` (boolean).
+
+#### New Known Issues
+- None introduced.
+
+#### What UI May Need Next
+- Attack indicator or combo counter could read `state === 'attacking'` and `attackState.comboIndex` if exposed.
+- Mobile attack button: no changes needed — same input path.
+- If a hit-flash or impact effect is wanted on contact, the active hitbox window now aligns with frame_055+056 (~83–167ms after press).
+
+---
+
 ### 2026-06-05 — Guard ground-only restriction
 
 #### Agent
