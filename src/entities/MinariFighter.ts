@@ -21,11 +21,16 @@ interface AttackState {
   hitDealt: boolean;
 }
 
-// Target display height in pixels for the sprite in-game.
-// PreloadScene normalises all frames to 512×512 with 40px baseline margin.
+// Target display height for the sprite in-game.
+// PreloadScene normalises all frames to 512×512 with 40px transparent margin
+// below the character's feet (NORM_BASE).  The sprite origin is (0.5,1)
+// which sits at the canvas BOTTOM, not the feet — so we shift the sprite
+// down by NORM_BASE×SPRITE_SCALE to plant the feet at the physics body floor.
 const DISPLAY_HEIGHT = 220;
 const NORM_SIZE      = 512;
-const SPRITE_SCALE   = DISPLAY_HEIGHT / NORM_SIZE;  // ≈ 0.43
+const NORM_BASE      = 40;  // px of transparent space below feet in normalised canvas
+const SPRITE_SCALE   = DISPLAY_HEIGHT / NORM_SIZE;            // ≈ 0.43
+const FEET_OFFSET    = Math.round(NORM_BASE * SPRITE_SCALE);  // ≈ 17 px
 
 export class MinariFighter extends Phaser.GameObjects.Container {
   readonly fighterId: string;
@@ -101,11 +106,11 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
       // Scale to DISPLAY_HEIGHT; use bottom-centre origin so feet track the body
       this.sprite.setScale(SPRITE_SCALE);
-      // setOrigin(0.5, 1) → pivot at bottom-centre of the frame.
-      // We then shift it up by bodyHeight/2 so that the sprite's feet land
-      // at the bottom edge of the physics body.
+      // origin (0.5,1) = pivot at canvas bottom.  Add FEET_OFFSET so the
+      // visible feet (which sit NORM_BASE px above canvas bottom) land at
+      // the physics body floor instead of floating above it.
       this.sprite.setOrigin(0.5, 1);
-      this.sprite.setPosition(0, data.bodyHeight / 2);
+      this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET);
       this.sprite.setAlpha(1);
 
       // Antialiasing ON — this is an HD 2.5D game
@@ -586,15 +591,15 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   }
   get flameGuardTimeRemaining(): number { return this.flameGuardTimer; }
 
-  // Debug info string for the overlay (two lines per fighter)
+  // Debug info string for the overlay
   debugInfo(): string {
     const guardAnimOk = this.scene.anims.exists('flarepaw_guard');
     const fgAnimOk    = this.scene.anims.exists('flarepaw_flame_guard');
-    const placeholder = !this.useSprite ? 'PLACEHOLDER' : (!guardAnimOk && !fgAnimOk ? 'sprite+no-guard-anims' : 'sprite');
     return [
-      `state:${this.state}  anim:${this.lastAnim}  face:${this.facing === 1 ? 'R' : 'L'}  gnd:${this.grounded ? 'Y' : 'N'}  render:${placeholder}`,
-      `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}  aura:${Math.round(this.stats.aura)}  sb:${Math.round(this.stats.soulbond)}`,
+      `state:${this.state}  anim:${this.lastAnim}  render:${this.useSprite ? 'sprite' : 'PLACEHOLDER'}`,
+      `facing:${this.facing === 1 ? 'R' : 'L'}(persists)  gnd:${this.grounded ? 'Y' : 'N'}  vOffset:${FEET_OFFSET}px`,
       `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}  guard_asset:${guardAnimOk}  fg_asset:${fgAnimOk}`,
+      `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}  aura:${Math.round(this.stats.aura)}  sb:${Math.round(this.stats.soulbond)}`,
     ].join('\n');
   }
 

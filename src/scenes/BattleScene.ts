@@ -229,7 +229,10 @@ export class BattleScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const spd = this.player.minariData.stats.speed * 2.2 * this.player.formSystem.speedMult;
 
-    if (inp.left) {
+    if (this.player.state === 'guard') {
+      // Guard locks horizontal position; facing is preserved from last movement
+      body.setVelocityX(0);
+    } else if (inp.left) {
       this.player.facing = -1;
       body.setVelocityX(-spd);
     } else if (inp.right) {
@@ -237,10 +240,7 @@ export class BattleScene extends Phaser.Scene {
       body.setVelocityX(spd);
     } else {
       body.setVelocityX(0);
-      // Auto-face enemy only when not actively steering left/right
-      if (this.player.state === 'idle' || this.player.state === 'run') {
-        this.player.facing = this.player.x < this.enemy.x ? 1 : -1;
-      }
+      // No auto-face: facing persists from last pressed direction
     }
 
     if (inp.up && this.player.isGrounded) {
