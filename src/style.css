@@ -1,2 +1,44 @@
 @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Space+Grotesk:wght@400;600;700&display=swap');
 *{box-sizing:border-box}html,body,#app{width:100%;height:100%;margin:0;overflow:hidden;background:#09071b}body{display:grid;place-items:center;background:radial-gradient(circle at 50% 20%,#30216a,#080616 70%);font-family:'Space Grotesk',sans-serif}canvas{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 25px 70px #000)}#loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#f8d868;font-weight:700;letter-spacing:.3em}canvas+#loading{display:none}
+
+#app{
+  position:relative;
+  width:min(100vw,calc(100vh * 16 / 9),1280px);
+  aspect-ratio:16/9;
+  isolation:isolate;
+  border:1px solid rgba(255,220,122,.22);
+  border-radius:18px;
+  overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,206,92,.08),rgba(105,74,192,.06));
+  box-shadow:0 28px 90px rgba(0,0,0,.58),inset 0 0 0 1px rgba(255,255,255,.05);
+}
+
+#app::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:1;
+  background:
+    linear-gradient(180deg,rgba(255,221,132,.09),transparent 16%,transparent 78%,rgba(13,8,34,.2)),
+    radial-gradient(circle at 50% -12%,rgba(255,208,93,.18),transparent 32%),
+    radial-gradient(circle at 50% 110%,rgba(137,108,255,.18),transparent 42%);
+  box-shadow:inset 0 0 64px rgba(5,3,18,.6),inset 0 0 0 1px rgba(255,237,179,.08);
+}
+
+canvas{
+  position:relative;
+  z-index:0;
+  border-radius:inherit;
+  filter:drop-shadow(0 25px 70px #000) saturate(1.08) contrast(1.04);
+}
+
+#loading{
+  z-index:2;
+  padding:16px 20px;
+  border:1px solid rgba(255,216,104,.35);
+  border-radius:999px;
+  background:rgba(9,7,29,.72);
+  box-shadow:0 14px 48px rgba(0,0,0,.42),inset 0 0 24px rgba(255,204,88,.08);
+  text-shadow:0 0 18px rgba(248,216,104,.45);
+}
