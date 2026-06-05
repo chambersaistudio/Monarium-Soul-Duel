@@ -26,11 +26,12 @@ const FLAREPAW_FRAME_PATHS: Record<FlarepawAnimation, string[]> = {
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
 type FlarepawFrame = { image: HTMLImageElement; loaded: boolean };
+type FlarepawDebug = { idleLoaded: number; runLoaded: number; animation: FlarepawAnimation; frame: number; facing: number };
 
 export class Painter {
   private flarepawFrames: Record<FlarepawAnimation, FlarepawFrame[]>;
   private flarepawFrameLoadFailed = false;
-  private flarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle' as FlarepawAnimation, frame: 0, facing: 1 };
+  private flarepawDebug: FlarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle', frame: 0, facing: 1 };
 
   constructor(private c: CanvasRenderingContext2D) {
     this.flarepawFrames = this.loadFlarepawFrames();
