@@ -59,6 +59,7 @@ function updatePlayer(state: GameState, input: Input, dt: number) {
     setTimeout(() => hit(state, p, 4 + p.combo * 2, 115 + p.combo * 8, 90 + p.combo * 45), 95);
   }
   if (p.cooldown <= 0 && input.pressed('KeyK')) useSpecial(state, p, state.selected);
+  if (p.cooldown <= 0 && input.pressed('KeyO')) useSpecial(state, p, 3);
   if (p.cooldown <= 0 && input.pressed('KeyL')) { p.dodge = .38; p.vx = p.facing * 680; p.cooldown = .5; burst(state, p.x, p.y - 60, '#ffe5a6', 14); }
   if (input.pressed('KeyI') && p.form <= 0 && p.aura >= 50) { p.aura -= 50; p.form = 8; burst(state, p.x, p.y - 70, '#ff4e64', 30, 330); }
   if (input.pressed('KeyU') && p.soul >= 100 && p.cooldown <= 0) {

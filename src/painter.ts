@@ -2,10 +2,55 @@ import { Fighter, GameState, SPECIALS } from './model';
 
 const W = 1280, H = 720;
 const TAU = Math.PI * 2;
+type FlarepawAnimation = 'idle' | 'run' | 'jump' | 'guard' | 'flame_guard';
+
+const FLAREPAW_FRAME_WIDTH = 294, FLAREPAW_FRAME_HEIGHT = 245;
+const FLAREPAW_IDLE_FRAME_PATHS = [
+  '/assets/characters/flarepaw/idle/idle_000.png',
+  '/assets/characters/flarepaw/idle/idle_001.png',
+  '/assets/characters/flarepaw/idle/idle_002.png',
+  '/assets/characters/flarepaw/idle/idle_003.png',
+  '/assets/characters/flarepaw/idle/idle_004.png',
+];
+const FLAREPAW_RUN_FRAME_PATHS = [
+  '/assets/characters/flarepaw/run/run_001.png',
+  '/assets/characters/flarepaw/run/run_002.png',
+  '/assets/characters/flarepaw/run/run_003.png',
+  '/assets/characters/flarepaw/run/run_004.png',
+  '/assets/characters/flarepaw/run/run_005.png',
+];
+const FLAREPAW_JUMP_FRAME_PATHS = [
+  '/assets/characters/flarepaw/jump/jump_001.png',
+  '/assets/characters/flarepaw/jump/jump_002.png',
+  '/assets/characters/flarepaw/jump/jump_003.png',
+  '/assets/characters/flarepaw/jump/jump_004.png',
+  '/assets/characters/flarepaw/jump/jump_005.png',
+];
+const FLAREPAW_GUARD_FRAME_PATHS = ['/assets/characters/flarepaw/guard/guard_001.png'];
+const FLAREPAW_FLAME_GUARD_FRAME_PATHS = ['/assets/characters/flarepaw/flame_guard/flame_guard_001.png'];
+const FLAREPAW_FRAME_PATHS: Record<FlarepawAnimation, string[]> = {
+  idle: FLAREPAW_IDLE_FRAME_PATHS,
+  run: FLAREPAW_RUN_FRAME_PATHS,
+  jump: FLAREPAW_JUMP_FRAME_PATHS,
+  guard: FLAREPAW_GUARD_FRAME_PATHS,
+  flame_guard: FLAREPAW_FLAME_GUARD_FRAME_PATHS,
+};
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
+type FlarepawFrame = { image: HTMLImageElement; loaded: boolean; failed: boolean };
+type FlarepawDebug = {
+  idleLoaded: number; runLoaded: number; jumpLoaded: number; guardLoaded: boolean; flameGuardLoaded: boolean;
+  animation: FlarepawAnimation; frame: number; facing: number; airborne: boolean; guardActive: boolean; flameGuardActive: boolean;
+};
+
 export class Painter {
-  constructor(private c: CanvasRenderingContext2D) {}
+  private flarepawFrames: Record<FlarepawAnimation, FlarepawFrame[]>;
+  private flarepawFrameLoadFailed = false;
+  private flarepawDebug: FlarepawDebug = { idleLoaded: 0, runLoaded: 0, jumpLoaded: 0, guardLoaded: false, flameGuardLoaded: false, animation: 'idle', frame: 0, facing: 1, airborne: false, guardActive: false, flameGuardActive: false };
+
+  constructor(private c: CanvasRenderingContext2D) {
+    this.flarepawFrames = this.loadFlarepawFrames();
+  }
   text(text: string, x: number, y: number, size: number, color = '#fff', align: CanvasTextAlign = 'left', weight = '700') {
     const c = this.c; c.font = `${weight} ${size}px 'Space Grotesk', sans-serif`; c.textAlign = align; c.fillStyle = color; c.fillText(text, x, y);
   }
@@ -81,23 +126,102 @@ export class Painter {
     for (const b of s.bolts) { this.mote(b.x, b.y, b.radius, b.color, .8); c.strokeStyle = b.color; c.lineWidth = 5; c.beginPath(); c.arc(b.x, b.y, b.radius * .7, s.clock * 5, s.clock * 5 + 4); c.stroke(); }
     for (const f of s.fighters) this.drawCreature(f, s.clock);
     this.drawHud(s);
+    this.drawFlarepawDebug();
   }
 
   drawCreature(f: Fighter, time: number) {
     const c = this.c, fire = f.id === 'flarepaw', bob = Math.sin(time * 5 + (fire ? 0 : 2)) * (f.grounded ? 4 : 0), alpha = f.dodge > 0 ? .42 : 1; c.save(); c.globalAlpha = alpha; c.translate(f.x, f.y + bob); c.scale(f.facing, 1);
     if (f.form > 0) { c.strokeStyle = '#ffbf55'; c.lineWidth = 5; c.globalAlpha = .5 + Math.sin(time * 12) * .2; c.beginPath(); c.ellipse(0, -68, 65, 96, 0, 0, TAU); c.stroke(); c.globalAlpha = alpha; }
-    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, 66, 18, 0, 0, TAU); c.fill();
+    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, fire ? 100 : 66, fire ? 23 : 18, 0, 0, TAU); c.fill();
     if (fire) this.flarepaw(c, f, time); else this.droplet(c, f, time); c.restore();
   }
 
+  loadFlarepawFrames(): Record<FlarepawAnimation, FlarepawFrame[]> {
+    const load = (path: string, required: boolean) => {
+      const frame: FlarepawFrame = { image: new Image(), loaded: false, failed: false };
+      frame.image.onload = () => { frame.loaded = true; };
+      frame.image.onerror = () => { frame.failed = true; if (required) this.flarepawFrameLoadFailed = true; };
+      frame.image.src = path;
+      return frame;
+    };
+    return {
+      idle: FLAREPAW_FRAME_PATHS.idle.map((path) => load(path, true)),
+      run: FLAREPAW_FRAME_PATHS.run.map((path) => load(path, true)),
+      jump: FLAREPAW_FRAME_PATHS.jump.map((path) => load(path, false)),
+      guard: FLAREPAW_FRAME_PATHS.guard.map((path) => load(path, false)),
+      flame_guard: FLAREPAW_FRAME_PATHS.flame_guard.map((path) => load(path, false)),
+    };
+  }
+
   flarepaw(c: CanvasRenderingContext2D, f: Fighter, time: number) {
+    const movement: FlarepawAnimation = Math.abs(f.vx) > 30 ? 'run' : 'idle';
+    const airborne = !f.grounded;
+    const flameGuardActive = f.attackKind === 'flameguard' && f.attack > 0;
+    const guardActive = f.guard;
+    const requested: FlarepawAnimation = flameGuardActive ? 'flame_guard' : guardActive ? 'guard' : airborne ? 'jump' : movement;
+    const animation = this.resolveFlarepawAnimation(requested, movement);
+    const frames = this.flarepawFrames[animation];
+    const fps = animation === 'jump' ? 14 : animation === 'idle' ? 6 : 10;
+    const frameIndex = animation === 'guard' || animation === 'flame_guard' ? 0 : Math.floor(time * fps) % frames.length;
+    const frame = frames[frameIndex];
+    this.flarepawDebug = {
+      idleLoaded: this.loadedFlarepawCount('idle'),
+      runLoaded: this.loadedFlarepawCount('run'),
+      jumpLoaded: this.loadedFlarepawCount('jump'),
+      guardLoaded: this.hasLoadedFlarepawFrame('guard'),
+      flameGuardLoaded: this.hasLoadedFlarepawFrame('flame_guard'),
+      animation,
+      frame: frameIndex,
+      facing: f.facing >= 0 ? 1 : -1,
+      airborne,
+      guardActive,
+      flameGuardActive,
+    };
+
+    if (this.flarepawFrameLoadFailed) this.flarepawFallback(c);
+    else if (frame.loaded) this.drawFlarepawFrame(c, frame.image);
+
+    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
+    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
+  }
+
+  resolveFlarepawAnimation(requested: FlarepawAnimation, movement: FlarepawAnimation): FlarepawAnimation {
+    return this.hasLoadedFlarepawFrame(requested) ? requested : movement;
+  }
+
+  hasLoadedFlarepawFrame(animation: FlarepawAnimation) {
+    return this.flarepawFrames[animation].some((frame) => frame.loaded);
+  }
+
+  loadedFlarepawCount(animation: FlarepawAnimation) {
+    return this.flarepawFrames[animation].filter((frame) => frame.loaded).length;
+  }
+
+  drawFlarepawFrame(c: CanvasRenderingContext2D, image: HTMLImageElement) {
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(image, -FLAREPAW_FRAME_WIDTH / 2, -FLAREPAW_FRAME_HEIGHT, FLAREPAW_FRAME_WIDTH, FLAREPAW_FRAME_HEIGHT);
+  }
+
+  drawFlarepawDebug() {
+    const d = this.flarepawDebug;
+    this.pill(982, 536, 270, 156, '#08051dcc', '#ffca6766');
+    this.text(`FLAREPAW DEBUG`, 1000, 558, 10, '#ffca67');
+    this.text(`state ${d.animation}  frame ${d.frame}`, 1000, 578, 10, '#d9cdf6');
+    this.text(`idle ${d.idleLoaded}/${FLAREPAW_IDLE_FRAME_PATHS.length}  run ${d.runLoaded}/${FLAREPAW_RUN_FRAME_PATHS.length}`, 1000, 597, 10, '#fff2c8');
+    this.text(`jump ${d.jumpLoaded}/${FLAREPAW_JUMP_FRAME_PATHS.length}`, 1000, 616, 10, '#fff2c8');
+    this.text(`guard loaded ${d.guardLoaded ? 'true' : 'false'}`, 1000, 635, 10, '#fff2c8');
+    this.text(`flame_guard loaded ${d.flameGuardLoaded ? 'true' : 'false'}`, 1000, 654, 10, '#fff2c8');
+    this.text(`facing ${d.facing > 0 ? 'right' : 'left'}  airborne ${d.airborne ? 'true' : 'false'}`, 1000, 673, 10, '#d9cdf6');
+    this.text(`guard ${d.guardActive ? 'true' : 'false'}  flame ${d.flameGuardActive ? 'true' : 'false'}`, 1000, 690, 10, '#d9cdf6');
+  }
+
+  flarepawFallback(c: CanvasRenderingContext2D) {
     c.strokeStyle = '#5b1a36'; c.lineWidth = 23; c.lineCap = 'round'; c.beginPath(); c.moveTo(-22, -42); c.lineTo(-40, -4); c.moveTo(23, -42); c.lineTo(41, -4); c.stroke();
     c.fillStyle = '#f36b49'; c.beginPath(); c.ellipse(0, -67, 48, 58, 0, 0, TAU); c.fill(); c.fillStyle = '#ffc65e'; c.beginPath(); c.ellipse(7, -57, 25, 34, .2, 0, TAU); c.fill();
     c.fillStyle = '#f36b49'; c.beginPath(); c.arc(0, -119, 43, 0, TAU); c.fill(); c.beginPath(); c.moveTo(-34, -142); c.lineTo(-48, -181); c.lineTo(-10, -153); c.moveTo(27, -145); c.lineTo(46, -178); c.lineTo(45, -132); c.fill();
     c.fillStyle = '#3a1932'; c.beginPath(); c.moveTo(-26, -133); c.lineTo(-7, -128); c.lineTo(-24, -121); c.moveTo(25, -133); c.lineTo(7, -128); c.lineTo(24, -121); c.fill();
     c.fillStyle = '#ffe56d'; c.beginPath(); c.arc(-17, -129, 4, 0, TAU); c.arc(17, -129, 4, 0, TAU); c.fill();
-    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
-    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
   }
 
   droplet(c: CanvasRenderingContext2D, f: Fighter, time: number) {
@@ -117,7 +241,7 @@ export class Painter {
     this.pill(555, 18, 170, 60, '#171039', '#6c55a5'); this.title('SOUL DUEL', 640, 55, 20, '#f9dc7a');
     this.pill(24, 628, 490, 68, '#0b0823dd', '#7253a5'); this.text(`${s.selected + 1}`, 52, 670, 24, '#ffcc64'); this.text(SPECIALS[s.selected].name, 88, 658, 15, '#fff'); this.text(`${SPECIALS[s.selected].cost} AURA  ·  ${SPECIALS[s.selected].note}`, 88, 678, 10, '#ab99cc');
     this.bar(540, 652, 285, 11, p.aura, '#8d6bff', false); this.text('AURA', 540, 641, 9, '#c0afe7'); this.bar(850, 652, 285, 11, p.soul, '#ffcf53', false); this.text('SOULBOND  ·  U', 850, 641, 9, '#e8c971');
-    this.text('J ATTACK   K SPECIAL   L STEP   I MAGMAFORGE', 640, 708, 10, '#9786bd', 'center');
+    this.text('J ATTACK   K SPECIAL   L STEP   I MAGMAFORGE   O FLAME GUARD', 640, 708, 10, '#9786bd', 'center');
   }
 
   bar(x: number, y: number, w: number, h: number, amount: number, color: string, reverse: boolean) {
