@@ -72,10 +72,16 @@ export class PreloadScene extends Phaser.Scene {
       const firstKey = this.normalizeAndRegister(idleOk, runOk, jumpOk, guardOk, fgOk);
       this.registry.set('flarepaw_sprite_key', firstKey);
       this.registry.set('flarepaw_anim_mode', 'frames');
-      console.log('[PreloadScene] Flarepaw individual frames loaded ✓');
+      this.registry.set('flarepaw_guard_loaded', guardOk);
+      this.registry.set('flarepaw_flame_guard_loaded', fgOk);
+      console.log(`[PreloadScene] Flarepaw frames loaded ✓  guard:${guardOk}  flame_guard:${fgOk}`);
+      if (!guardOk)  console.warn('[PreloadScene] guard_001.png failed to load — check path: assets/characters/flarepaw/guard/guard_001.png');
+      if (!fgOk)     console.warn('[PreloadScene] flame_guard_001.png failed to load — check path: assets/characters/flarepaw/flame_guard/flame_guard_001.png');
     } else {
       this.registry.set('flarepaw_sprite_key', null);
       this.registry.set('flarepaw_anim_mode', 'none');
+      this.registry.set('flarepaw_guard_loaded', false);
+      this.registry.set('flarepaw_flame_guard_loaded', false);
       console.warn('[PreloadScene] No Flarepaw frames found — placeholder graphics active.');
     }
 
@@ -146,8 +152,9 @@ export class PreloadScene extends Phaser.Scene {
       { animKey: 'flarepaw_jump_takeoff', frameRate: 14, repeat: 0,  normKeys: normJump.slice(0, 2) },
       { animKey: 'flarepaw_jump_air',     frameRate: 1,  repeat: -1, normKeys: normJump.slice(2, 3) },
       { animKey: 'flarepaw_jump_land',    frameRate: 1,  repeat: 0,  normKeys: normJump.slice(4, 5) },
-      { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: 0,  normKeys: normGuard          },
-      { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: 0,  normKeys: normFG             },
+      // Held-state single-frame animations use repeat:-1 so isPlaying stays true
+      { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: -1, normKeys: normGuard          },
+      { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: -1, normKeys: normFG             },
     ];
 
     for (const { animKey, frameRate, repeat, normKeys } of animSpecs) {

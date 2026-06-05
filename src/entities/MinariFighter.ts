@@ -321,27 +321,36 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.flameGuardActive = true;
     this.flameGuardTimer  = duration;
 
+    // When the sprite animation covers flame guard, suppress the placeholder ring
+    const hasFGSprite = this.useSprite && this.scene.anims.exists('flarepaw_flame_guard');
+
     if (!this.flameGuardGfx) {
       this.flameGuardGfx = this.scene.add.graphics();
       this.add(this.flameGuardGfx);
     }
-    this.flameGuardGfx.setVisible(true);
-    this.flameGuardGfx.setDepth(20);
 
-    const g = this.flameGuardGfx;
-    g.clear();
-    const r = this.minariData.bodyWidth * 1.2;
-    g.lineStyle(4, 0xff8800, 0.95);
-    g.strokeCircle(0, 0, r);
-    g.fillStyle(0xff4400, 0.18);
-    g.fillCircle(0, 0, r);
-    g.lineStyle(2, 0xffcc00, 0.6);
-    g.strokeCircle(0, 0, r * 0.7);
-
-    this.scene.tweens.add({
-      targets: this.flameGuardGfx, alpha: 0.4,
-      duration: 280, yoyo: true, repeat: -1
-    });
+    if (hasFGSprite) {
+      // Sprite animation handles the visual — hide the ring
+      this.scene.tweens.killTweensOf(this.flameGuardGfx);
+      this.flameGuardGfx.setVisible(false);
+    } else {
+      // Fallback ring for when no sprite asset is loaded
+      this.flameGuardGfx.setVisible(true);
+      this.flameGuardGfx.setDepth(20);
+      const g = this.flameGuardGfx;
+      g.clear();
+      const r = this.minariData.bodyWidth * 1.2;
+      g.lineStyle(4, 0xff8800, 0.95);
+      g.strokeCircle(0, 0, r);
+      g.fillStyle(0xff4400, 0.18);
+      g.fillCircle(0, 0, r);
+      g.lineStyle(2, 0xffcc00, 0.6);
+      g.strokeCircle(0, 0, r * 0.7);
+      this.scene.tweens.add({
+        targets: this.flameGuardGfx, alpha: 0.4,
+        duration: 280, yoyo: true, repeat: -1
+      });
+    }
   }
 
   deactivateFlameGuard(): void {
@@ -577,18 +586,16 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   }
   get flameGuardTimeRemaining(): number { return this.flameGuardTimer; }
 
-  // Debug info string for the overlay
+  // Debug info string for the overlay (two lines per fighter)
   debugInfo(): string {
+    const guardAnimOk = this.scene.anims.exists('flarepaw_guard');
+    const fgAnimOk    = this.scene.anims.exists('flarepaw_flame_guard');
+    const placeholder = !this.useSprite ? 'PLACEHOLDER' : (!guardAnimOk && !fgAnimOk ? 'sprite+no-guard-anims' : 'sprite');
     return [
-      `state:${this.state}`,
-      `anim:${this.lastAnim}`,
-      `face:${this.facing === 1 ? 'R' : 'L'}`,
-      `gnd:${this.grounded ? 'Y' : 'N'}`,
-      `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}`,
-      `aura:${Math.round(this.stats.aura)}`,
-      `sb:${Math.round(this.stats.soulbond)}`,
-      `sprite:${this.useSprite ? 'yes' : 'gfx'}`,
-    ].join('  ');
+      `state:${this.state}  anim:${this.lastAnim}  face:${this.facing === 1 ? 'R' : 'L'}  gnd:${this.grounded ? 'Y' : 'N'}  render:${placeholder}`,
+      `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}  aura:${Math.round(this.stats.aura)}  sb:${Math.round(this.stats.soulbond)}`,
+      `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}  guard_asset:${guardAnimOk}  fg_asset:${fgAnimOk}`,
+    ].join('\n');
   }
 
   override destroy(): void {
