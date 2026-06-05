@@ -59,6 +59,34 @@ Claude
 
 ## Handoff Log
 
+### 2026-06-05 — Guard ground-only restriction
+
+#### Agent
+Claude
+
+#### Summary of What Changed
+Guard can no longer be activated while Flarepaw is airborne. Jumping is blocked while guard state is active. Both changes are in `src/scenes/BattleScene.ts` `handlePlayerInput()`.
+
+#### New or Changed Game States
+- No new states added.
+- Existing `guard` state now has an additional precondition: `isGrounded` must be true to enter it.
+
+#### New or Changed Controls
+- DOWN / S to enter guard: now only works when grounded. Mid-air presses are ignored.
+- UP (jump): now blocked when `state === 'guard'`. Must release guard before jumping.
+
+#### New or Changed Assets
+- None.
+
+#### New Known Issues
+- None introduced.
+
+#### What UI May Need Next
+- Guard indicator (if any) only needs to show when player is grounded — it will never be active mid-air.
+- Mobile guard button can be visually disabled or greyed while player is airborne.
+
+---
+
 ### 2026-06-05
 
 - Initial reusable handoff template added for Claude-to-Codex coordination.
