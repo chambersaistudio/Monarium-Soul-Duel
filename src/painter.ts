@@ -26,12 +26,11 @@ const FLAREPAW_FRAME_PATHS: Record<FlarepawAnimation, string[]> = {
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
 type FlarepawFrame = { image: HTMLImageElement; loaded: boolean };
-type FlarepawDebug = { idleLoaded: number; runLoaded: number; animation: FlarepawAnimation; frame: number; facing: number };
 
 export class Painter {
   private flarepawFrames: Record<FlarepawAnimation, FlarepawFrame[]>;
   private flarepawFrameLoadFailed = false;
-  private flarepawDebug: FlarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle', frame: 0, facing: 1 };
+  private flarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle' as FlarepawAnimation, frame: 0, facing: 1 };
 
   constructor(private c: CanvasRenderingContext2D) {
     this.flarepawFrames = this.loadFlarepawFrames();
@@ -216,3 +215,4 @@ export class Painter {
     const c = this.c; c.fillStyle = '#09061caa'; c.fillRect(0, 0, W, H); const win = s.result === 'victory'; this.text(win ? 'SOUL RESONANCE COMPLETE' : 'THE BOND ENDURES', 640, 255, 15, win ? '#ffce5e' : '#89dcff', 'center'); this.title(win ? 'VICTORY' : 'DEFEAT', 640, 350, 92, win ? '#fff0a6' : '#d5f6ff'); this.text(win ? 'Flarepaw’s bond burns brighter.' : 'Train. Bond. Rise again.', 640, 395, 20, '#d6c9ef', 'center'); this.pill(530, 460, 220, 52, '#ffcc59'); this.text('ENTER  ·  RETURN', 640, 493, 14, '#25133d', 'center');
   }
 }
+
