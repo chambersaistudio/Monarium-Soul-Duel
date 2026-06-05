@@ -76,15 +76,21 @@ export class UISystem {
     this.addText('ultimate_ready', '', w / 2 + 12, 112, {
       fontSize: '9px', color: '#ffe680', fontFamily: UI_FONT_BOLD
     });
-    this.addText('controls_hint', '', w / 2, h - 22, {
+    this.addText('controls_hint', '', w / 2, h - 15, {
       fontSize: '9px', color: '#dfd7ff', fontFamily: UI_FONT, align: 'center'
     }).setOrigin(0.5, 0);
 
-    ['MOVE', 'JUMP', 'GUARD', 'ATTACK', 'SPECIAL', 'DODGE'].forEach((label, i) => {
-      this.addText(`control_${i}`, label, w / 2 - 205 + i * 82, h - 34, {
-        fontSize: '9px', color: '#f7f0ff', fontFamily: UI_FONT_BOLD, align: 'center'
+    for (let i = 0; i < 6; i++) {
+      this.addText(`action_icon_${i}`, '', w / 2, h - 88, {
+        fontSize: '18px', color: '#ffffff', fontFamily: UI_FONT_BOLD, align: 'center'
       }).setOrigin(0.5, 0);
-    });
+      this.addText(`action_title_${i}`, '', w / 2, h - 66, {
+        fontSize: '10px', color: '#ffffff', fontFamily: UI_FONT_BOLD, align: 'center'
+      }).setOrigin(0.5, 0);
+      this.addText(`action_meta_${i}`, '', w / 2, h - 48, {
+        fontSize: '8px', color: '#d8d0eb', fontFamily: UI_FONT, align: 'center'
+      }).setOrigin(0.5, 0);
+    }
 
     // Announce / event text (center screen)
     this.addText('announce', '', w / 2, h / 2 - 60, {
@@ -212,7 +218,7 @@ export class UISystem {
       });
     }
 
-    this.drawControlPills();
+    this.drawActionDeck(specials, selectedSlot, abilityReady, ultimateReady, formActive);
   }
 
   private drawHudBackplate(x: number, y: number, w: number, h: number, accent: number, glow: number): void {
@@ -263,30 +269,81 @@ export class UISystem {
     this.graphics.strokeRoundedRect(centerX - width / 2, y, width, 15, 8);
   }
 
-  private drawControlPills(): void {
-    const labels = ['MOVE', 'JUMP', 'GUARD', 'ATTACK', 'SPECIAL', 'DODGE'];
+  private drawActionDeck(
+    specials: MoveData[],
+    selectedSlot: number,
+    abilityReady: boolean,
+    ultimateReady: boolean,
+    formActive: boolean
+  ): void {
+    const selectedMove = specials[selectedSlot];
+    const actions = [
+      { icon: '◆', title: 'BASIC', meta: 'J  ATTACK', accent: 0xffa14a, fill: 0x3c2316, active: true },
+      { icon: '✦', title: selectedMove?.name.toUpperCase() ?? 'SPECIAL', meta: selectedMove ? `K  AURA ${selectedMove.auraCost}` : 'K  EMPTY', accent: 0xff6f3c, fill: 0x421b18, active: Boolean(selectedMove) },
+      { icon: '◇', title: 'GUARD', meta: '↓ / S', accent: 0x9f83ff, fill: 0x251a48, active: true },
+      { icon: '➤', title: 'DODGE', meta: 'L', accent: 0x8fe7ff, fill: 0x123148, active: true },
+      { icon: '✧', title: formActive ? 'FORM' : 'ASCEND', meta: abilityReady || formActive ? 'I  READY' : 'I', accent: 0xffc66b, fill: 0x3d2656, active: abilityReady || formActive },
+      { icon: '✹', title: 'BURST', meta: ultimateReady ? 'U  READY' : 'U', accent: 0xffe58f, fill: 0x332618, active: ultimateReady },
+    ];
+
     const w = this.width;
     const h = this.height;
-    const pillW = 66;
-    const gap = 10;
-    const startX = w / 2 - ((labels.length * pillW + (labels.length - 1) * gap) / 2) + pillW / 2;
-    const y = h - 40;
+    const compact = w < 760;
+    const cardW = compact ? 86 : 104;
+    const cardH = 62;
+    const gap = compact ? 7 : 10;
+    const totalW = actions.length * cardW + (actions.length - 1) * gap;
+    const startX = w / 2 - totalW / 2;
+    const y = h - 101;
 
-    labels.forEach((_, i) => {
-      const x = startX + i * (pillW + gap);
-      const text = this.texts.get(`control_${i}`);
-      if (text) {
-        text.setPosition(x, y + 7);
-        text.setStyle({ fontSize: '9px', color: '#f7f0ff', fontFamily: UI_FONT_BOLD, align: 'center' });
-        text.setAlpha(0.82);
+    // A subtle action shelf grounds the controls without covering the battlefield.
+    this.graphics.fillStyle(0x080712, 0.34);
+    this.graphics.fillRoundedRect(startX - 14, y - 8, totalW + 28, cardH + 18, 18);
+    this.graphics.lineStyle(1, 0x8f5cff, 0.2);
+    this.graphics.strokeRoundedRect(startX - 14, y - 8, totalW + 28, cardH + 18, 18);
+
+    actions.forEach((action, i) => {
+      const x = startX + i * (cardW + gap);
+      const selected = i === 1;
+      const alpha = action.active ? 1 : 0.56;
+      const icon = this.texts.get(`action_icon_${i}`);
+      const title = this.texts.get(`action_title_${i}`);
+      const meta = this.texts.get(`action_meta_${i}`);
+
+      this.graphics.fillStyle(action.accent, action.active ? 0.16 : 0.06);
+      this.graphics.fillRoundedRect(x - 3, y - 3, cardW + 6, cardH + 6, 15);
+      this.graphics.fillGradientStyle(action.fill, 0x18111f, 0x090812, action.fill, 0.92, 0.84, 0.78, 0.86);
+      this.graphics.fillRoundedRect(x, y, cardW, cardH, 13);
+      this.graphics.fillStyle(0xffffff, action.active ? 0.1 : 0.05);
+      this.graphics.fillRoundedRect(x + 6, y + 5, cardW - 12, 12, 8);
+      this.graphics.lineStyle(selected ? 2 : 1, selected ? 0xffd37a : action.accent, selected ? 0.95 : 0.45);
+      this.graphics.strokeRoundedRect(x, y, cardW, cardH, 13);
+
+      if (selected) {
+        this.graphics.fillStyle(0xffd37a, 0.95);
+        this.graphics.fillTriangle(x + cardW / 2 - 8, y - 7, x + cardW / 2 + 8, y - 7, x + cardW / 2, y - 1);
       }
-      this.graphics.fillStyle(0x8f5cff, 0.12);
-      this.graphics.fillRoundedRect(x - pillW / 2 - 2, y - 2, pillW + 4, 25, 13);
-      this.graphics.fillGradientStyle(0x241633, 0x151422, 0x0e0b18, 0x1c1230, 0.66, 0.58, 0.46, 0.54);
-      this.graphics.fillRoundedRect(x - pillW / 2, y, pillW, 21, 11);
-      this.graphics.lineStyle(1, 0xb996ff, 0.32);
-      this.graphics.strokeRoundedRect(x - pillW / 2, y, pillW, 21, 11);
+
+      if (icon) {
+        icon.setText(action.icon).setPosition(x + 18, y + 8).setAlpha(alpha);
+        icon.setStyle({ fontSize: '18px', color: action.active ? '#fff8ea' : '#a99fc0', fontFamily: UI_FONT_BOLD, align: 'center' });
+      }
+      if (title) {
+        const displayTitle = action.title.length > 11 ? `${action.title.slice(0, 10)}…` : action.title;
+        title.setText(displayTitle).setPosition(x + cardW / 2 + 8, y + 15).setAlpha(alpha);
+        title.setStyle({ fontSize: compact ? '9px' : '10px', color: action.active ? '#ffffff' : '#b7adca', fontFamily: UI_FONT_BOLD, align: 'center' });
+      }
+      if (meta) {
+        meta.setText(action.meta).setPosition(x + cardW / 2, y + 41).setAlpha(alpha);
+        meta.setStyle({ fontSize: '8px', color: action.active ? '#ffdca8' : '#9185a8', fontFamily: UI_FONT, align: 'center' });
+      }
     });
+
+    const hint = this.texts.get('controls_hint');
+    if (hint) {
+      hint.setText('ARROWS MOVE / JUMP  •  NUMBER KEYS SELECT SPECIALS').setAlpha(0.65);
+      hint.setPosition(w / 2, h - 17);
+    }
   }
 
   private drawBar(
