@@ -28,56 +28,53 @@ export class UISystem {
   private createStaticUI(): void {
     const w = this.width;
     const h = this.height;
-    const compact = w < 760;
 
-    // Player / enemy labels stay inside the canvas-safe HUD panel.
-    this.addText('player_name', 'FLAREPAW', 24, h - 170, {
+    // Top HUD: keeps lower battle space clear for fighters and controls.
+    this.addText('player_name', 'FLAREPAW', 24, 16, {
       fontSize: '12px', color: '#ff9a3d', fontStyle: 'bold', fontFamily: 'monospace'
     });
-    this.addText('enemy_name', 'DROPLET', w - 24, h - 170, {
+    this.addText('enemy_name', 'DROPLET', w - 24, 16, {
       fontSize: '12px', color: '#66d7ff', fontStyle: 'bold', fontFamily: 'monospace', align: 'right'
     }).setOrigin(1, 0);
 
-    this.addText('player_values', '', 24, h - 156, {
+    this.addText('player_values', '', 24, 31, {
       fontSize: '10px', color: '#dce7d3', fontFamily: 'monospace'
     });
-    this.addText('enemy_values', '', w - 24, h - 156, {
+    this.addText('enemy_values', '', w - 24, 31, {
       fontSize: '10px', color: '#dce7d3', fontFamily: 'monospace', align: 'right'
     }).setOrigin(1, 0);
 
-    this.addText('state_chip_training', '', w / 2, h - 174, {
-      fontSize: '10px', color: '#7dffb2', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
+    this.addText('state_chip_training', '', w / 2, 10, {
+      fontSize: '9px', color: '#7dffb2', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
     }).setOrigin(0.5, 0);
-    this.addText('state_chip_guard', '', w / 2 - 82, h - 152, {
-      fontSize: '10px', color: '#7aa7ff', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
+    this.addText('state_chip_guard', '', w / 2 - 60, 30, {
+      fontSize: '9px', color: '#7aa7ff', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
     }).setOrigin(0.5, 0);
-    this.addText('state_chip_flame_guard', '', w / 2 + 82, h - 152, {
-      fontSize: '10px', color: '#ffb15e', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
+    this.addText('state_chip_flame_guard', '', w / 2 + 60, 30, {
+      fontSize: '9px', color: '#ffb15e', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
     }).setOrigin(0.5, 0);
-    this.addText('state_chip_anim', '', w / 2, h - 130, {
-      fontSize: '10px', color: '#cccccc', fontFamily: 'monospace', align: 'center'
+    this.addText('state_chip_anim', '', w / 2, 50, {
+      fontSize: '9px', color: '#cccccc', fontFamily: 'monospace', align: 'center'
     }).setOrigin(0.5, 0);
 
-    // Special slots label and slots; positions are recalculated during update for mobile-friendly wrapping.
-    this.addText('slots_label', 'SPECIAL SLOT', 24, h - 86, {
-      fontSize: '10px', color: '#d7c777', fontStyle: 'bold', fontFamily: 'monospace'
-    });
+    this.addText('slots_label', 'SLOT', w / 2, 71, {
+      fontSize: '10px', color: '#fff0a6', fontStyle: 'bold', fontFamily: 'monospace', align: 'center'
+    }).setOrigin(0.5, 0);
 
     for (let i = 0; i < 4; i++) {
-      this.addText(`slot_${i}`, `[${i + 1}] ---`, 24 + (i % (compact ? 2 : 4)) * 160, h - 68 + Math.floor(i / (compact ? 2 : 4)) * 20, {
-        fontSize: '11px', color: '#888888', fontFamily: 'monospace'
-      });
+      this.addText(`slot_${i}`, `${i + 1}`, w / 2 - 54 + i * 36, 92, {
+        fontSize: '9px', color: '#888888', fontFamily: 'monospace', align: 'center'
+      }).setOrigin(0.5, 0);
     }
 
-    // Ability / ultimate ready indicators double as a compact battle control legend.
-    this.addText('ability_ready', '', w / 2 - 130, h - 42, {
-      fontSize: '10px', color: '#ff8800', fontFamily: 'monospace'
+    this.addText('ability_ready', '', w / 2 - 106, 112, {
+      fontSize: '9px', color: '#ff8800', fontFamily: 'monospace'
     });
-    this.addText('ultimate_ready', '', w / 2 + 24, h - 42, {
-      fontSize: '10px', color: '#ffdd00', fontFamily: 'monospace'
+    this.addText('ultimate_ready', '', w / 2 + 12, 112, {
+      fontSize: '9px', color: '#ffdd00', fontFamily: 'monospace'
     });
     this.addText('controls_hint', '←/→ MOVE  ↑ JUMP  ↓/S GUARD  J ATTACK  K SPECIAL  L DODGE', w / 2, h - 22, {
-      fontSize: compact ? '9px' : '10px', color: '#adb8c7', fontFamily: 'monospace', align: 'center'
+      fontSize: '9px', color: '#adb8c7', fontFamily: 'monospace', align: 'center'
     }).setOrigin(0.5, 0);
 
     // Announce / event text (center screen)
@@ -113,35 +110,28 @@ export class UISystem {
   ): void {
     this.graphics.clear();
     const w = this.width;
-    const h = this.height;
-
-    const panelX = 14;
-    const panelY = h - 184;
-    const panelW = w - 28;
-    const panelH = 170;
     const compact = w < 760;
-    const playerBarW = compact ? Math.min(210, w * 0.34) : 230;
+
+    const playerBarW = compact ? Math.min(190, w * 0.32) : 230;
     const enemyBarW = playerBarW;
     const playerX = 24;
     const enemyX = w - 24 - enemyBarW;
-    const hpY = h - 138;
-    const auraY = h - 112;
-    const soulY = h - 91;
+    const hpY = 48;
+    const auraY = 70;
+    const soulY = 88;
 
-    // Contained, mobile-first HUD surface.
-    this.graphics.fillStyle(0x050711, 0.74);
-    this.graphics.fillRoundedRect(panelX, panelY, panelW, panelH, 14);
-    this.graphics.lineStyle(1, 0x27324a, 0.95);
-    this.graphics.strokeRoundedRect(panelX, panelY, panelW, panelH, 14);
+    // Lightweight bar backplates only; no large lower overlay.
+    this.drawHudBackplate(playerX - 10, 10, playerBarW + 20, 92, 0xff8a30);
+    this.drawHudBackplate(enemyX - 10, 10, enemyBarW + 20, 76, 0x66d7ff);
 
     // ── Player bars (left side) ──
-    this.drawBar(playerX, hpY, playerBarW, 16, playerStats.hp, playerStats.maxHp, 0x2ee86f, 0x114421);
-    this.drawBar(playerX, auraY, playerBarW, 12, playerStats.aura, playerStats.maxAura, 0x4a73ff, 0x112266);
-    this.drawBar(playerX, soulY, Math.floor(playerBarW * 0.74), 8, playerStats.soulbond, playerStats.maxSoulbond, 0xffcc33, 0x665500);
+    this.drawBar(playerX, hpY, playerBarW, 15, playerStats.hp, playerStats.maxHp, 0x2ee86f, 0x114421);
+    this.drawBar(playerX, auraY, playerBarW, 11, playerStats.aura, playerStats.maxAura, 0x4a73ff, 0x112266);
+    this.drawBar(playerX, soulY, Math.floor(playerBarW * 0.72), 7, playerStats.soulbond, playerStats.maxSoulbond, 0xffcc33, 0x665500);
 
     // ── Enemy bars (right side) ──
-    this.drawBar(enemyX, hpY, enemyBarW, 16, enemyStats.hp, enemyStats.maxHp, 0xff5252, 0x661111);
-    this.drawBar(enemyX, auraY, enemyBarW, 12, enemyStats.aura, enemyStats.maxAura, 0x4a73ff, 0x112266);
+    this.drawBar(enemyX, hpY, enemyBarW, 15, enemyStats.hp, enemyStats.maxHp, 0xff5252, 0x661111);
+    this.drawBar(enemyX, auraY, enemyBarW, 11, enemyStats.aura, enemyStats.maxAura, 0x4a73ff, 0x112266);
 
     const playerValues = this.texts.get('player_values');
     if (playerValues) {
@@ -152,90 +142,104 @@ export class UISystem {
       enemyValues.setText(`HP ${Math.ceil(enemyStats.hp)}/${enemyStats.maxHp}  AU ${Math.floor(enemyStats.aura)}/${enemyStats.maxAura}`);
     }
 
-    // ── Read-only gameplay state chips ──
-    this.updateChip('state_chip_training', hudState.trainingModeActive === true ? 'TRAINING MODE' : '');
-    this.updateChip('state_chip_guard', hudState.guardActive === true ? 'GUARD ACTIVE' : 'GUARD READY', hudState.guardActive === true);
-    this.updateChip('state_chip_flame_guard', hudState.flameGuardActive === true ? 'FLAME GUARD' : 'FLAME GUARD OFF', hudState.flameGuardActive === true);
-    const animText = hudState.currentAnimationState ? `STATE ${hudState.currentAnimationState.toUpperCase()}` : '';
-    const animChip = this.texts.get('state_chip_anim');
-    if (animChip) animChip.setText(animText);
+    // ── Compact read-only status badges in the top center ──
+    this.drawBadge('state_chip_training', hudState.trainingModeActive === true ? 'TRAINING' : '', w / 2, 9, 72, 0x113822, 0x7dffb2, true);
+    this.drawBadge('state_chip_guard', hudState.guardActive === true ? 'GUARD' : 'G', w / 2 - 52, 29, 44, 0x13224a, 0x7aa7ff, hudState.guardActive === true);
+    this.drawBadge('state_chip_flame_guard', hudState.flameGuardActive === true ? 'FLAME' : 'FG', w / 2 + 52, 29, 52, 0x4a220d, 0xffb15e, hudState.flameGuardActive === true);
+    const animText = hudState.currentAnimationState ? hudState.currentAnimationState.toUpperCase() : '';
+    this.drawBadge('state_chip_anim', animText, w / 2, 49, Math.max(46, animText.length * 7 + 14), 0x171c27, 0xb8c0d4, false);
 
-    // ── Special slots ──
-    const slotColumns = compact ? 2 : 4;
-    const slotW = compact ? Math.min(188, (w - 56) / 2) : Math.min(172, (w - 72) / 4);
-    const slotsStartX = 24;
-    const slotsStartY = h - 76;
-    const slotGapX = compact ? 8 : 12;
-    const slotGapY = 20;
-    const slotsLabel = this.texts.get('slots_label');
-    if (slotsLabel) {
-      const selectedMove = specials[selectedSlot];
-      slotsLabel.setText(selectedMove ? `SPECIAL SLOT ${selectedSlot + 1}: ${selectedMove.name}` : `SPECIAL SLOT ${selectedSlot + 1}`);
-      slotsLabel.setPosition(slotsStartX, h - 91);
-    }
+    // ── Current special slot: visible but compact ──
+    const selectedMove = specials[selectedSlot];
+    const selectedName = selectedMove ? selectedMove.name : '---';
+    const slotLabel = `SLOT ${selectedSlot + 1}: ${selectedName}`;
+    this.drawBadge('slots_label', slotLabel, w / 2, 70, Math.min(compact ? 190 : 240, Math.max(94, slotLabel.length * 6 + 18)), 0x3b310f, 0xffdd55, true);
 
     for (let i = 0; i < 4; i++) {
-      const move = specials[i];
       const isSelected = i === selectedSlot;
       const slotText = this.texts.get(`slot_${i}`);
-      const col = i % slotColumns;
-      const row = Math.floor(i / slotColumns);
-      const bx = slotsStartX + col * (slotW + slotGapX);
-      const by = slotsStartY + row * slotGapY;
+      const x = w / 2 - 54 + i * 36;
       if (slotText) {
-        const label = move ? `[${i + 1}] ${move.name}` : `[${i + 1}] ---`;
-        slotText.setText(label);
-        slotText.setPosition(bx + 8, by + 2);
+        slotText.setText(`${i + 1}`);
+        slotText.setPosition(x, 92);
         slotText.setStyle({
-          fontSize: compact ? '10px' : '11px',
-          color: isSelected ? '#fff7a8' : '#9aa3b2',
+          fontSize: '9px',
+          color: isSelected ? '#1a1300' : '#9aa3b2',
           fontFamily: 'monospace',
           fontStyle: isSelected ? 'bold' : 'normal'
         });
-
-        this.graphics.fillStyle(isSelected ? 0x4a3b09 : 0x111723, isSelected ? 0.96 : 0.84);
-        this.graphics.fillRoundedRect(bx, by, slotW, 17, 6);
-        this.graphics.lineStyle(1, isSelected ? 0xffdd55 : 0x2d3850, isSelected ? 1 : 0.8);
-        this.graphics.strokeRoundedRect(bx, by, slotW, 17, 6);
-        if (isSelected) {
-          this.graphics.fillStyle(0xffdd55, 1);
-          this.graphics.fillTriangle(bx + 4, by + 5, bx + 4, by + 13, bx + 10, by + 9);
-        }
+        this.graphics.fillStyle(isSelected ? 0xffdd55 : 0x111723, isSelected ? 1 : 0.76);
+        this.graphics.fillRoundedRect(x - 12, 90, 24, 14, 5);
+        this.graphics.lineStyle(1, isSelected ? 0xfff2a0 : 0x2d3850, 0.9);
+        this.graphics.strokeRoundedRect(x - 12, 90, 24, 14, 5);
       }
     }
 
-    // Form duration bar sits above the lower control hint without overlapping slots.
+    // Form duration bar is attached to the player HUD, not the battle floor.
     if (formActive) {
       this.graphics.fillStyle(0xff4400, 0.35);
-      this.graphics.fillRoundedRect(playerX, h - 52, playerBarW, 5, 3);
+      this.graphics.fillRoundedRect(playerX, 101, playerBarW, 4, 2);
       this.graphics.fillStyle(0xff8800, 1);
-      this.graphics.fillRoundedRect(playerX, h - 52, playerBarW * Math.min(formTimeRemaining / 8000, 1), 5, 3);
+      this.graphics.fillRoundedRect(playerX, 101, playerBarW * Math.min(formTimeRemaining / 8000, 1), 4, 2);
     }
 
     // Ability / ultimate indicators
     const abilityText = this.texts.get('ability_ready');
     if (abilityText) {
+      abilityText.setPosition(w / 2 - 106, 112);
       if (formActive) {
-        abilityText.setText('[I] FORM ACTIVE').setStyle({ fontSize: '11px', color: '#ff8800', fontFamily: 'monospace' });
+        abilityText.setText('[I] FORM').setStyle({ fontSize: '9px', color: '#ff8800', fontFamily: 'monospace', fontStyle: 'bold' });
       } else {
-        abilityText.setText(abilityReady ? '[I] ABILITY RDY' : '[I] ABILITY').setStyle({
-          fontSize: '11px', color: abilityReady ? '#ff8800' : '#555555', fontFamily: 'monospace'
+        abilityText.setText(abilityReady ? '[I] READY' : '[I] ABILITY').setStyle({
+          fontSize: '9px', color: abilityReady ? '#ff8800' : '#656b78', fontFamily: 'monospace', fontStyle: abilityReady ? 'bold' : 'normal'
         });
       }
     }
     const ultText = this.texts.get('ultimate_ready');
     if (ultText) {
-      ultText.setText(ultimateReady ? '[U] SOULBURST!' : '[U] ULTIMATE').setStyle({
-        fontSize: '11px', color: ultimateReady ? '#ffdd00' : '#555555', fontFamily: 'monospace'
+      ultText.setPosition(w / 2 + 12, 112);
+      ultText.setText(ultimateReady ? '[U] SOULBURST' : '[U] ULT').setStyle({
+        fontSize: '9px', color: ultimateReady ? '#ffdd00' : '#656b78', fontFamily: 'monospace', fontStyle: ultimateReady ? 'bold' : 'normal'
       });
     }
   }
 
-  private updateChip(key: string, text: string, active = true): void {
-    const chip = this.texts.get(key);
-    if (!chip) return;
-    chip.setText(text);
-    chip.setAlpha(text ? (active ? 1 : 0.58) : 0);
+  private drawHudBackplate(x: number, y: number, w: number, h: number, accent: number): void {
+    this.graphics.fillStyle(0x050711, 0.52);
+    this.graphics.fillRoundedRect(x, y, w, h, 10);
+    this.graphics.lineStyle(1, accent, 0.22);
+    this.graphics.strokeRoundedRect(x, y, w, h, 10);
+  }
+
+  private drawBadge(
+    key: string,
+    text: string,
+    centerX: number,
+    y: number,
+    width: number,
+    fillColor: number,
+    accentColor: number,
+    active: boolean
+  ): void {
+    const badge = this.texts.get(key);
+    if (!badge) return;
+
+    badge.setText(text);
+    badge.setPosition(centerX, y + 2);
+    badge.setAlpha(text ? (active ? 1 : 0.62) : 0);
+    badge.setStyle({
+      fontSize: key === 'slots_label' ? '10px' : '9px',
+      color: active ? '#fff7d0' : '#b7bfcd',
+      fontFamily: 'monospace',
+      fontStyle: active ? 'bold' : 'normal',
+      align: 'center'
+    });
+
+    if (!text) return;
+    this.graphics.fillStyle(fillColor, active ? 0.82 : 0.5);
+    this.graphics.fillRoundedRect(centerX - width / 2, y, width, 15, 6);
+    this.graphics.lineStyle(1, accentColor, active ? 0.95 : 0.38);
+    this.graphics.strokeRoundedRect(centerX - width / 2, y, width, 15, 6);
   }
 
   private drawBar(
