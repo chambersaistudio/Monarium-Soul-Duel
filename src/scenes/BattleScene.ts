@@ -249,7 +249,8 @@ export class BattleScene extends Phaser.Scene {
 
     if (inp.down && this.player.state !== 'attacking') {
       this.player.state = 'guard';
-    } else if (this.player.state === 'guard' && !inp.down) {
+    } else if (this.player.state === 'guard' && !inp.down && !this.player.hasFlameGuard) {
+      // Only release guard when neither the guard key nor Flame Guard is holding it
       this.player.state = 'idle';
     }
 
