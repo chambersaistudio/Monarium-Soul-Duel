@@ -243,11 +243,11 @@ export class BattleScene extends Phaser.Scene {
       // No auto-face: facing persists from last pressed direction
     }
 
-    if (inp.up && this.player.isGrounded) {
+    if (inp.up && this.player.isGrounded && this.player.state !== 'guard') {
       body.setVelocityY(-this.player.minariData.stats.jumpPower);
     }
 
-    if (inp.down && this.player.state !== 'attacking') {
+    if (inp.down && this.player.state !== 'attacking' && this.player.isGrounded) {
       this.player.state = 'guard';
     } else if (this.player.state === 'guard' && !inp.down && !this.player.hasFlameGuard) {
       // Only release guard when neither the guard key nor Flame Guard is holding it
