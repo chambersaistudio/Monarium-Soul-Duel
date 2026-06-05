@@ -2,10 +2,39 @@ import { Fighter, GameState, SPECIALS } from './model';
 
 const W = 1280, H = 720;
 const TAU = Math.PI * 2;
+type FlarepawAnimation = 'idle' | 'run';
+
+const FLAREPAW_FRAME_WIDTH = 294, FLAREPAW_FRAME_HEIGHT = 245;
+const FLAREPAW_IDLE_FRAME_PATHS = [
+  '/assets/characters/flarepaw/idle/idle_000.png',
+  '/assets/characters/flarepaw/idle/idle_001.png',
+  '/assets/characters/flarepaw/idle/idle_002.png',
+  '/assets/characters/flarepaw/idle/idle_003.png',
+  '/assets/characters/flarepaw/idle/idle_004.png',
+];
+const FLAREPAW_RUN_FRAME_PATHS = [
+  '/assets/characters/flarepaw/run/run_001.png',
+  '/assets/characters/flarepaw/run/run_002.png',
+  '/assets/characters/flarepaw/run/run_003.png',
+  '/assets/characters/flarepaw/run/run_004.png',
+  '/assets/characters/flarepaw/run/run_005.png',
+];
+const FLAREPAW_FRAME_PATHS: Record<FlarepawAnimation, string[]> = {
+  idle: FLAREPAW_IDLE_FRAME_PATHS,
+  run: FLAREPAW_RUN_FRAME_PATHS,
+};
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
+type FlarepawFrame = { image: HTMLImageElement; loaded: boolean };
+
 export class Painter {
-  constructor(private c: CanvasRenderingContext2D) {}
+  private flarepawFrames: Record<FlarepawAnimation, FlarepawFrame[]>;
+  private flarepawFrameLoadFailed = false;
+  private flarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle' as FlarepawAnimation, frame: 0, facing: 1 };
+
+  constructor(private c: CanvasRenderingContext2D) {
+    this.flarepawFrames = this.loadFlarepawFrames();
+  }
   text(text: string, x: number, y: number, size: number, color = '#fff', align: CanvasTextAlign = 'left', weight = '700') {
     const c = this.c; c.font = `${weight} ${size}px 'Space Grotesk', sans-serif`; c.textAlign = align; c.fillStyle = color; c.fillText(text, x, y);
   }
@@ -81,23 +110,76 @@ export class Painter {
     for (const b of s.bolts) { this.mote(b.x, b.y, b.radius, b.color, .8); c.strokeStyle = b.color; c.lineWidth = 5; c.beginPath(); c.arc(b.x, b.y, b.radius * .7, s.clock * 5, s.clock * 5 + 4); c.stroke(); }
     for (const f of s.fighters) this.drawCreature(f, s.clock);
     this.drawHud(s);
+    this.drawFlarepawDebug();
   }
 
   drawCreature(f: Fighter, time: number) {
     const c = this.c, fire = f.id === 'flarepaw', bob = Math.sin(time * 5 + (fire ? 0 : 2)) * (f.grounded ? 4 : 0), alpha = f.dodge > 0 ? .42 : 1; c.save(); c.globalAlpha = alpha; c.translate(f.x, f.y + bob); c.scale(f.facing, 1);
     if (f.form > 0) { c.strokeStyle = '#ffbf55'; c.lineWidth = 5; c.globalAlpha = .5 + Math.sin(time * 12) * .2; c.beginPath(); c.ellipse(0, -68, 65, 96, 0, 0, TAU); c.stroke(); c.globalAlpha = alpha; }
-    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, 66, 18, 0, 0, TAU); c.fill();
+    c.fillStyle = '#07061766'; c.beginPath(); c.ellipse(0, 9, fire ? 100 : 66, fire ? 23 : 18, 0, 0, TAU); c.fill();
     if (fire) this.flarepaw(c, f, time); else this.droplet(c, f, time); c.restore();
   }
 
+  loadFlarepawFrames(): Record<FlarepawAnimation, FlarepawFrame[]> {
+    const load = (path: string) => {
+      const frame: FlarepawFrame = { image: new Image(), loaded: false };
+      frame.image.onload = () => { frame.loaded = true; };
+      frame.image.onerror = () => { this.flarepawFrameLoadFailed = true; };
+      frame.image.src = path;
+      return frame;
+    };
+    return {
+      idle: FLAREPAW_FRAME_PATHS.idle.map(load),
+      run: FLAREPAW_FRAME_PATHS.run.map(load),
+    };
+  }
+
   flarepaw(c: CanvasRenderingContext2D, f: Fighter, time: number) {
+    const animation: FlarepawAnimation = Math.abs(f.vx) > 30 ? 'run' : 'idle';
+    const frames = this.flarepawFrames[animation];
+    const fps = animation === 'idle' ? 6 : 10;
+    const frameIndex = Math.floor(time * fps) % frames.length;
+    const frame = frames[frameIndex];
+    this.flarepawDebug = {
+      idleLoaded: this.loadedFlarepawCount('idle'),
+      runLoaded: this.loadedFlarepawCount('run'),
+      animation,
+      frame: frameIndex,
+      facing: f.facing >= 0 ? 1 : -1,
+    };
+
+    if (this.flarepawFrameLoadFailed) this.flarepawFallback(c);
+    else if (frame.loaded) this.drawFlarepawFrame(c, frame.image);
+
+    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
+    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
+  }
+
+  loadedFlarepawCount(animation: FlarepawAnimation) {
+    return this.flarepawFrames[animation].filter((frame) => frame.loaded).length;
+  }
+
+  drawFlarepawFrame(c: CanvasRenderingContext2D, image: HTMLImageElement) {
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(image, -FLAREPAW_FRAME_WIDTH / 2, -FLAREPAW_FRAME_HEIGHT, FLAREPAW_FRAME_WIDTH, FLAREPAW_FRAME_HEIGHT);
+  }
+
+  drawFlarepawDebug() {
+    const d = this.flarepawDebug;
+    this.pill(1020, 610, 232, 78, '#08051dcc', '#ffca6766');
+    this.text(`FLAREPAW DEBUG`, 1038, 633, 10, '#ffca67');
+    this.text(`idle ${d.idleLoaded}/${FLAREPAW_IDLE_FRAME_PATHS.length}  run ${d.runLoaded}/${FLAREPAW_RUN_FRAME_PATHS.length}`, 1038, 654, 10, '#fff2c8');
+    this.text(`state ${d.animation}  frame ${d.frame}`, 1038, 673, 10, '#d9cdf6');
+    this.text(`facing ${d.facing > 0 ? 'right' : 'left'}`, 1038, 692, 10, '#d9cdf6');
+  }
+
+  flarepawFallback(c: CanvasRenderingContext2D) {
     c.strokeStyle = '#5b1a36'; c.lineWidth = 23; c.lineCap = 'round'; c.beginPath(); c.moveTo(-22, -42); c.lineTo(-40, -4); c.moveTo(23, -42); c.lineTo(41, -4); c.stroke();
     c.fillStyle = '#f36b49'; c.beginPath(); c.ellipse(0, -67, 48, 58, 0, 0, TAU); c.fill(); c.fillStyle = '#ffc65e'; c.beginPath(); c.ellipse(7, -57, 25, 34, .2, 0, TAU); c.fill();
     c.fillStyle = '#f36b49'; c.beginPath(); c.arc(0, -119, 43, 0, TAU); c.fill(); c.beginPath(); c.moveTo(-34, -142); c.lineTo(-48, -181); c.lineTo(-10, -153); c.moveTo(27, -145); c.lineTo(46, -178); c.lineTo(45, -132); c.fill();
     c.fillStyle = '#3a1932'; c.beginPath(); c.moveTo(-26, -133); c.lineTo(-7, -128); c.lineTo(-24, -121); c.moveTo(25, -133); c.lineTo(7, -128); c.lineTo(24, -121); c.fill();
     c.fillStyle = '#ffe56d'; c.beginPath(); c.arc(-17, -129, 4, 0, TAU); c.arc(17, -129, 4, 0, TAU); c.fill();
-    if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
-    if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
   }
 
   droplet(c: CanvasRenderingContext2D, f: Fighter, time: number) {
