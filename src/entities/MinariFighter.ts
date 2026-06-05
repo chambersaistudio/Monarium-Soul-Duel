@@ -72,6 +72,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   private jumpPhase: 'none' | 'takeoff' | 'air' | 'landing' = 'none';
   private landingTimer = 0;
+  private attackAnimPlaying = false;
 
   projectileGroup: Phaser.Physics.Arcade.Group;
   onProjectileFired?: (p: Projectile) => void;
@@ -215,7 +216,13 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         break;
       case 'attacking':
         if (this.scene.anims.exists('flarepaw_attack')) {
-          this.playAnim('flarepaw_attack', false);
+          if (!this.attackAnimPlaying) {
+            // Start or restart animation for each new attack press
+            this.playAnim('flarepaw_attack', true);
+            this.attackAnimPlaying = true;
+          }
+          // If animation has finished (repeat:0), hold the last frame —
+          // do not restart it; the state machine will return to idle/run.
         } else {
           this.playAnim('flarepaw_idle');
         }
@@ -266,6 +273,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       startupElapsed: 0, activeElapsed: 0, recoveryElapsed: 0,
       phase: 'startup', hitDealt: false
     };
+    this.attackAnimPlaying = false; // reset so syncAnim restarts the anim for this press
     this.state = 'attacking';
     return true;
   }

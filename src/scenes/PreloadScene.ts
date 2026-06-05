@@ -5,9 +5,21 @@ const NORM_SIZE  = 512;  // target canvas size for all normalised frames (px)
 const NORM_BASE  = 40;   // px from canvas bottom kept below feet baseline
 
 // ── Frame key groups ───────────────────────────────────────────────────────────
-const IDLE_KEYS  = ['fp_idle_000','fp_idle_001','fp_idle_002','fp_idle_003','fp_idle_004'];
-const RUN_KEYS   = ['fp_run_001', 'fp_run_002', 'fp_run_003', 'fp_run_004', 'fp_run_005'];
-const JUMP_KEYS  = ['fp_jump_001','fp_jump_002','fp_jump_003','fp_jump_004','fp_jump_005'];
+const IDLE_KEYS   = ['fp_idle_000','fp_idle_001','fp_idle_002','fp_idle_003','fp_idle_004'];
+const RUN_KEYS    = ['fp_run_001', 'fp_run_002', 'fp_run_003', 'fp_run_004', 'fp_run_005'];
+const JUMP_KEYS   = ['fp_jump_001','fp_jump_002','fp_jump_003','fp_jump_004','fp_jump_005'];
+// Attack frames — video-extracted names with skipped numbers are fine; sorted numerically below
+const ATTACK_KEYS = ['fp_atk_054','fp_atk_055','fp_atk_056','fp_atk_058'];
+
+// Sorts frame keys by the trailing integer so skipped numbers stay in the right order.
+// e.g. ['fp_atk_058','fp_atk_054'] → ['fp_atk_054','fp_atk_058']
+function sortByFrameNumber(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    const na = parseInt(a.match(/\d+$/)?.[0] ?? '0', 10);
+    const nb = parseInt(b.match(/\d+$/)?.[0] ?? '0', 10);
+    return na - nb;
+  });
+}
 
 // ── Load manifest: Phaser key → public path ────────────────────────────────────
 const LOAD_SPECS: Array<{ key: string; path: string }> = [
@@ -28,6 +40,11 @@ const LOAD_SPECS: Array<{ key: string; path: string }> = [
   { key: 'fp_jump_005', path: `${FRAME_BASE}/jump/jump_005.png` },
   { key: 'fp_guard_001',       path: `${FRAME_BASE}/guard/guard_001.png` },
   { key: 'fp_flame_guard_001', path: `${FRAME_BASE}/flame_guard/flame_guard_001.png` },
+  // Attack frames (video-extracted, skipped numbers allowed)
+  { key: 'fp_atk_054', path: `${FRAME_BASE}/attack/frame_054.png` },
+  { key: 'fp_atk_055', path: `${FRAME_BASE}/attack/frame_055.png` },
+  { key: 'fp_atk_056', path: `${FRAME_BASE}/attack/frame_056.png` },
+  { key: 'fp_atk_058', path: `${FRAME_BASE}/attack/frame_058.png` },
 ];
 
 export class PreloadScene extends Phaser.Scene {
@@ -62,26 +79,30 @@ export class PreloadScene extends Phaser.Scene {
   create(): void {
     const loaded = (k: string) => this.textures.exists(k) && !this.loadErrors.has(k);
 
-    const idleOk  = IDLE_KEYS.every(loaded);
-    const runOk   = RUN_KEYS.every(loaded);
-    const jumpOk  = JUMP_KEYS.every(loaded);
-    const guardOk = loaded('fp_guard_001');
-    const fgOk    = loaded('fp_flame_guard_001');
+    const idleOk   = IDLE_KEYS.every(loaded);
+    const runOk    = RUN_KEYS.every(loaded);
+    const jumpOk   = JUMP_KEYS.every(loaded);
+    const guardOk  = loaded('fp_guard_001');
+    const fgOk     = loaded('fp_flame_guard_001');
+    const attackOk = ATTACK_KEYS.every(loaded);
 
     if (idleOk || runOk || jumpOk) {
-      const firstKey = this.normalizeAndRegister(idleOk, runOk, jumpOk, guardOk, fgOk);
+      const firstKey = this.normalizeAndRegister(idleOk, runOk, jumpOk, guardOk, fgOk, attackOk);
       this.registry.set('flarepaw_sprite_key', firstKey);
       this.registry.set('flarepaw_anim_mode', 'frames');
       this.registry.set('flarepaw_guard_loaded', guardOk);
       this.registry.set('flarepaw_flame_guard_loaded', fgOk);
-      console.log(`[PreloadScene] Flarepaw frames loaded ✓  guard:${guardOk}  flame_guard:${fgOk}`);
+      this.registry.set('flarepaw_attack_loaded', attackOk);
+      console.log(`[PreloadScene] Flarepaw frames loaded ✓  guard:${guardOk}  flame_guard:${fgOk}  attack:${attackOk}`);
       if (!guardOk)  console.warn('[PreloadScene] guard_001.png failed to load — check path: assets/characters/flarepaw/guard/guard_001.png');
       if (!fgOk)     console.warn('[PreloadScene] flame_guard_001.png failed to load — check path: assets/characters/flarepaw/flame_guard/flame_guard_001.png');
+      if (!attackOk) console.warn('[PreloadScene] attack frames failed to load — check path: assets/characters/flarepaw/attack/frame_054.png … frame_058.png');
     } else {
       this.registry.set('flarepaw_sprite_key', null);
       this.registry.set('flarepaw_anim_mode', 'none');
       this.registry.set('flarepaw_guard_loaded', false);
       this.registry.set('flarepaw_flame_guard_loaded', false);
+      this.registry.set('flarepaw_attack_loaded', false);
       console.warn('[PreloadScene] No Flarepaw frames found — placeholder graphics active.');
     }
 
@@ -133,16 +154,18 @@ export class PreloadScene extends Phaser.Scene {
 
   private normalizeAndRegister(
     idleOk: boolean, runOk: boolean, jumpOk: boolean,
-    guardOk: boolean, fgOk: boolean,
+    guardOk: boolean, fgOk: boolean, attackOk: boolean,
   ): string | null {
     const normAll = (keys: string[]) =>
       keys.map(k => this.normalizeToCanvas(k)).filter((k): k is string => k !== null);
 
-    const normIdle  = idleOk  ? normAll(IDLE_KEYS)              : [];
-    const normRun   = runOk   ? normAll(RUN_KEYS)               : [];
-    const normJump  = jumpOk  ? normAll(JUMP_KEYS)              : [];
-    const normGuard = guardOk ? normAll(['fp_guard_001'])        : [];
-    const normFG    = fgOk    ? normAll(['fp_flame_guard_001'])  : [];
+    const normIdle   = idleOk   ? normAll(IDLE_KEYS)                              : [];
+    const normRun    = runOk    ? normAll(RUN_KEYS)                               : [];
+    const normJump   = jumpOk   ? normAll(JUMP_KEYS)                              : [];
+    const normGuard  = guardOk  ? normAll(['fp_guard_001'])                       : [];
+    const normFG     = fgOk     ? normAll(['fp_flame_guard_001'])                 : [];
+    // Numeric sort ensures frame_054 < frame_055 < frame_056 < frame_058 even with gaps
+    const normAttack = attackOk ? normAll(sortByFrameNumber(ATTACK_KEYS))         : [];
 
     type AnimSpec = { animKey: string; frameRate: number; repeat: number; normKeys: string[] };
     const animSpecs: AnimSpec[] = [
@@ -155,6 +178,8 @@ export class PreloadScene extends Phaser.Scene {
       // Held-state single-frame animations use repeat:-1 so isPlaying stays true
       { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: -1, normKeys: normGuard          },
       { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: -1, normKeys: normFG             },
+      // Attack: plays once, no loop — frame_054=startup, 055+056=active hit, 058=recovery
+      { animKey: 'flarepaw_attack',       frameRate: 12, repeat: 0,  normKeys: normAttack         },
     ];
 
     for (const { animKey, frameRate, repeat, normKeys } of animSpecs) {

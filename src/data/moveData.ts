@@ -4,23 +4,25 @@ export const CORE_ATTACKS: Record<string, CoreAttackConfig> = {
   flarepaw_core: {
     id: 'flarepaw_core',
     name: 'Flaming Palm Strike',
-    animKey: 'flarepaw_palm',
+    animKey: 'flarepaw_attack',
     comboHits: [
       {
+        // frame_054 = startup, frame_055+056 = active hit, frame_058 = recovery
+        // at 12fps each frame ≈ 83ms → startup≈5 ticks, active≈10 ticks, recovery≈5 ticks
         damage: 8,
         hitbox: { shape: 'rect', offsetX: 40, offsetY: 0, width: 50, height: 40 },
-        startupFrames: 4,
-        activeFrames: 6,
-        recoveryFrames: 8,
+        startupFrames: 5,
+        activeFrames: 10,
+        recoveryFrames: 5,
         knockbackX: 80,
         knockbackY: -20
       },
       {
         damage: 10,
         hitbox: { shape: 'rect', offsetX: 45, offsetY: 0, width: 55, height: 40 },
-        startupFrames: 3,
-        activeFrames: 6,
-        recoveryFrames: 8,
+        startupFrames: 4,
+        activeFrames: 10,
+        recoveryFrames: 6,
         knockbackX: 100,
         knockbackY: -30
       },
@@ -28,8 +30,8 @@ export const CORE_ATTACKS: Record<string, CoreAttackConfig> = {
         damage: 16,
         hitbox: { shape: 'rect', offsetX: 50, offsetY: 0, width: 65, height: 50 },
         startupFrames: 5,
-        activeFrames: 8,
-        recoveryFrames: 16,
+        activeFrames: 10,
+        recoveryFrames: 12,
         knockbackX: 200,
         knockbackY: -60
       }
