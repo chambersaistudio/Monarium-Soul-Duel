@@ -22,11 +22,10 @@ interface AttackState {
 }
 
 // Target display height in pixels for the sprite in-game.
-// The script normalises frames to 512×512 with ~40px baseline margin,
-// so most of the character lives in the top ~90% of the frame.
+// PreloadScene normalises all frames to 512×512 with 40px baseline margin.
 const DISPLAY_HEIGHT = 220;
-const FRAME_SIZE     = 512; // must match process_flarepaw_sprites.py --size
-const SPRITE_SCALE   = DISPLAY_HEIGHT / FRAME_SIZE;  // ≈ 0.43
+const NORM_SIZE      = 512;
+const SPRITE_SCALE   = DISPLAY_HEIGHT / NORM_SIZE;  // ≈ 0.43
 
 export class MinariFighter extends Phaser.GameObjects.Container {
   readonly fighterId: string;
@@ -197,7 +196,11 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         this.playAnim('flarepaw_run');
         break;
       case 'guard':
-        this.playAnim('flarepaw_guard', false);
+        if (this.flameGuardActive) {
+          this.playAnim('flarepaw_flame_guard', false);
+        } else {
+          this.playAnim('flarepaw_guard', false);
+        }
         break;
       case 'attacking':
         // Attack animation mapped to jump frames until dedicated art exists
