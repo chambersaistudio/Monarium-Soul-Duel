@@ -65,6 +65,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private hurtElapsed   = 0;
   private guardActive   = false;
 
+  private jumpPhase: 'none' | 'takeoff' | 'air' | 'landing' = 'none';
+  private landingTimer = 0;
+
   projectileGroup: Phaser.Physics.Arcade.Group;
   onProjectileFired?: (p: Projectile) => void;
   activeHitbox?: { x: number; y: number; w: number; h: number } | null = null;
@@ -180,17 +183,20 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private syncAnim(): void {
     if (!this.sprite) return;
 
-    // Use setFlipX on the sprite itself — NOT container scaleX.
-    // Sprite source is right-facing; flip when facing left.
+    // Frames are authored right-facing; flip sprite (not container) when facing left
     this.sprite.setFlipX(this.facing === -1);
 
-    const velX    = Math.abs(this.phBody.velocity.x);
-    const airborne = !this.grounded;
+    const velX = Math.abs(this.phBody.velocity.x);
 
     switch (this.state) {
       case 'jump':
       case 'fall':
-        this.playAnim('flarepaw_jump');
+        // Phase-based: takeoff frames once, then hold air frame
+        if (this.jumpPhase === 'air') {
+          this.playAnim('flarepaw_jump_air', false);
+        } else {
+          this.playAnim('flarepaw_jump_takeoff', false);
+        }
         break;
       case 'run':
         this.playAnim('flarepaw_run');
@@ -203,7 +209,6 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         }
         break;
       case 'attacking':
-        // Attack animation mapped to jump frames until dedicated art exists
         if (this.scene.anims.exists('flarepaw_attack')) {
           this.playAnim('flarepaw_attack', false);
         } else {
@@ -211,13 +216,13 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         }
         break;
       case 'hurt':
-        // Tint is applied in takeDamage(); keep current anim during stun
         break;
       case 'idle':
       case 'form_active':
       default:
-        if (airborne) {
-          this.playAnim('flarepaw_jump');
+        // Landing frame briefly overrides idle/run after touching down
+        if (this.jumpPhase === 'landing') {
+          this.playAnim('flarepaw_jump_land', false);
         } else if (velX > 10) {
           this.playAnim('flarepaw_run');
         } else {
@@ -497,12 +502,32 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       }
     }
 
-    // Jump / fall state tracking
+    // Jump / fall state tracking + phase-based jump animation management
     if (!this.grounded && this.state !== 'attacking' && this.state !== 'hurt' &&
         this.state !== 'stunned' && this.state !== 'guard') {
+      // Leaving ground: start takeoff phase
+      if (this.jumpPhase === 'none' || this.jumpPhase === 'landing') {
+        this.jumpPhase = 'takeoff';
+      }
+      // Takeoff animation finished → switch to air-hold frame
+      if (this.jumpPhase === 'takeoff' && this.sprite &&
+          !this.sprite.anims.isPlaying && this.lastAnim === 'flarepaw_jump_takeoff') {
+        this.jumpPhase = 'air';
+      }
       this.state = this.phBody.velocity.y < 0 ? 'jump' : 'fall';
     } else if (this.grounded) {
-      // Resolve run vs idle when on ground
+      // Just touched down from a jump
+      if ((this.state === 'jump' || this.state === 'fall') &&
+          (this.jumpPhase === 'takeoff' || this.jumpPhase === 'air')) {
+        this.jumpPhase   = 'landing';
+        this.landingTimer = 100;
+      }
+      // Count down the brief landing hold
+      if (this.jumpPhase === 'landing') {
+        this.landingTimer -= delta;
+        if (this.landingTimer <= 0) this.jumpPhase = 'none';
+      }
+      // Resolve ground state
       if (this.state === 'jump' || this.state === 'fall') {
         this.state = Math.abs(this.phBody.velocity.x) > 10 ? 'run' : 'idle';
       } else if (this.state === 'idle' && Math.abs(this.phBody.velocity.x) > 10) {

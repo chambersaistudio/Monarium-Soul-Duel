@@ -237,6 +237,10 @@ export class BattleScene extends Phaser.Scene {
       body.setVelocityX(spd);
     } else {
       body.setVelocityX(0);
+      // Auto-face enemy only when not actively steering left/right
+      if (this.player.state === 'idle' || this.player.state === 'run') {
+        this.player.facing = this.player.x < this.enemy.x ? 1 : -1;
+      }
     }
 
     if (inp.up && this.player.isGrounded) {
@@ -279,11 +283,6 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (inp.ultimate) this.triggerUltimate();
-
-    // Auto-face enemy when idle
-    if (this.player.state === 'idle' || this.player.state === 'run') {
-      this.player.facing = this.player.x < this.enemy.x ? 1 : -1;
-    }
   }
 
   private triggerUltimate(): void {

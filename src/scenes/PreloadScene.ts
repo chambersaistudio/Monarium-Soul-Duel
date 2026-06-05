@@ -140,11 +140,14 @@ export class PreloadScene extends Phaser.Scene {
 
     type AnimSpec = { animKey: string; frameRate: number; repeat: number; normKeys: string[] };
     const animSpecs: AnimSpec[] = [
-      { animKey: 'flarepaw_idle',        frameRate: 6,  repeat: -1, normKeys: normIdle  },
-      { animKey: 'flarepaw_run',         frameRate: 10, repeat: -1, normKeys: normRun   },
-      { animKey: 'flarepaw_jump',        frameRate: 10, repeat: 0,  normKeys: normJump  },
-      { animKey: 'flarepaw_guard',       frameRate: 1,  repeat: 0,  normKeys: normGuard },
-      { animKey: 'flarepaw_flame_guard', frameRate: 1,  repeat: 0,  normKeys: normFG    },
+      { animKey: 'flarepaw_idle',         frameRate: 6,  repeat: -1, normKeys: normIdle           },
+      { animKey: 'flarepaw_run',          frameRate: 10, repeat: -1, normKeys: normRun            },
+      // Jump split into 3 phases: takeoff (001-002), air-hold (003), landing (005)
+      { animKey: 'flarepaw_jump_takeoff', frameRate: 14, repeat: 0,  normKeys: normJump.slice(0, 2) },
+      { animKey: 'flarepaw_jump_air',     frameRate: 1,  repeat: -1, normKeys: normJump.slice(2, 3) },
+      { animKey: 'flarepaw_jump_land',    frameRate: 1,  repeat: 0,  normKeys: normJump.slice(4, 5) },
+      { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: 0,  normKeys: normGuard          },
+      { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: 0,  normKeys: normFG             },
     ];
 
     for (const { animKey, frameRate, repeat, normKeys } of animSpecs) {
