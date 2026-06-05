@@ -2,7 +2,7 @@ import { Fighter, GameState, SPECIALS } from './model';
 
 const W = 1280, H = 720;
 const TAU = Math.PI * 2;
-type FlarepawAnimation = 'idle' | 'run' | 'jump' | 'guard' | 'flame_guard';
+type FlarepawAnimation = 'idle' | 'run';
 
 const FLAREPAW_FRAME_WIDTH = 294, FLAREPAW_FRAME_HEIGHT = 245;
 const FLAREPAW_IDLE_FRAME_PATHS = [
@@ -19,34 +19,18 @@ const FLAREPAW_RUN_FRAME_PATHS = [
   '/assets/characters/flarepaw/run/run_004.png',
   '/assets/characters/flarepaw/run/run_005.png',
 ];
-const FLAREPAW_JUMP_FRAME_PATHS = [
-  '/assets/characters/flarepaw/jump/jump_001.png',
-  '/assets/characters/flarepaw/jump/jump_002.png',
-  '/assets/characters/flarepaw/jump/jump_003.png',
-  '/assets/characters/flarepaw/jump/jump_004.png',
-  '/assets/characters/flarepaw/jump/jump_005.png',
-];
-const FLAREPAW_GUARD_FRAME_PATHS = ['/assets/characters/flarepaw/guard/guard_001.png'];
-const FLAREPAW_FLAME_GUARD_FRAME_PATHS = ['/assets/characters/flarepaw/flame_guard/flame_guard_001.png'];
 const FLAREPAW_FRAME_PATHS: Record<FlarepawAnimation, string[]> = {
   idle: FLAREPAW_IDLE_FRAME_PATHS,
   run: FLAREPAW_RUN_FRAME_PATHS,
-  jump: FLAREPAW_JUMP_FRAME_PATHS,
-  guard: FLAREPAW_GUARD_FRAME_PATHS,
-  flame_guard: FLAREPAW_FLAME_GUARD_FRAME_PATHS,
 };
 const rounded = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
 
-type FlarepawFrame = { image: HTMLImageElement; loaded: boolean; failed: boolean };
-type FlarepawDebug = {
-  idleLoaded: number; runLoaded: number; jumpLoaded: number; guardLoaded: number; flameGuardLoaded: number;
-  animation: FlarepawAnimation; frame: number; facing: number;
-};
+type FlarepawFrame = { image: HTMLImageElement; loaded: boolean };
 
 export class Painter {
   private flarepawFrames: Record<FlarepawAnimation, FlarepawFrame[]>;
   private flarepawFrameLoadFailed = false;
-  private flarepawDebug: FlarepawDebug = { idleLoaded: 0, runLoaded: 0, jumpLoaded: 0, guardLoaded: 0, flameGuardLoaded: 0, animation: 'idle', frame: 0, facing: 1 };
+  private flarepawDebug = { idleLoaded: 0, runLoaded: 0, animation: 'idle' as FlarepawAnimation, frame: 0, facing: 1 };
 
   constructor(private c: CanvasRenderingContext2D) {
     this.flarepawFrames = this.loadFlarepawFrames();
@@ -137,36 +121,28 @@ export class Painter {
   }
 
   loadFlarepawFrames(): Record<FlarepawAnimation, FlarepawFrame[]> {
-    const load = (path: string, required: boolean) => {
-      const frame: FlarepawFrame = { image: new Image(), loaded: false, failed: false };
+    const load = (path: string) => {
+      const frame: FlarepawFrame = { image: new Image(), loaded: false };
       frame.image.onload = () => { frame.loaded = true; };
-      frame.image.onerror = () => { frame.failed = true; if (required) this.flarepawFrameLoadFailed = true; };
+      frame.image.onerror = () => { this.flarepawFrameLoadFailed = true; };
       frame.image.src = path;
       return frame;
     };
     return {
-      idle: FLAREPAW_FRAME_PATHS.idle.map((path) => load(path, true)),
-      run: FLAREPAW_FRAME_PATHS.run.map((path) => load(path, true)),
-      jump: FLAREPAW_FRAME_PATHS.jump.map((path) => load(path, false)),
-      guard: FLAREPAW_FRAME_PATHS.guard.map((path) => load(path, false)),
-      flame_guard: FLAREPAW_FRAME_PATHS.flame_guard.map((path) => load(path, false)),
+      idle: FLAREPAW_FRAME_PATHS.idle.map(load),
+      run: FLAREPAW_FRAME_PATHS.run.map(load),
     };
   }
 
   flarepaw(c: CanvasRenderingContext2D, f: Fighter, time: number) {
-    const movement: FlarepawAnimation = Math.abs(f.vx) > 30 ? 'run' : 'idle';
-    const requested: FlarepawAnimation = f.attackKind === 'flameguard' && f.attack > 0 ? 'flame_guard' : f.guard ? 'guard' : !f.grounded ? 'jump' : movement;
-    const animation = this.resolveFlarepawAnimation(requested, movement);
+    const animation: FlarepawAnimation = Math.abs(f.vx) > 30 ? 'run' : 'idle';
     const frames = this.flarepawFrames[animation];
-    const fps = animation === 'jump' ? 14 : animation === 'idle' ? 6 : 10;
-    const frameIndex = animation === 'guard' || animation === 'flame_guard' ? 0 : Math.floor(time * fps) % frames.length;
+    const fps = animation === 'idle' ? 6 : 10;
+    const frameIndex = Math.floor(time * fps) % frames.length;
     const frame = frames[frameIndex];
     this.flarepawDebug = {
       idleLoaded: this.loadedFlarepawCount('idle'),
       runLoaded: this.loadedFlarepawCount('run'),
-      jumpLoaded: this.loadedFlarepawCount('jump'),
-      guardLoaded: this.loadedFlarepawCount('guard'),
-      flameGuardLoaded: this.loadedFlarepawCount('flame_guard'),
       animation,
       frame: frameIndex,
       facing: f.facing >= 0 ? 1 : -1,
@@ -177,10 +153,6 @@ export class Painter {
 
     if (f.attack > 0) { const reach = f.attackKind === 'charge' ? 105 : 70; this.mote(reach, -58, f.attackKind === 'soulburst' ? 46 : 25, f.attackKind === 'soulburst' ? '#fff06b' : '#ff6f4d', .9); }
     if (f.guard) { c.strokeStyle = '#ffca64'; c.lineWidth = 7; c.beginPath(); c.arc(12, -75, 75, -1.2, 1.2); c.stroke(); }
-  }
-
-  resolveFlarepawAnimation(requested: FlarepawAnimation, movement: FlarepawAnimation): FlarepawAnimation {
-    return this.flarepawFrames[requested].some((frame) => frame.loaded) ? requested : movement;
   }
 
   loadedFlarepawCount(animation: FlarepawAnimation) {
@@ -195,13 +167,11 @@ export class Painter {
 
   drawFlarepawDebug() {
     const d = this.flarepawDebug;
-    this.pill(992, 574, 260, 118, '#08051dcc', '#ffca6766');
-    this.text(`FLAREPAW DEBUG`, 1010, 597, 10, '#ffca67');
-    this.text(`idle ${d.idleLoaded}/${FLAREPAW_IDLE_FRAME_PATHS.length}  run ${d.runLoaded}/${FLAREPAW_RUN_FRAME_PATHS.length}`, 1010, 618, 10, '#fff2c8');
-    this.text(`jump ${d.jumpLoaded}/${FLAREPAW_JUMP_FRAME_PATHS.length}  guard ${d.guardLoaded}/${FLAREPAW_GUARD_FRAME_PATHS.length}`, 1010, 637, 10, '#fff2c8');
-    this.text(`flame_guard ${d.flameGuardLoaded}/${FLAREPAW_FLAME_GUARD_FRAME_PATHS.length}`, 1010, 656, 10, '#fff2c8');
-    this.text(`state ${d.animation}  frame ${d.frame}`, 1010, 675, 10, '#d9cdf6');
-    this.text(`facing ${d.facing > 0 ? 'right' : 'left'}`, 1010, 692, 10, '#d9cdf6');
+    this.pill(1020, 610, 232, 78, '#08051dcc', '#ffca6766');
+    this.text(`FLAREPAW DEBUG`, 1038, 633, 10, '#ffca67');
+    this.text(`idle ${d.idleLoaded}/${FLAREPAW_IDLE_FRAME_PATHS.length}  run ${d.runLoaded}/${FLAREPAW_RUN_FRAME_PATHS.length}`, 1038, 654, 10, '#fff2c8');
+    this.text(`state ${d.animation}  frame ${d.frame}`, 1038, 673, 10, '#d9cdf6');
+    this.text(`facing ${d.facing > 0 ? 'right' : 'left'}`, 1038, 692, 10, '#d9cdf6');
   }
 
   flarepawFallback(c: CanvasRenderingContext2D) {
@@ -245,3 +215,4 @@ export class Painter {
     const c = this.c; c.fillStyle = '#09061caa'; c.fillRect(0, 0, W, H); const win = s.result === 'victory'; this.text(win ? 'SOUL RESONANCE COMPLETE' : 'THE BOND ENDURES', 640, 255, 15, win ? '#ffce5e' : '#89dcff', 'center'); this.title(win ? 'VICTORY' : 'DEFEAT', 640, 350, 92, win ? '#fff0a6' : '#d5f6ff'); this.text(win ? 'Flarepaw’s bond burns brighter.' : 'Train. Bond. Rise again.', 640, 395, 20, '#d6c9ef', 'center'); this.pill(530, 460, 220, 52, '#ffcc59'); this.text('ENTER  ·  RETURN', 640, 493, 14, '#25133d', 'center');
   }
 }
+
