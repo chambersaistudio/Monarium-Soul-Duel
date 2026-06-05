@@ -458,6 +458,18 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  private getPlayerHUDState(): {
+    currentAnimationState: string;
+    guardActive: boolean;
+    flameGuardActive: boolean;
+  } {
+    return {
+      currentAnimationState: this.player.state,
+      guardActive: this.player.isGuarding,
+      flameGuardActive: this.player.hasFlameGuard
+    };
+  }
+
   update(_time: number, delta: number): void {
     // Tick down the enter-key lock so a held Enter from overworld can't skip result
     if (this.enterLockTimer > 0) this.enterLockTimer -= delta;
@@ -477,7 +489,8 @@ export class BattleScene extends Phaser.Scene {
         this.player.stats, this.enemy.stats,
         this.player.selectedSlotIndex, this.player.specials,
         this.player.isFormReady(), this.player.isUltimateReady(),
-        this.player.formSystem.isActive, this.player.formSystem.timeRemaining
+        this.player.formSystem.isActive, this.player.formSystem.timeRemaining,
+        this.getPlayerHUDState()
       );
       return;
     }
@@ -511,7 +524,8 @@ export class BattleScene extends Phaser.Scene {
       this.player.stats, this.enemy.stats,
       this.player.selectedSlotIndex, this.player.specials,
       this.player.isFormReady(), this.player.isUltimateReady(),
-      this.player.formSystem.isActive, this.player.formSystem.timeRemaining
+      this.player.formSystem.isActive, this.player.formSystem.timeRemaining,
+      this.getPlayerHUDState()
     );
 
     // ── Debug overlay ──
