@@ -18,46 +18,76 @@
  *   # Single character only
  *   npm run process:sprites -- --character flarepaw
  *
- *   # Single animation folder only
- *   npm run process:sprites -- --character flarepaw --animation attack
- *
- *   # Preview what would run without writing any files
+ *   # Preview without writing files
  *   npm run process:sprites -- --dry-run
  *
- *   # Loosen threshold (useful for off-white or cream backgrounds)
- *   npm run process:sprites -- --threshold 220
+ *   # Recommended command for Flarepaw (run/guard/flame_guard/attack cleanup)
+ *   npm run process:sprites -- --character flarepaw --threshold 220 --feather 25 --island-max-area 600 --defringe --defringe-strength 2
  *
- *   # Wider soft-edge fade zone around the background boundary
- *   npm run process:sprites -- --threshold 235 --feather 25
- *
- *   # Simple per-pixel cutoff instead of flood-fill (faster, less safe)
- *   npm run process:sprites -- --mode threshold
- *
- * ── Options ──────────────────────────────────────────────────────
+ * ── Core options ─────────────────────────────────────────────────
  *
  *   --threshold N      Background whiteness cutoff 0–255.
- *                      Pixels where R, G, and B are all >= N are treated as
- *                      background. Lower = more aggressive removal.
- *                      Default: 240
+ *                      Pixels where R, G, and B are all >= N are background.
+ *                      Lower = more aggressive. Default: 240
  *
  *   --feather N        Soft-edge fade width (pixels). Pixels between
  *                      (threshold - feather) and threshold receive partial
- *                      transparency for smoother sprite edges.
+ *                      transparency for smoother edges.
  *                      Default: 15. Set to 0 for a hard cut.
  *
- *   --mode MODE        'flood-fill' (default) — only removes background that
- *                      is reachable from the image border. Interior white
+ *   --mode MODE        'flood-fill' (default) — only removes background
+ *                      reachable from the image border. Interior white
  *                      markings (eyes, highlights, fur) are preserved.
- *                      'threshold' — removes ALL near-white pixels anywhere
- *                      in the frame. Faster but can punch holes in sprites.
+ *                      'threshold' — removes ALL near-white pixels.
+ *                      Faster but can punch holes in white interior areas.
+ *
+ * ── Island / pocket cleanup ──────────────────────────────────────
+ *
+ *   Runs after the main flood-fill pass. Finds connected regions of
+ *   near-white opaque pixels that were NOT reached from the image border
+ *   (enclosed pockets: gaps between legs, inside bent arms, etc.) and
+ *   removes small ones. Larger white regions — fur, teeth, eye whites —
+ *   survive because their area exceeds --island-max-area.
+ *
+ *   --no-islands         Disable island cleanup (it is ON by default).
+ *
+ *   --island-max-area N  Connected near-white component larger than N pixels
+ *                        is kept (assumed to be intentional white detail).
+ *                        Default: 600. Tune up if a real white feature is
+ *                        being removed; tune down to catch larger pockets.
+ *
+ *   --island-threshold N Whiteness floor for island detection.
+ *                        Default: (threshold - 20). Pixels with all channels
+ *                        below this are NOT considered near-white pockets.
+ *
+ * ── Edge defringe / halo cleanup ─────────────────────────────────
+ *
+ *   After all other passes, reduces alpha of opaque pixels at the sprite
+ *   boundary that are suspiciously white/bright (anti-aliased background
+ *   bleed). Only pixels directly adjacent to a transparent pixel are
+ *   affected. Sprite interior pixels are untouched.
+ *
+ *   --defringe             Enable defringe (OFF by default).
+ *
+ *   --defringe-strength N  1 = light fade (30%), 2 = medium (65%),
+ *                          3 = aggressive (full removal of fringe whites).
+ *                          Default: 1
+ *
+ *   --defringe-passes N    How many times to apply the defringe sweep.
+ *                          More passes eat further into the fringe.
+ *                          Default: 2
+ *
+ *   --defringe-threshold N Pixels with min(R,G,B) below this are not
+ *                          considered fringe. Default: (threshold - 40),
+ *                          minimum 160.
+ *
+ * ── Other options ────────────────────────────────────────────────
  *
  *   --character NAME   Process only this character folder (default: all).
- *
  *   --animation NAME   Process only this animation folder (default: all).
- *
- *   --dry-run          Print the file mapping without writing anything.
- *
- *   --help             Show this help message.
+ *   --dry-run          Print what would be processed, write nothing.
+ *   --verbose          Log each removed island's size.
+ *   --help             Show this message.
  *
  * ── Directory layout ─────────────────────────────────────────────
  *
@@ -82,12 +112,10 @@
  * ── Notes ─────────────────────────────────────────────────────────
  *
  *   - Canvas size is preserved exactly. No cropping or resizing is done.
- *     Consistent baseline across frames is more important than tight crops.
  *   - Filenames are preserved verbatim.
- *   - Frames within each folder are processed in ascending numeric order,
- *     so skipped numbers (frame_054, frame_056, frame_058) are fine.
- *   - Output PNGs use maximum compression (PNG level 9) for smaller files.
- *   - Requires: sharp  (npm install — already in devDependencies)
+ *   - Frames sort ascending numerically, so skipped numbers are fine.
+ *   - Output PNGs use PNG level 9 compression.
+ *   - Requires: sharp  (already in devDependencies — run npm install)
  */
 
 'use strict';
@@ -96,47 +124,57 @@ const sharp = require('sharp');
 const fs    = require('fs');
 const path  = require('path');
 
-// ── Paths (relative to repo root) ─────────────────────────────────────────────
+// ── Paths ─────────────────────────────────────────────────────────────────────
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const RAW_BASE  = path.join(REPO_ROOT, 'assets', 'raw');
 const OUT_BASE  = path.join(REPO_ROOT, 'public', 'assets', 'characters');
 
-// ── Defaults ──────────────────────────────────────────────────────────────────
-
-const DEFAULTS = {
-  threshold: 240,      // R, G, B all >= threshold → background
-  feather:    15,      // fade zone width below threshold
-  mode:  'flood-fill', // or 'threshold'
-};
-
 // ── Argument parser ────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
   const args = {
-    threshold:  DEFAULTS.threshold,
-    feather:    DEFAULTS.feather,
-    mode:       DEFAULTS.mode,
-    character:  null,
-    animation:  null,
-    dryRun:     false,
-    help:       false,
+    threshold:         240,
+    feather:            15,
+    mode:        'flood-fill',
+    islands:           true,   // island cleanup ON by default
+    islandMaxArea:      600,
+    islandThreshold:   null,   // null = derive from threshold at runtime
+    defringe:          false,
+    defringeStrength:    1,
+    defringePasses:      2,
+    defringeThreshold: null,   // null = derive from threshold at runtime
+    character:         null,
+    animation:         null,
+    dryRun:            false,
+    verbose:           false,
+    help:              false,
   };
 
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
-      case '--threshold':  args.threshold = parseInt(argv[++i], 10); break;
-      case '--feather':    args.feather   = parseInt(argv[++i], 10); break;
-      case '--mode':       args.mode      = argv[++i];               break;
-      case '--character':  args.character = argv[++i];               break;
-      case '--animation':  args.animation = argv[++i];               break;
-      case '--dry-run':    args.dryRun    = true;                    break;
-      case '--help':
-      case '-h':           args.help      = true;                    break;
-      default:
-        console.warn(`Unknown option: ${argv[i]}`);
+      case '--threshold':          args.threshold         = parseInt(argv[++i], 10); break;
+      case '--feather':            args.feather           = parseInt(argv[++i], 10); break;
+      case '--mode':               args.mode              = argv[++i];               break;
+      case '--no-islands':         args.islands           = false;                   break;
+      case '--island-max-area':    args.islandMaxArea     = parseInt(argv[++i], 10); break;
+      case '--island-threshold':   args.islandThreshold   = parseInt(argv[++i], 10); break;
+      case '--defringe':           args.defringe          = true;                    break;
+      case '--defringe-strength':  args.defringeStrength  = parseInt(argv[++i], 10); break;
+      case '--defringe-passes':    args.defringePasses    = parseInt(argv[++i], 10); break;
+      case '--defringe-threshold': args.defringeThreshold = parseInt(argv[++i], 10); break;
+      case '--character':          args.character         = argv[++i];               break;
+      case '--animation':          args.animation         = argv[++i];               break;
+      case '--dry-run':            args.dryRun            = true;                    break;
+      case '--verbose':            args.verbose           = true;                    break;
+      case '--help': case '-h':    args.help              = true;                    break;
+      default: console.warn(`Unknown option: ${argv[i]}`);
     }
   }
+
+  // Derive defaults from threshold if not explicitly set
+  if (args.islandThreshold  === null) args.islandThreshold  = Math.max(150, args.threshold - 20);
+  if (args.defringeThreshold === null) args.defringeThreshold = Math.max(160, args.threshold - 40);
 
   if (!['flood-fill', 'threshold'].includes(args.mode)) {
     console.error(`Invalid --mode "${args.mode}". Use "flood-fill" or "threshold".`);
@@ -150,10 +188,7 @@ function parseArgs(argv) {
 
 function findPngFiles(baseDir, charFilter, animFilter) {
   const results = [];
-
-  if (!fs.existsSync(baseDir)) {
-    return results;
-  }
+  if (!fs.existsSync(baseDir)) return results;
 
   const chars = fs.readdirSync(baseDir, { withFileTypes: true })
     .filter(d => d.isDirectory() && (!charFilter || d.name === charFilter))
@@ -161,19 +196,15 @@ function findPngFiles(baseDir, charFilter, animFilter) {
 
   for (const character of chars) {
     const charDir = path.join(baseDir, character);
-
     const anims = fs.readdirSync(charDir, { withFileTypes: true })
       .filter(d => d.isDirectory() && (!animFilter || d.name === animFilter))
       .map(d => d.name);
 
     for (const animation of anims) {
       const animDir = path.join(charDir, animation);
-
       const pngs = fs.readdirSync(animDir)
         .filter(f => f.toLowerCase().endsWith('.png'))
         .sort((a, b) => {
-          // Sort by the first run of digits in the filename so that
-          // frame_054 < frame_055 < frame_058 even with gaps.
           const na = parseInt(a.match(/\d+/)?.[0] ?? '0', 10);
           const nb = parseInt(b.match(/\d+/)?.[0] ?? '0', 10);
           return na !== nb ? na - nb : a.localeCompare(b);
@@ -181,63 +212,51 @@ function findPngFiles(baseDir, charFilter, animFilter) {
 
       for (const filename of pngs) {
         results.push({
-          character,
-          animation,
-          filename,
+          character, animation, filename,
           inputPath:  path.join(animDir, filename),
           outputPath: path.join(OUT_BASE, character, animation, filename),
         });
       }
     }
   }
-
   return results;
 }
 
-// ── Background removal — flood fill from image edges ─────────────────────────
+// ── Pass 1: Flood-fill background removal from image edges ────────────────────
 //
-// Only background pixels reachable from the image border are made transparent.
-// Interior white/near-white areas (eyes, highlights, fur) are left intact.
+// Starts from every border pixel that is near-white and expands inward through
+// connected near-white pixels. Only edge-reachable background is removed —
+// interior white markings (eyes, fur, highlights) remain opaque.
 
 function floodFillRemove(buf, width, height, threshold, feather) {
   const total   = width * height;
   const visited = new Uint8Array(total);
 
-  // Returns true if a pixel at byte offset `bi` is within the background range.
+  const lo = threshold - feather;
+
   const isBackground = (bi) => {
-    const r = buf[bi], g = buf[bi + 1], b = buf[bi + 2];
-    return r >= (threshold - feather) && g >= (threshold - feather) && b >= (threshold - feather);
+    return buf[bi] >= lo && buf[bi + 1] >= lo && buf[bi + 2] >= lo;
   };
 
-  // Compute output alpha for a background pixel: 0 if all channels >= threshold,
-  // feathered partial alpha if within the fade zone.
   const alphaFor = (bi) => {
-    const r = buf[bi], g = buf[bi + 1], b = buf[bi + 2];
-    const lo  = threshold - feather;
-    const min = Math.min(r, g, b);
+    const min = Math.min(buf[bi], buf[bi + 1], buf[bi + 2]);
     if (min >= threshold) return 0;
-    if (feather > 0 && min >= lo) {
-      return Math.round(255 * (1 - (min - lo) / feather));
-    }
+    if (feather > 0 && min >= lo) return Math.round(255 * (1 - (min - lo) / feather));
     return 0;
   };
 
-  // Collect all border pixels that qualify as background.
   const queue = [];
-
   const enqueue = (px, py) => {
     const pidx = py * width + px;
     if (visited[pidx]) return;
-    const bi = pidx * 4;
-    if (!isBackground(bi)) return;
+    if (!isBackground(pidx * 4)) return;
     visited[pidx] = 1;
     queue.push(pidx);
   };
 
-  for (let x = 0; x < width;  x++) { enqueue(x, 0); enqueue(x, height - 1); }
-  for (let y = 1; y < height - 1; y++) { enqueue(0, y); enqueue(width - 1, y); }
+  for (let x = 0; x < width;       x++) { enqueue(x, 0); enqueue(x, height - 1); }
+  for (let y = 1; y < height - 1;  y++) { enqueue(0, y); enqueue(width - 1, y); }
 
-  // BFS — use index-based head pointer to avoid expensive Array.shift()
   let head = 0;
   while (head < queue.length) {
     const pidx = queue[head++];
@@ -246,7 +265,6 @@ function floodFillRemove(buf, width, height, threshold, feather) {
 
     const px = pidx % width;
     const py = (pidx - px) / width;
-
     if (px > 0)          enqueue(px - 1, py);
     if (px < width - 1)  enqueue(px + 1, py);
     if (py > 0)          enqueue(px, py - 1);
@@ -256,10 +274,7 @@ function floodFillRemove(buf, width, height, threshold, feather) {
   return buf;
 }
 
-// ── Background removal — simple per-pixel threshold ───────────────────────────
-//
-// Removes ALL near-white pixels regardless of position.
-// Faster than flood fill but can punch holes in white interior markings.
+// ── Pass 1 (alt): Simple per-pixel threshold removal ─────────────────────────
 
 function thresholdRemove(buf, threshold, feather) {
   const lo = threshold - feather;
@@ -274,29 +289,177 @@ function thresholdRemove(buf, threshold, feather) {
   return buf;
 }
 
+// ── Pass 2: Island / enclosed pocket cleanup ──────────────────────────────────
+//
+// After edge flood-fill, any near-white opaque pixels that remain are either:
+//   (a) intentional white details — eyes, tooth highlights, fur markings
+//   (b) enclosed background pockets trapped inside the silhouette
+//
+// Strategy: find connected components (4-connected) of near-white opaque
+// pixels. Remove components whose total pixel area <= islandMaxArea.
+// Larger components are assumed to be intentional white features.
+//
+// Returns { buf, removed, totalPx } for logging.
+
+function removeIslands(buf, width, height, islandThreshold, islandMaxArea, verbose) {
+  const total   = width * height;
+  // 0 = unchecked near-white, 1 = visited, 2 = dark/transparent (skip)
+  const state   = new Uint8Array(total);
+  let removed   = 0;
+  let totalPx   = 0;
+
+  // Classify pixels
+  for (let i = 0; i < total; i++) {
+    const bi = i * 4;
+    const a  = buf[bi + 3];
+    if (a === 0) {
+      state[i] = 2; // already transparent
+      continue;
+    }
+    const r = buf[bi], g = buf[bi + 1], b = buf[bi + 2];
+    if (r < islandThreshold || g < islandThreshold || b < islandThreshold) {
+      state[i] = 2; // colored sprite pixel — not a candidate
+    }
+    // else: state[i] = 0 (near-white opaque candidate)
+  }
+
+  // Find connected components of unchecked near-white pixels (state == 0)
+  const queue = [];
+  for (let start = 0; start < total; start++) {
+    if (state[start] !== 0) continue;
+
+    // BFS to collect this component
+    const component = [];
+    queue.length = 0;
+    queue.push(start);
+    state[start] = 1;
+
+    let head = 0;
+    while (head < queue.length) {
+      const pidx = queue[head++];
+      component.push(pidx);
+
+      const px = pidx % width;
+      const py = (pidx - px) / width;
+
+      const tryNeighbor = (nx, ny) => {
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) return;
+        const nidx = ny * width + nx;
+        if (state[nidx] !== 0) return;
+        state[nidx] = 1;
+        queue.push(nidx);
+      };
+
+      tryNeighbor(px - 1, py);
+      tryNeighbor(px + 1, py);
+      tryNeighbor(px, py - 1);
+      tryNeighbor(px, py + 1);
+    }
+
+    // Remove if small enough to be a pocket
+    if (component.length <= islandMaxArea) {
+      for (const pidx of component) buf[pidx * 4 + 3] = 0;
+      if (verbose) process.stdout.write(`      island removed: ${component.length}px\n`);
+      removed++;
+      totalPx += component.length;
+    }
+  }
+
+  return { buf, removed, totalPx };
+}
+
+// ── Pass 3: Edge defringe / halo cleanup ──────────────────────────────────────
+//
+// Reduces alpha of opaque pixels at the sprite boundary that are suspiciously
+// bright/white — these are anti-aliased background bleed pixels left after the
+// main removal passes.
+//
+// Algorithm (per pass):
+//   1. Build a mask of "edge pixels": opaque pixels with at least one
+//      fully-transparent 4-connected neighbour.
+//   2. For each edge pixel, compute relative whiteness:
+//        w = clamp((min(R,G,B) - defringeThreshold) / (255 - defringeThreshold), 0, 1)
+//   3. Reduce alpha: new_alpha = alpha * (1 - w * strength_factor)
+//
+// Running multiple passes extends the effect one pixel layer at a time.
+
+function defringeEdges(buf, width, height, defringeThreshold, strength, passes) {
+  const total = width * height;
+  const strengthFactor = strength === 3 ? 1.0 : strength === 2 ? 0.65 : 0.30;
+  const range = 255 - defringeThreshold;
+
+  for (let pass = 0; pass < passes; pass++) {
+    // Snapshot alpha at start of this pass so we use original values for the
+    // edge mask, not values already modified in this pass.
+    const alphaSnap = new Uint8Array(total);
+    for (let i = 0; i < total; i++) alphaSnap[i] = buf[i * 4 + 3];
+
+    for (let i = 0; i < total; i++) {
+      if (alphaSnap[i] === 0) continue;
+
+      const px = i % width;
+      const py = (i - px) / width;
+
+      // Check for at least one fully-transparent 4-connected neighbour
+      const hasTransparentNeighbour =
+        (px > 0          && alphaSnap[i - 1]     === 0) ||
+        (px < width - 1  && alphaSnap[i + 1]     === 0) ||
+        (py > 0          && alphaSnap[i - width]  === 0) ||
+        (py < height - 1 && alphaSnap[i + width]  === 0);
+
+      if (!hasTransparentNeighbour) continue;
+
+      const bi  = i * 4;
+      const min = Math.min(buf[bi], buf[bi + 1], buf[bi + 2]);
+      if (min <= defringeThreshold) continue;
+
+      const w      = Math.min(1, (min - defringeThreshold) / range);
+      const factor = 1 - w * strengthFactor;
+      buf[bi + 3]  = Math.round(alphaSnap[i] * factor);
+    }
+  }
+
+  return buf;
+}
+
 // ── Process a single PNG file ──────────────────────────────────────────────────
 
-async function processFile(file, args) {
+async function processFile(file, args, verbose) {
   const { data, info } = await sharp(file.inputPath)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
 
   const buf = new Uint8Array(data.buffer);
+  const { width, height } = info;
 
+  // Pass 1 — main background removal
   if (args.mode === 'threshold') {
     thresholdRemove(buf, args.threshold, args.feather);
   } else {
-    floodFillRemove(buf, info.width, info.height, args.threshold, args.feather);
+    floodFillRemove(buf, width, height, args.threshold, args.feather);
+  }
+
+  // Pass 2 — enclosed pocket / island cleanup
+  let islandStats = null;
+  if (args.islands) {
+    islandStats = removeIslands(buf, width, height, args.islandThreshold, args.islandMaxArea, verbose);
+  }
+
+  // Pass 3 — edge defringe
+  if (args.defringe) {
+    defringeEdges(buf, width, height, args.defringeThreshold, args.defringeStrength, args.defringePasses);
   }
 
   fs.mkdirSync(path.dirname(file.outputPath), { recursive: true });
 
   await sharp(Buffer.from(buf.buffer), {
-    raw: { width: info.width, height: info.height, channels: 4 }
+    raw: { width, height, channels: 4 }
   })
     .png({ compressionLevel: 9 })
     .toFile(file.outputPath);
+
+  return islandStats;
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -305,10 +468,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help) {
-    // Re-print the top-of-file usage block by reading ourselves
     const self = fs.readFileSync(__filename, 'utf8');
-    const docMatch = self.match(/^\/\*\*([\s\S]*?)\*\//);
-    if (docMatch) console.log(docMatch[0]);
+    const doc  = self.match(/^\/\*\*([\s\S]*?)\*\//);
+    if (doc) console.log(doc[0]);
     process.exit(0);
   }
 
@@ -323,17 +485,17 @@ async function main() {
   }
 
   const modeLabel = args.mode === 'flood-fill'
-    ? 'flood-fill (edge-connected, safe for interior white)'
-    : 'threshold  (all near-white pixels, fast)';
+    ? 'flood-fill (edge-connected)'
+    : 'threshold  (all near-white)';
 
   console.log('\nMonarium sprite processor');
-  console.log(`  mode:       ${modeLabel}`);
-  console.log(`  threshold:  ${args.threshold}  (R,G,B all >= ${args.threshold} → background)`);
-  console.log(`  feather:    ${args.feather}  (${args.feather === 0 ? 'hard cut' : `fade ${args.feather}px below threshold`})`);
+  console.log(`  pass 1 — background:  ${modeLabel}  threshold:${args.threshold}  feather:${args.feather}`);
+  console.log(`  pass 2 — islands:     ${args.islands ? `ON  max-area:${args.islandMaxArea}  whiteness-floor:${args.islandThreshold}` : 'OFF'}`);
+  console.log(`  pass 3 — defringe:    ${args.defringe ? `ON  strength:${args.defringeStrength}  passes:${args.defringePasses}  floor:${args.defringeThreshold}` : 'OFF (use --defringe to enable)'}`);
   if (args.dryRun) console.log('  DRY RUN — no files will be written');
   console.log(`  found ${files.length} PNG file(s)\n`);
 
-  let ok = 0, errs = 0;
+  let ok = 0, errs = 0, totalIslands = 0, totalIslandPx = 0;
 
   for (const file of files) {
     const inRel  = path.relative(REPO_ROOT, file.inputPath);
@@ -346,8 +508,14 @@ async function main() {
     }
 
     try {
-      await processFile(file, args);
-      console.log(`  ✓  ${inRel}  →  ${outRel}`);
+      const islandStats = await processFile(file, args, args.verbose);
+      let suffix = '';
+      if (islandStats && islandStats.removed > 0) {
+        suffix = `  [islands:${islandStats.removed} ×${islandStats.totalPx}px]`;
+        totalIslands  += islandStats.removed;
+        totalIslandPx += islandStats.totalPx;
+      }
+      console.log(`  ✓  ${inRel}${suffix}`);
       ok++;
     } catch (err) {
       console.error(`  ✗  ${inRel}  ERROR: ${err.message}`);
@@ -356,10 +524,9 @@ async function main() {
   }
 
   if (!args.dryRun) {
-    const summary = errs > 0
-      ? `${ok} processed, ${errs} failed.`
-      : `${ok} processed.`;
-    console.log(`\n${summary}`);
+    let summary = `\n${ok} processed${errs ? `, ${errs} failed` : ''}.`;
+    if (totalIslands > 0) summary += `  ${totalIslands} island(s) removed (${totalIslandPx} px total).`;
+    console.log(summary);
   }
 
   if (errs > 0) process.exit(1);
