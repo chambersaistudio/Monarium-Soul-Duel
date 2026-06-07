@@ -73,6 +73,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private jumpPhase: 'none' | 'takeoff' | 'air' | 'landing' = 'none';
   private landingTimer = 0;
   private attackAnimPlaying = false;
+  private hurtAnimPlaying   = false;
 
   projectileGroup: Phaser.Physics.Arcade.Group;
   onProjectileFired?: (p: Projectile) => void;
@@ -197,11 +198,14 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     switch (this.state) {
       case 'jump':
       case 'fall':
-        // Phase-based: takeoff frames once, then hold air frame
-        if (this.jumpPhase === 'air') {
-          this.playAnim('flarepaw_jump_air', false);
+        if (this.scene.anims.exists('flarepaw_jump_takeoff')) {
+          if (this.jumpPhase === 'air') {
+            this.playAnim('flarepaw_jump_air', false);
+          } else {
+            this.playAnim('flarepaw_jump_takeoff', false);
+          }
         } else {
-          this.playAnim('flarepaw_jump_takeoff', false);
+          this.playAnim('flarepaw_idle');
         }
         break;
       case 'run':
@@ -228,6 +232,14 @@ export class MinariFighter extends Phaser.GameObjects.Container {
         }
         break;
       case 'hurt':
+        if (this.scene.anims.exists('flarepaw_hurt')) {
+          if (!this.hurtAnimPlaying) {
+            this.playAnim('flarepaw_hurt', true);
+            this.hurtAnimPlaying = true;
+          }
+        } else {
+          this.playAnim('flarepaw_idle');
+        }
         break;
       case 'idle':
       case 'form_active':
@@ -418,8 +430,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.stats.soulbond = Math.min(this.stats.maxSoulbond, this.stats.soulbond + reduced * 0.2);
 
     if (!this.guardActive) {
-      this.state       = 'hurt';
-      this.hurtElapsed = 0;
+      this.state            = 'hurt';
+      this.hurtElapsed      = 0;
+      this.hurtAnimPlaying  = false;
       this.attackState.active = false;
       this.attackState.phase  = 'none';
       this.phBody.setVelocityX(this.facing * -200);
@@ -601,12 +614,15 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   // Debug info string for the overlay
   debugInfo(): string {
-    const guardAnimOk = this.scene.anims.exists('flarepaw_guard');
-    const fgAnimOk    = this.scene.anims.exists('flarepaw_flame_guard');
+    const frameKey    = this.sprite?.anims?.currentFrame?.textureKey ?? '—';
+    const animFrames  = this.lastAnim && this.scene.anims.exists(this.lastAnim)
+      ? (this.scene.anims.get(this.lastAnim)?.frames.length ?? 0)
+      : 0;
     return [
-      `state:${this.state}  anim:${this.lastAnim}  render:${this.useSprite ? 'sprite' : 'PLACEHOLDER'}`,
-      `facing:${this.facing === 1 ? 'R' : 'L'}(persists)  gnd:${this.grounded ? 'Y' : 'N'}  vOffset:${FEET_OFFSET}px`,
-      `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}  guard_asset:${guardAnimOk}  fg_asset:${fgAnimOk}`,
+      `state:${this.state}  anim:${this.lastAnim}(${animFrames}f)  render:${this.useSprite ? 'sprite' : 'PLACEHOLDER'}`,
+      `frame:${frameKey}`,
+      `facing:${this.facing === 1 ? 'R' : 'L'}  gnd:${this.grounded ? 'Y' : 'N'}  vOffset:${FEET_OFFSET}px`,
+      `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}`,
       `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}  aura:${Math.round(this.stats.aura)}  sb:${Math.round(this.stats.soulbond)}`,
     ].join('\n');
   }

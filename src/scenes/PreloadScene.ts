@@ -1,51 +1,27 @@
 import Phaser from 'phaser';
+import { FLAREPAW_BASE, FLAREPAW_FRAMES } from '../generated/flarepaw-manifest';
 
-const FRAME_BASE = 'assets/characters/flarepaw';
-const NORM_SIZE  = 512;  // target canvas size for all normalised frames (px)
-const NORM_BASE  = 40;   // px from canvas bottom kept below feet baseline
+const NORM_SIZE = 512;
+const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
-// ── Frame key groups ───────────────────────────────────────────────────────────
-const IDLE_KEYS   = ['fp_idle_000','fp_idle_001','fp_idle_002','fp_idle_003','fp_idle_004'];
-const RUN_KEYS    = ['fp_run_001', 'fp_run_002', 'fp_run_003', 'fp_run_004', 'fp_run_005'];
-const JUMP_KEYS   = ['fp_jump_001','fp_jump_002','fp_jump_003','fp_jump_004','fp_jump_005'];
-// Attack frames — video-extracted names with skipped numbers are fine; sorted numerically below
-const ATTACK_KEYS = ['fp_atk_054','fp_atk_055','fp_atk_056','fp_atk_058'];
+// Maps animation folder → Phaser animation config
+const ANIM_CONFIG: Record<string, { animKey: string; frameRate: number; repeat: number }> = {
+  idle:        { animKey: 'flarepaw_idle',       frameRate: 8,  repeat: -1 },
+  run:         { animKey: 'flarepaw_run',         frameRate: 12, repeat: -1 },
+  attack:      { animKey: 'flarepaw_attack',      frameRate: 12, repeat: 0  },
+  hurt:        { animKey: 'flarepaw_hurt',        frameRate: 12, repeat: 0  },
+  guard:       { animKey: 'flarepaw_guard',       frameRate: 8,  repeat: -1 },
+  flame_guard: { animKey: 'flarepaw_flame_guard', frameRate: 12, repeat: -1 },
+  // jump folder (if present) is split into 3 phase-animations below
+};
 
-// Sorts frame keys by the trailing integer so skipped numbers stay in the right order.
-// e.g. ['fp_atk_058','fp_atk_054'] → ['fp_atk_054','fp_atk_058']
-function sortByFrameNumber(keys: string[]): string[] {
-  return [...keys].sort((a, b) => {
-    const na = parseInt(a.match(/\d+$/)?.[0] ?? '0', 10);
-    const nb = parseInt(b.match(/\d+$/)?.[0] ?? '0', 10);
-    return na - nb;
-  });
+function phaserKey(folder: string, stem: string): string {
+  return `fp_${folder}_${stem}`;
 }
 
-// ── Load manifest: Phaser key → public path ────────────────────────────────────
-const LOAD_SPECS: Array<{ key: string; path: string }> = [
-  { key: 'fp_idle_000', path: `${FRAME_BASE}/idle/idle_000.png` },
-  { key: 'fp_idle_001', path: `${FRAME_BASE}/idle/idle_001.png` },
-  { key: 'fp_idle_002', path: `${FRAME_BASE}/idle/idle_002.png` },
-  { key: 'fp_idle_003', path: `${FRAME_BASE}/idle/idle_003.png` },
-  { key: 'fp_idle_004', path: `${FRAME_BASE}/idle/idle_004.png` },
-  { key: 'fp_run_001',  path: `${FRAME_BASE}/run/run_001.png` },
-  { key: 'fp_run_002',  path: `${FRAME_BASE}/run/run_002.png` },
-  { key: 'fp_run_003',  path: `${FRAME_BASE}/run/run_003.png` },
-  { key: 'fp_run_004',  path: `${FRAME_BASE}/run/run_004.png` },
-  { key: 'fp_run_005',  path: `${FRAME_BASE}/run/run_005.png` },
-  { key: 'fp_jump_001', path: `${FRAME_BASE}/jump/jump_001.png` },
-  { key: 'fp_jump_002', path: `${FRAME_BASE}/jump/jump_002.png` },
-  { key: 'fp_jump_003', path: `${FRAME_BASE}/jump/jump_003.png` },
-  { key: 'fp_jump_004', path: `${FRAME_BASE}/jump/jump_004.png` },
-  { key: 'fp_jump_005', path: `${FRAME_BASE}/jump/jump_005.png` },
-  { key: 'fp_guard_001',       path: `${FRAME_BASE}/guard/guard_001.png` },
-  { key: 'fp_flame_guard_001', path: `${FRAME_BASE}/flame_guard/flame_guard_001.png` },
-  // Attack frames (video-extracted, skipped numbers allowed)
-  { key: 'fp_atk_054', path: `${FRAME_BASE}/attack/frame_054.png` },
-  { key: 'fp_atk_055', path: `${FRAME_BASE}/attack/frame_055.png` },
-  { key: 'fp_atk_056', path: `${FRAME_BASE}/attack/frame_056.png` },
-  { key: 'fp_atk_058', path: `${FRAME_BASE}/attack/frame_058.png` },
-];
+function normKey(rawKey: string): string {
+  return 'fpn' + rawKey.slice(2);
+}
 
 export class PreloadScene extends Phaser.Scene {
   private loadErrors = new Set<string>();
@@ -71,80 +47,125 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('fileprogress', (f: Phaser.Loader.File) => { statusText.setText(f.key); });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
-    for (const { key, path } of LOAD_SPECS) {
-      this.load.image(key, path);
+    for (const [folder, stems] of Object.entries(FLAREPAW_FRAMES)) {
+      for (const stem of stems) {
+        this.load.image(phaserKey(folder, stem), `${FLAREPAW_BASE}/${folder}/${stem}.png`);
+      }
     }
   }
 
   create(): void {
     const loaded = (k: string) => this.textures.exists(k) && !this.loadErrors.has(k);
+    const folderOk = (folder: string) =>
+      !!(FLAREPAW_FRAMES[folder]?.length && FLAREPAW_FRAMES[folder].every(s => loaded(phaserKey(folder, s))));
 
-    const idleOk   = IDLE_KEYS.every(loaded);
-    const runOk    = RUN_KEYS.every(loaded);
-    const jumpOk   = JUMP_KEYS.every(loaded);
-    const guardOk  = loaded('fp_guard_001');
-    const fgOk     = loaded('fp_flame_guard_001');
-    const attackOk = ATTACK_KEYS.every(loaded);
+    const flags = {
+      idleOk:   folderOk('idle'),
+      runOk:    folderOk('run'),
+      attackOk: folderOk('attack'),
+      hurtOk:   folderOk('hurt'),
+      guardOk:  folderOk('guard'),
+      fgOk:     folderOk('flame_guard'),
+      jumpOk:   folderOk('jump'),
+    };
 
-    if (idleOk || runOk || jumpOk) {
-      const firstKey = this.normalizeAndRegister(idleOk, runOk, jumpOk, guardOk, fgOk, attackOk);
-      this.registry.set('flarepaw_sprite_key', firstKey);
-      this.registry.set('flarepaw_anim_mode', 'frames');
-      this.registry.set('flarepaw_guard_loaded', guardOk);
-      this.registry.set('flarepaw_flame_guard_loaded', fgOk);
-      this.registry.set('flarepaw_attack_loaded', attackOk);
-      console.log(`[PreloadScene] Flarepaw frames loaded ✓  guard:${guardOk}  flame_guard:${fgOk}  attack:${attackOk}`);
-      if (!guardOk)  console.warn('[PreloadScene] guard_001.png failed to load — check path: assets/characters/flarepaw/guard/guard_001.png');
-      if (!fgOk)     console.warn('[PreloadScene] flame_guard_001.png failed to load — check path: assets/characters/flarepaw/flame_guard/flame_guard_001.png');
-      if (!attackOk) console.warn('[PreloadScene] attack frames failed to load — check path: assets/characters/flarepaw/attack/frame_054.png … frame_058.png');
+    if (flags.idleOk || flags.runOk) {
+      const firstKey = this.normalizeAndRegister(flags);
+      this.registry.set('flarepaw_sprite_key',        firstKey);
+      this.registry.set('flarepaw_anim_mode',         'frames');
+      this.registry.set('flarepaw_guard_loaded',      flags.guardOk);
+      this.registry.set('flarepaw_flame_guard_loaded', flags.fgOk);
+      this.registry.set('flarepaw_attack_loaded',     flags.attackOk);
+      this.registry.set('flarepaw_hurt_loaded',       flags.hurtOk);
+      this.registry.set('flarepaw_jump_loaded',       flags.jumpOk);
+
+      const summary = (Object.entries(flags) as [string, boolean][])
+        .filter(([, ok]) => ok)
+        .map(([f, ]) => `${f.replace('Ok', '')}:${FLAREPAW_FRAMES[f.replace('Ok', '')]?.length ?? '?'}`)
+        .join('  ');
+      console.log(`[PreloadScene] Flarepaw ✓  ${summary}`);
     } else {
-      this.registry.set('flarepaw_sprite_key', null);
-      this.registry.set('flarepaw_anim_mode', 'none');
-      this.registry.set('flarepaw_guard_loaded', false);
+      this.registry.set('flarepaw_sprite_key',         null);
+      this.registry.set('flarepaw_anim_mode',          'none');
+      this.registry.set('flarepaw_guard_loaded',       false);
       this.registry.set('flarepaw_flame_guard_loaded', false);
-      this.registry.set('flarepaw_attack_loaded', false);
+      this.registry.set('flarepaw_attack_loaded',      false);
+      this.registry.set('flarepaw_hurt_loaded',        false);
+      this.registry.set('flarepaw_jump_loaded',        false);
       console.warn('[PreloadScene] No Flarepaw frames found — placeholder graphics active.');
     }
 
     this.scene.start('TitleScene');
   }
 
-  // 'fp_idle_000' → 'fpn_idle_000'  (prefix swap fp → fpn)
-  private normKey(rawKey: string): string {
-    return 'fpn' + rawKey.slice(2);
-  }
-
-  // Draws a raw Phaser texture onto a NORM_SIZE×NORM_SIZE canvas, baseline-aligned.
-  // Returns the normalised texture key (or the raw key if normalisation fails).
+  // Draws the content region of a raw texture onto a NORM_SIZE×NORM_SIZE canvas,
+  // baseline-aligned.  Uses a reduced-resolution scan to locate opaque pixels so
+  // large video-extracted frames (1440×1440) aren't shrunk to a postage stamp.
   private normalizeToCanvas(rawKey: string): string | null {
     if (!this.textures.exists(rawKey)) return null;
-    const nk = this.normKey(rawKey);
+    const nk = normKey(rawKey);
     if (this.textures.exists(nk)) return nk;
 
     try {
-      const src  = this.textures.get(rawKey).getSourceImage() as
-        HTMLImageElement | HTMLCanvasElement;
+      const src  = this.textures.get(rawKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
       const srcW = (src as HTMLImageElement).naturalWidth  || (src as HTMLCanvasElement).width  || 0;
       const srcH = (src as HTMLImageElement).naturalHeight || (src as HTMLCanvasElement).height || 0;
       if (!srcW || !srcH) return rawKey;
 
-      const canvas = document.createElement('canvas');
-      canvas.width  = NORM_SIZE;
-      canvas.height = NORM_SIZE;
-      const ctx = canvas.getContext('2d')!;
+      // Step 1: find content bbox via reduced-resolution pixel scan (max 256px wide)
+      const SCAN_MAX  = 256;
+      const scanScale = Math.min(1, SCAN_MAX / Math.max(srcW, srcH));
+      const scanW     = Math.max(1, Math.round(srcW * scanScale));
+      const scanH     = Math.max(1, Math.round(srcH * scanScale));
+
+      const scanCanvas   = document.createElement('canvas');
+      scanCanvas.width   = scanW;
+      scanCanvas.height  = scanH;
+      const scanCtx      = scanCanvas.getContext('2d')!;
+      scanCtx.drawImage(src as CanvasImageSource, 0, 0, scanW, scanH);
+      const pixels       = scanCtx.getImageData(0, 0, scanW, scanH).data;
+
+      let minX = scanW, maxX = -1, minY = scanH, maxY = -1;
+      for (let y = 0; y < scanH; y++) {
+        for (let x = 0; x < scanW; x++) {
+          if (pixels[(y * scanW + x) * 4 + 3] > 10) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      // Map bbox back to source space with a small padding margin
+      let contentX = 0, contentY = 0, contentW = srcW, contentH = srcH;
+      if (minX <= maxX && minY <= maxY) {
+        const pad  = Math.ceil(4 / scanScale);
+        contentX   = Math.max(0, Math.floor(minX / scanScale) - pad);
+        contentY   = Math.max(0, Math.floor(minY / scanScale) - pad);
+        const r    = Math.min(srcW, Math.ceil((maxX + 1) / scanScale) + pad);
+        const b    = Math.min(srcH, Math.ceil((maxY + 1) / scanScale) + pad);
+        contentW   = r - contentX;
+        contentH   = b - contentY;
+      }
+
+      // Step 2: draw only the content region into NORM_SIZE canvas, baseline-aligned
+      const canvas   = document.createElement('canvas');
+      canvas.width   = NORM_SIZE;
+      canvas.height  = NORM_SIZE;
+      const ctx      = canvas.getContext('2d')!;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Scale to fit available area (10px side margin, NORM_BASE bottom, 10px top clearance)
       const availW = NORM_SIZE - 20;
       const availH = NORM_SIZE - NORM_BASE - 10;
-      const scale  = Math.min(availW / srcW, availH / srcH);
-      const dw = srcW * scale;
-      const dh = srcH * scale;
-      const dx = (NORM_SIZE - dw) / 2;               // horizontal centre
-      const dy = NORM_SIZE - NORM_BASE - dh;          // baseline-aligned
+      const scale  = Math.min(availW / contentW, availH / contentH);
+      const dw     = contentW * scale;
+      const dh     = contentH * scale;
+      const dx     = (NORM_SIZE - dw) / 2;
+      const dy     = NORM_SIZE - NORM_BASE - dh;
 
-      ctx.drawImage(src as CanvasImageSource, dx, dy, dw, dh);
+      ctx.drawImage(src as CanvasImageSource, contentX, contentY, contentW, contentH, dx, dy, dw, dh);
       this.textures.addCanvas(nk, canvas);
       return nk;
     } catch {
@@ -152,48 +173,68 @@ export class PreloadScene extends Phaser.Scene {
     }
   }
 
-  private normalizeAndRegister(
-    idleOk: boolean, runOk: boolean, jumpOk: boolean,
-    guardOk: boolean, fgOk: boolean, attackOk: boolean,
-  ): string | null {
-    const normAll = (keys: string[]) =>
-      keys.map(k => this.normalizeToCanvas(k)).filter((k): k is string => k !== null);
+  private normalizeAndRegister(flags: {
+    idleOk: boolean; runOk: boolean; attackOk: boolean;
+    hurtOk: boolean; guardOk: boolean; fgOk: boolean; jumpOk: boolean;
+  }): string | null {
+    // Cache normalised key lists to avoid double-processing
+    const normCache: Record<string, string[]> = {};
+    const normFolder = (folder: string): string[] => {
+      if (normCache[folder]) return normCache[folder];
+      const result = FLAREPAW_FRAMES[folder]
+        ?.map(stem => this.normalizeToCanvas(phaserKey(folder, stem)))
+        .filter((k): k is string => k !== null) ?? [];
+      normCache[folder] = result;
+      return result;
+    };
 
-    const normIdle   = idleOk   ? normAll(IDLE_KEYS)                              : [];
-    const normRun    = runOk    ? normAll(RUN_KEYS)                               : [];
-    const normJump   = jumpOk   ? normAll(JUMP_KEYS)                              : [];
-    const normGuard  = guardOk  ? normAll(['fp_guard_001'])                       : [];
-    const normFG     = fgOk     ? normAll(['fp_flame_guard_001'])                 : [];
-    // Numeric sort ensures frame_054 < frame_055 < frame_056 < frame_058 even with gaps
-    const normAttack = attackOk ? normAll(sortByFrameNumber(ATTACK_KEYS))         : [];
+    // Register single-folder animations from ANIM_CONFIG
+    const folderMap: Record<keyof typeof flags, string> = {
+      idleOk:   'idle',
+      runOk:    'run',
+      attackOk: 'attack',
+      hurtOk:   'hurt',
+      guardOk:  'guard',
+      fgOk:     'flame_guard',
+      jumpOk:   'jump',
+    };
 
-    type AnimSpec = { animKey: string; frameRate: number; repeat: number; normKeys: string[] };
-    const animSpecs: AnimSpec[] = [
-      { animKey: 'flarepaw_idle',         frameRate: 6,  repeat: -1, normKeys: normIdle           },
-      { animKey: 'flarepaw_run',          frameRate: 10, repeat: -1, normKeys: normRun            },
-      // Jump split into 3 phases: takeoff (001-002), air-hold (003), landing (005)
-      { animKey: 'flarepaw_jump_takeoff', frameRate: 14, repeat: 0,  normKeys: normJump.slice(0, 2) },
-      { animKey: 'flarepaw_jump_air',     frameRate: 1,  repeat: -1, normKeys: normJump.slice(2, 3) },
-      { animKey: 'flarepaw_jump_land',    frameRate: 1,  repeat: 0,  normKeys: normJump.slice(4, 5) },
-      // Held-state single-frame animations use repeat:-1 so isPlaying stays true
-      { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: -1, normKeys: normGuard          },
-      { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: -1, normKeys: normFG             },
-      // Attack: plays once, no loop — frame_054=startup, 055+056=active hit, 058=recovery
-      { animKey: 'flarepaw_attack',       frameRate: 12, repeat: 0,  normKeys: normAttack         },
-    ];
-
-    for (const { animKey, frameRate, repeat, normKeys } of animSpecs) {
+    for (const [flag, folder] of Object.entries(folderMap) as [keyof typeof flags, string][]) {
+      if (!flags[flag] || folder === 'jump') continue;
+      const cfg = ANIM_CONFIG[folder];
+      if (!cfg) continue;
+      const normKeys = normFolder(folder);
       if (normKeys.length === 0) continue;
-      if (this.anims.exists(animKey)) this.anims.remove(animKey);
+      if (this.anims.exists(cfg.animKey)) this.anims.remove(cfg.animKey);
       this.anims.create({
-        key: animKey,
+        key: cfg.animKey,
         frames: normKeys.map(k => ({ key: k })),
-        frameRate,
-        repeat,
+        frameRate: cfg.frameRate,
+        repeat: cfg.repeat,
       });
     }
 
+    // Jump folder → 3 phase-animations (takeoff / air-hold / land)
+    if (flags.jumpOk) {
+      const normJump = normFolder('jump');
+      if (normJump.length >= 1) {
+        const takeoff = normJump.length >= 2 ? normJump.slice(0, 2)                          : normJump;
+        const air     = normJump.length >= 3 ? normJump.slice(2, Math.max(3, normJump.length - 1)) : normJump.slice(0, 1);
+        const land    = normJump.slice(-1);
+
+        const jumpPhases = [
+          { key: 'flarepaw_jump_takeoff', frames: takeoff, frameRate: 14, repeat: 0  },
+          { key: 'flarepaw_jump_air',     frames: air,     frameRate: 1,  repeat: -1 },
+          { key: 'flarepaw_jump_land',    frames: land,    frameRate: 1,  repeat: 0  },
+        ];
+        for (const { key, frames, frameRate, repeat } of jumpPhases) {
+          if (this.anims.exists(key)) this.anims.remove(key);
+          this.anims.create({ key, frames: frames.map(k => ({ key: k })), frameRate, repeat });
+        }
+      }
+    }
+
     // First valid texture key for sprite initialisation in MinariFighter
-    return normIdle[0] ?? normRun[0] ?? normJump[0] ?? null;
+    return normFolder('idle')[0] ?? normFolder('run')[0] ?? null;
   }
 }

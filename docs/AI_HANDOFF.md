@@ -59,6 +59,45 @@ Claude
 
 ## Handoff Log
 
+### 2026-06-07 — Manifest-driven sprite loader + hurt animation
+
+#### Agent
+Claude
+
+#### Summary of What Changed
+PreloadScene is now fully manifest-driven. `tools/gen-manifest.js` scans `public/assets/characters/flarepaw/` and writes `src/generated/flarepaw-manifest.ts`. PreloadScene imports that file and loads every frame from every folder at startup — no hardcoded filenames. When frames change, run `npm run gen:manifest` and the game picks them up automatically.
+
+Bounding-box normalization upgraded: instead of scaling the full source canvas to 512×512 (which made 1440×1440 frames tiny), the normaliser does a fast 256px scan to locate opaque pixels, then crops to that content region before scaling to 512×512 with NORM_BASE=40px baseline margin.
+
+New `flarepaw_hurt` animation (5 frames: frame_049–053) is now registered and wired into `syncAnim` using the same `hurtAnimPlaying` flag pattern as `attackAnimPlaying`. Jump state falls back gracefully to idle when no `jump` folder exists.
+
+Files changed: `src/scenes/PreloadScene.ts`, `src/entities/MinariFighter.ts`, `tools/gen-manifest.js`, `src/generated/flarepaw-manifest.ts`, `package.json`.
+
+#### New or Changed Game States
+- `hurt` state: now plays `flarepaw_hurt` animation once (repeat:0), then returns to idle after 350ms timer. Previously showed no animation.
+- Registry key added: `flarepaw_hurt_loaded` (boolean).
+- Registry key added: `flarepaw_jump_loaded` (boolean).
+
+#### New or Changed Controls
+- No input changes.
+
+#### New or Changed Assets
+- All Flarepaw animation folders now use `frame_NNN.png` naming (video-extracted, skipped numbers OK).
+- 6 animation folders active: `idle` (14f), `run` (8f), `attack` (4f), `hurt` (5f), `guard` (8f), `flame_guard` (20f).
+- No `jump` folder yet — jump/fall states display idle animation.
+- `src/generated/flarepaw-manifest.ts` — auto-generated TypeScript const, do not edit manually.
+- To regenerate after adding new frames: `npm run gen:manifest`.
+
+#### New Known Issues
+- No jump-specific frames available. Jump/fall states show idle animation in air.
+- When a jump folder is added, run `npm run gen:manifest` to pick it up.
+
+#### What UI May Need Next
+- Debug overlay now shows `frame:fpn_idle_frame_NNN` — useful for reviewing animation timing.
+- Hurt animation is now visible; any screen-shake or impact VFX could be triggered off `state === 'hurt'`.
+
+---
+
 ### 2026-06-05 — Flarepaw attack animation (4-frame PNG sequence)
 
 #### Agent

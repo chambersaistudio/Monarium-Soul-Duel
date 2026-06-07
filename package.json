@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "process:sprites": "node tools/process-sprites.js"
+    "process:sprites": "node tools/process-sprites.js",
+    "gen:manifest": "node tools/gen-manifest.js"
   },
   "dependencies": {
     "phaser": "^3.80.1"
