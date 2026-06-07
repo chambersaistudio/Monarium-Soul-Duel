@@ -21,6 +21,14 @@ interface AttackState {
   hitDealt: boolean;
 }
 
+// ── Aura Step constants ────────────────────────────────────────────────────────
+const AURA_STEP_COST          = 15;   // aura consumed per step
+const AURA_STEP_SPEED         = 500;  // px/s lateral velocity
+const AURA_STEP_IFRAMES       = 160;  // ms of invincibility at the start of the step
+const AURA_STEP_COOLDOWN      = 1200; // ms before next Aura Step can trigger
+const AURA_STEP_BONUS_AURA    = 12;   // aura refund on perfect step
+const AURA_STEP_BONUS_SOULBOND = 8;   // soul sync bonus on perfect step
+
 // Target display height for the sprite in-game.
 // PreloadScene normalises all frames to 512×512 with 40px transparent margin
 // below the character's feet (NORM_BASE).  The sprite origin is (0.5,1)
@@ -71,9 +79,11 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private guardActive   = false;
 
   private jumpPhase: 'none' | 'takeoff' | 'air' | 'landing' = 'none';
-  private landingTimer = 0;
+  private landingTimer      = 0;
   private attackAnimPlaying = false;
   private hurtAnimPlaying   = false;
+  private auraStepCooldown  = 0;
+  private iFrameTimer       = 0;
 
   projectileGroup: Phaser.Physics.Arcade.Group;
   onProjectileFired?: (p: Projectile) => void;
@@ -392,7 +402,8 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   // ──────────────────────────────────────────────────────────────────────────
 
   startDodge(): boolean {
-    if (this.dodgeCooldown > 0 || this.state === 'hurt' || this.state === 'stunned') return false;
+    if (this.dodgeCooldown > 0) return false;
+    if (this.state === 'hurt' || this.state === 'stunned' || this.state === 'dodge') return false;
     this.dodgeActive   = true;
     this.dodgeElapsed  = 0;
     this.dodgeCooldown = 800;
@@ -400,6 +411,31 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.state = 'dodge';
     return true;
   }
+
+  // Aura Step — triggered by guard+direction.  Costs aura, grants i-frames.
+  startAuraStep(dir: 1 | -1): boolean {
+    if (this.auraStepCooldown > 0) return false;
+    if (this.state === 'hurt' || this.state === 'stunned' || this.state === 'dodge') return false;
+    if (this.stats.aura < AURA_STEP_COST) return false;
+
+    this.stats.aura      -= AURA_STEP_COST;
+    this.auraStepCooldown = AURA_STEP_COOLDOWN;
+    this.iFrameTimer      = AURA_STEP_IFRAMES;
+    this.dodgeActive      = true;
+    this.dodgeElapsed     = 0;
+    this.phBody.setVelocityX(dir * AURA_STEP_SPEED);
+    this.state = 'dodge';
+    return true;
+  }
+
+  // Called by BattleScene when a perfect-timed Aura Step is detected.
+  grantAuraStepBonus(): void {
+    this.stats.aura     = Math.min(this.stats.maxAura,     this.stats.aura     + AURA_STEP_BONUS_AURA);
+    this.stats.soulbond = Math.min(this.stats.maxSoulbond, this.stats.soulbond + AURA_STEP_BONUS_SOULBOND);
+  }
+
+  get isInvincible(): boolean { return this.iFrameTimer > 0; }
+  get auraStepReady(): boolean { return this.auraStepCooldown <= 0 && this.stats.aura >= AURA_STEP_COST; }
 
   activateForm(): boolean {
     if (!this.formSystem.canActivate(this.stats)) return false;
@@ -420,6 +456,8 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   /** Returns burn counter-damage (>0) when Flame Guard is active and it's not already a burn hit. */
   takeDamage(amount: number, burnSource = false): number {
+    if (this.iFrameTimer > 0) return 0;  // Aura Step i-frames: invincible
+
     const defense = this.stats.defense * this.formSystem.defenseMult;
     let reduced   = Math.max(1, amount - defense * 0.1);
 
@@ -465,7 +503,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   update(delta: number): void {
     // Cooldowns
     this.moveCooldowns.forEach((cd, key) => this.moveCooldowns.set(key, Math.max(0, cd - delta)));
-    this.dodgeCooldown = Math.max(0, this.dodgeCooldown - delta);
+    this.dodgeCooldown    = Math.max(0, this.dodgeCooldown    - delta);
+    this.auraStepCooldown = Math.max(0, this.auraStepCooldown - delta);
+    if (this.iFrameTimer > 0) this.iFrameTimer = Math.max(0, this.iFrameTimer - delta);
 
     // Ground check
     this.grounded = this.phBody.blocked.down;
@@ -591,6 +631,16 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
     // Sync animation + flip
     this.syncAnim();
+
+    // I-frame flicker: rapid blink during Aura Step invincibility window.
+    // Resets to full alpha once i-frames or dodge end.
+    if (this.sprite) {
+      if (this.iFrameTimer > 0) {
+        this.sprite.setAlpha(Math.floor(this.scene.time.now / 50) % 2 === 0 ? 1.0 : 0.25);
+      } else if (this.state === 'dodge') {
+        this.sprite.setAlpha(1.0);
+      }
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -614,15 +664,17 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   // Debug info string for the overlay
   debugInfo(): string {
-    const frameKey    = this.sprite?.anims?.currentFrame?.textureKey ?? '—';
-    const animFrames  = this.lastAnim && this.scene.anims.exists(this.lastAnim)
+    const frameKey   = this.sprite?.anims?.currentFrame?.textureKey ?? '—';
+    const animFrames = this.lastAnim && this.scene.anims.exists(this.lastAnim)
       ? (this.scene.anims.get(this.lastAnim)?.frames.length ?? 0)
       : 0;
+    const iFrameStr  = this.iFrameTimer > 0 ? `  iframes:${Math.round(this.iFrameTimer)}ms` : '';
+    const stepStr    = this.auraStepCooldown > 0 ? `stepCD:${Math.round(this.auraStepCooldown)}ms` : 'stepREADY';
     return [
       `state:${this.state}  anim:${this.lastAnim}(${animFrames}f)  render:${this.useSprite ? 'sprite' : 'PLACEHOLDER'}`,
       `frame:${frameKey}`,
-      `facing:${this.facing === 1 ? 'R' : 'L'}  gnd:${this.grounded ? 'Y' : 'N'}  vOffset:${FEET_OFFSET}px`,
-      `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}`,
+      `facing:${this.facing === 1 ? 'R' : 'L'}  gnd:${this.grounded ? 'Y' : 'N'}${iFrameStr}`,
+      `guard:${this.guardActive}  flame_guard:${this.flameGuardActive}  ${stepStr}`,
       `hp:${Math.round(this.stats.hp)}/${this.stats.maxHp}  aura:${Math.round(this.stats.aura)}  sb:${Math.round(this.stats.soulbond)}`,
     ].join('\n');
   }

@@ -93,7 +93,7 @@ export class BattleScene extends Phaser.Scene {
       this.player as unknown as ArcadeTarget,
       (obj1) => {
         const proj = obj1 as Projectile;
-        if (proj.active && proj.ownerId === 'droplet') {
+        if (proj.active && proj.ownerId === 'droplet' && !this.player.isInvincible) {
           this.player.takeDamage(proj.damage);
           proj.deactivate();
           this.spawnHitFX(this.player.x, this.player.y, 0x00aaff);
@@ -229,7 +229,12 @@ export class BattleScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const spd = this.player.minariData.stats.speed * 2.2 * this.player.formSystem.speedMult;
 
-    if (this.player.state === 'guard') {
+    if (this.player.state === 'dodge') {
+      // Aura Step / dodge in progress — step velocity is owned by MinariFighter.
+      // Only update facing from held direction without overriding velocity.
+      if (inp.left) this.player.facing = -1;
+      if (inp.right) this.player.facing = 1;
+    } else if (this.player.state === 'guard') {
       // Guard locks horizontal position; facing is preserved from last movement
       body.setVelocityX(0);
     } else if (inp.left) {
@@ -243,15 +248,37 @@ export class BattleScene extends Phaser.Scene {
       // No auto-face: facing persists from last pressed direction
     }
 
-    if (inp.up && this.player.isGrounded && this.player.state !== 'guard') {
+    if (inp.up && this.player.isGrounded && this.player.state !== 'guard' && this.player.state !== 'dodge') {
       body.setVelocityY(-this.player.minariData.stats.jumpPower);
     }
 
-    if (inp.down && this.player.state !== 'attacking' && this.player.isGrounded) {
+    // Guard entry: blocked while attacking, dodging, hurt, or stunned
+    const canGuard = this.player.state !== 'attacking' && this.player.state !== 'dodge'
+                     && this.player.state !== 'hurt' && this.player.state !== 'stunned';
+    if (inp.down && canGuard && this.player.isGrounded) {
       this.player.state = 'guard';
     } else if (this.player.state === 'guard' && !inp.down && !this.player.hasFlameGuard) {
       // Only release guard when neither the guard key nor Flame Guard is holding it
       this.player.state = 'idle';
+    }
+
+    // Aura Step: guard held + directional tap → quick evasive step with i-frames
+    if (this.player.state === 'guard') {
+      const stepDir = inp.leftJustDown ? -1 : inp.rightJustDown ? 1 : 0;
+      if (stepDir !== 0) {
+        const ok = this.player.startAuraStep(stepDir as 1 | -1);
+        if (ok) {
+          // Perfect timing: step through an active enemy attack hitbox
+          if (this.enemy.isAttackActive()) {
+            this.player.grantAuraStepBonus();
+            this.uiSys.showAnnounce('Perfect Step!', 1000);
+          } else {
+            this.uiSys.showAnnounce('Aura Step', 500);
+          }
+        } else if (this.player.stats.aura < 15) {
+          this.uiSys.showAnnounce('Not enough Aura!', 600);
+        }
+      }
     }
 
     if (inp.coreAttack) this.player.startCoreAttack();

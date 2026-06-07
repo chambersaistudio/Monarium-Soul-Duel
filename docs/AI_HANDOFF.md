@@ -59,6 +59,43 @@ Claude
 
 ## Handoff Log
 
+### 2026-06-07 — Aura Step dodge mechanic
+
+#### Agent
+Claude
+
+#### Summary of What Changed
+New evasive mechanic: **Aura Step**. While holding Guard, tap Left or Right to perform a quick lateral step with a brief invincibility window. Rewards perfect timing (stepping through an active enemy attack) with Aura and Soul Sync bonuses.
+
+Files changed: `src/entities/MinariFighter.ts`, `src/scenes/BattleScene.ts`, `src/systems/InputSystem.ts`.
+
+#### New or Changed Game States
+- `dodge` state now used by both the existing L-key backstep and Aura Step.
+- Guard entry is blocked while in `dodge` state (was a pre-existing gap — guard could override a dodge mid-motion).
+- Dodge velocity is now preserved for its full 220ms duration; previously the movement block would zero it each frame.
+
+#### New or Changed Controls
+- **Guard (S/↓) held + Left tap**: Aura Step left — costs 15 Aura, 160ms i-frames, 500px/s step
+- **Guard (S/↓) held + Right tap**: Aura Step right — same cost and timing
+- **Perfect timing** (step while enemy melee hitbox is active): +12 Aura refund, +8 Soul Sync, shows "Perfect Step!"
+- Cooldown: 1200ms per Aura Step (independent of L-key dodge cooldown)
+
+#### New Getters on MinariFighter (read-only, safe for UI)
+- `isInvincible: boolean` — true during the 160ms i-frame window
+- `auraStepReady: boolean` — true when step cooldown is 0 and aura ≥ 15
+
+#### New Known Issues
+- No Aura Step animation yet (step visually shows run animation + i-frame flicker only).
+- AI (Droplet) does not use Aura Step — it still uses `startDodge()` only.
+
+#### What UI May Need Next
+- Aura Step cooldown indicator: grey out a step icon for 1200ms after use
+- `isInvincible` could drive a brief shield-flash or step-trail particle effect
+- "Perfect Step!" announce text already fires — just needs HUD styling
+- Mobile: a guard+swipe gesture could map to Aura Step
+
+---
+
 ### 2026-06-07 — Manifest-driven sprite loader + hurt animation
 
 #### Agent
