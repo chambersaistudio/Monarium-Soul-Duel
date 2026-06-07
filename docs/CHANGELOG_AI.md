@@ -3,6 +3,10 @@
 Simple dated log for changes made by AI agents.
 Keep entries short and focused on what changed, which agent made the change, and whether it affects gameplay, UI, assets, or docs.
 
+## 2026-06-07 (Universal character animation pipeline)
+
+- Claude: Universal character animation pipeline — any character works by adding `public/assets/characters/[charId]/[animName]/` PNG folders and running `npm run gen:manifest`. `tools/gen-manifest.js` now scans ALL characters and writes both per-character `sprite-manifest.json` and unified `src/generated/characters-manifest.ts`. `PreloadScene` rebuilt to loop over every character in the manifest, using `phaserKey(charId, folder, stem)` = `${charId}_${folder}_${stem}` and `normKey` = `n_${rawKey}`. Animation config extracted to `src/config/animationConfig.ts` (ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG) — idle slowed to 6fps, aura_step folder pre-wired. `MinariFighter` now uses `${this.fighterId}_*` for all animation key lookups (no more hardcoded `flarepaw_*`). Deleted `src/generated/flarepaw-manifest.ts`. Files: `src/scenes/PreloadScene.ts`, `src/entities/MinariFighter.ts`, `src/config/animationConfig.ts`, `tools/gen-manifest.js`, `src/generated/characters-manifest.ts`.
+
 ## 2026-06-07 (Aura Step)
 
 - Claude: Added Aura Step dodge mechanic. Input: Guard (held) + Left/Right (tapped). Costs 15 Aura, grants 160ms i-frames, 500px/s lateral velocity for 220ms. Perfect timing (stepping through an active enemy hitbox) refunds 12 Aura and +8 Soul Sync. Projectiles pass through player during i-frames. Guard entry now blocked while dodging (fixes guard spam over dodge). Dodge velocity preserved for full duration (fixes dodge-stops-instantly bug). Debug overlay shows step cooldown and i-frame timer. Files: `src/entities/MinariFighter.ts`, `src/scenes/BattleScene.ts`, `src/systems/InputSystem.ts`.

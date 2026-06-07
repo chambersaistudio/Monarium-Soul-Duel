@@ -1,28 +1,18 @@
 import Phaser from 'phaser';
-import { FLAREPAW_BASE, FLAREPAW_FRAMES } from '../generated/flarepaw-manifest';
+import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
+import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 
 const NORM_SIZE = 512;
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
-// Maps animation folder → Phaser animation config.
-// jump folder (if present) is handled separately — split into 3 phase-animations.
-const ANIM_CONFIG: Record<string, { animKey: string; frameRate: number; repeat: number }> = {
-  idle:        { animKey: 'flarepaw_idle',       frameRate: 8,  repeat: -1 },
-  run:         { animKey: 'flarepaw_run',         frameRate: 12, repeat: -1 },
-  attack:      { animKey: 'flarepaw_attack',      frameRate: 12, repeat: 0  },
-  hurt:        { animKey: 'flarepaw_hurt',        frameRate: 12, repeat: 0  },
-  guard:       { animKey: 'flarepaw_guard',       frameRate: 8,  repeat: -1 },
-  flame_guard: { animKey: 'flarepaw_flame_guard', frameRate: 12, repeat: -1 },
-};
-
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
 
-function phaserKey(folder: string, stem: string): string {
-  return `fp_${folder}_${stem}`;
+function phaserKey(charId: string, folder: string, stem: string): string {
+  return `${charId}_${folder}_${stem}`;
 }
 
 function normKey(rawKey: string): string {
-  return 'fpn' + rawKey.slice(2);
+  return `n_${rawKey}`;
 }
 
 export class PreloadScene extends Phaser.Scene {
@@ -49,95 +39,98 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('fileprogress', (f: Phaser.Loader.File) => { statusText.setText(f.key); });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
-    // Load runtime JSON manifest first.  When it completes, queue any frames it
-    // lists that aren't already in the compile-time manifest (handles newly added
-    // frames before a rebuild).  Missing files still fire loaderror and get skipped.
-    this.load.json('flarepaw_manifest', `${FLAREPAW_BASE}/sprite-manifest.json`);
-    this.load.on('filecomplete-json-flarepaw_manifest', () => {
-      const json = this.cache.json.get('flarepaw_manifest') as ManifestJSON | null;
-      if (!json?.animations) return;
-      for (const [folder, stems] of Object.entries(json.animations)) {
-        for (const stem of stems) {
-          const key = phaserKey(folder, stem);
-          if (!this.textures.exists(key)) {
-            this.load.image(key, `${FLAREPAW_BASE}/${folder}/${stem}.png`);
+    for (const [charId, manifest] of Object.entries(CHARACTERS_MANIFEST)) {
+      // Load runtime JSON manifest first.  On complete, queue any frames it lists
+      // that aren't already queued from the compile-time manifest.
+      const jsonKey = `${charId}_manifest`;
+      this.load.json(jsonKey, `${manifest.base}/sprite-manifest.json`);
+      this.load.on(`filecomplete-json-${jsonKey}`, () => {
+        const json = this.cache.json.get(jsonKey) as ManifestJSON | null;
+        if (!json?.animations) return;
+        for (const [folder, stems] of Object.entries(json.animations)) {
+          for (const stem of stems) {
+            const key = phaserKey(charId, folder, stem);
+            if (!this.textures.exists(key)) {
+              this.load.image(key, `${manifest.base}/${folder}/${stem}.png`);
+            }
           }
         }
-      }
-    });
+      });
 
-    // Queue all compile-time manifest frames as the primary load set.
-    // The JSON manifest overrides the source-of-truth in create(), but we seed
-    // here so frames load even if sprite-manifest.json is absent or stale.
-    for (const [folder, stems] of Object.entries(FLAREPAW_FRAMES)) {
-      for (const stem of stems) {
-        this.load.image(phaserKey(folder, stem), `${FLAREPAW_BASE}/${folder}/${stem}.png`);
+      // Seed the load queue from the compile-time manifest so frames load even
+      // if sprite-manifest.json is absent or stale.
+      for (const [folder, stems] of Object.entries(manifest.animations)) {
+        for (const stem of stems) {
+          this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
+        }
       }
     }
   }
 
   create(): void {
-    // JSON manifest (written by npm run gen:manifest) reflects actual files on disk.
-    // Prefer it over the compile-time TypeScript manifest so deleted frames are not
-    // attempted, and newly added frames (added since last build) are picked up.
-    const jsonOk = !this.loadErrors.has('flarepaw_manifest') && this.cache.json.has('flarepaw_manifest');
+    for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
+      this.createCharacter(charId);
+    }
+    this.scene.start('TitleScene');
+  }
+
+  private createCharacter(charId: string): void {
+    const manifest = CHARACTERS_MANIFEST[charId];
+    const jsonKey  = `${charId}_manifest`;
+
+    const jsonOk = !this.loadErrors.has(jsonKey) && this.cache.json.has(jsonKey);
     const sourceFrames: Record<string, readonly string[]> =
       jsonOk
-        ? ((this.cache.json.get('flarepaw_manifest') as ManifestJSON).animations ?? FLAREPAW_FRAMES)
-        : FLAREPAW_FRAMES;
+        ? ((this.cache.json.get(jsonKey) as ManifestJSON).animations ?? manifest.animations)
+        : manifest.animations;
 
     if (jsonOk) {
-      console.log('[PreloadScene] Using runtime sprite-manifest.json');
+      console.log(`[PreloadScene] ${charId}: using runtime sprite-manifest.json`);
     } else {
-      console.log('[PreloadScene] sprite-manifest.json not found — using compile-time manifest');
+      console.log(`[PreloadScene] ${charId}: sprite-manifest.json absent — using compile-time manifest`);
     }
 
     const loaded = (k: string) => this.textures.exists(k) && !this.loadErrors.has(k);
 
     // Build per-folder frame lists from ONLY the frames that actually loaded.
-    // This makes the system self-healing: if a frame was deleted but the manifest
-    // wasn't regenerated, it simply gets skipped instead of breaking the animation.
+    // Missing frames are skipped with a warning instead of breaking the animation.
     const loadedFolders: Record<string, string[]> = {};
     for (const [folder, stems] of Object.entries(sourceFrames)) {
-      const ok      = (stems as string[]).filter(s => loaded(phaserKey(folder, s)));
-      const skipped = (stems as string[]).filter(s => !loaded(phaserKey(folder, s)));
+      const ok      = (stems as string[]).filter(s => loaded(phaserKey(charId, folder, s)));
+      const skipped = (stems as string[]).filter(s => !loaded(phaserKey(charId, folder, s)));
 
       if (skipped.length > 0) {
-        console.warn(`[PreloadScene] ${folder}: skipped ${skipped.length} missing frame(s): ${skipped.join(', ')}`);
+        console.warn(`[PreloadScene] ${charId}/${folder}: skipped ${skipped.length} missing frame(s): ${skipped.join(', ')}`);
         console.warn(`[PreloadScene] → Run "npm run gen:manifest" to update the manifest`);
       }
       if (ok.length > 0) {
         loadedFolders[folder] = ok;
-        console.log(`[PreloadScene] ${folder} (${ok.length}f): [${ok.join(', ')}]`);
+        console.log(`[PreloadScene] ${charId}/${folder} (${ok.length}f): [${ok.join(', ')}]`);
       }
     }
 
     if (loadedFolders['idle'] || loadedFolders['run']) {
-      const firstKey = this.normalizeAndRegister(loadedFolders);
-      this.registry.set('flarepaw_sprite_key',         firstKey);
-      this.registry.set('flarepaw_anim_mode',          'frames');
-      this.registry.set('flarepaw_guard_loaded',       !!loadedFolders['guard']);
-      this.registry.set('flarepaw_flame_guard_loaded', !!loadedFolders['flame_guard']);
-      this.registry.set('flarepaw_attack_loaded',      !!loadedFolders['attack']);
-      this.registry.set('flarepaw_hurt_loaded',        !!loadedFolders['hurt']);
-      this.registry.set('flarepaw_jump_loaded',        !!loadedFolders['jump']);
+      const firstKey = this.registerCharacterAnims(charId, loadedFolders);
+      this.registry.set(`${charId}_sprite_key`, firstKey);
+      this.registry.set(`${charId}_anim_mode`,  'frames');
 
-      const summary = Object.entries(loadedFolders)
-        .map(([f, stems]) => `${f}:${stems.length}`)
-        .join('  ');
-      console.log(`[PreloadScene] Flarepaw ✓  ${summary}`);
+      for (const folder of Object.keys(ANIM_CONFIG)) {
+        this.registry.set(`${charId}_${folder}_loaded`, !!loadedFolders[folder]);
+      }
+      this.registry.set(`${charId}_jump_loaded`, !!loadedFolders['jump']);
+
+      const summary = Object.entries(loadedFolders).map(([f, s]) => `${f}:${s.length}`).join('  ');
+      console.log(`[PreloadScene] ${charId} ✓  ${summary}`);
     } else {
-      this.registry.set('flarepaw_sprite_key',         null);
-      this.registry.set('flarepaw_anim_mode',          'none');
-      this.registry.set('flarepaw_guard_loaded',       false);
-      this.registry.set('flarepaw_flame_guard_loaded', false);
-      this.registry.set('flarepaw_attack_loaded',      false);
-      this.registry.set('flarepaw_hurt_loaded',        false);
-      this.registry.set('flarepaw_jump_loaded',        false);
-      console.warn('[PreloadScene] No Flarepaw frames found — placeholder graphics active.');
-    }
+      this.registry.set(`${charId}_sprite_key`, null);
+      this.registry.set(`${charId}_anim_mode`,  'none');
 
-    this.scene.start('TitleScene');
+      for (const folder of Object.keys(ANIM_CONFIG)) {
+        this.registry.set(`${charId}_${folder}_loaded`, false);
+      }
+      this.registry.set(`${charId}_jump_loaded`, false);
+      console.warn(`[PreloadScene] No ${charId} frames found — placeholder graphics active.`);
+    }
   }
 
   // Draws the content region of a raw texture onto a NORM_SIZE×NORM_SIZE canvas,
@@ -215,10 +208,11 @@ export class PreloadScene extends Phaser.Scene {
     }
   }
 
-  // Registers Phaser animations from the pre-filtered loadedFolders map.
-  // loadedFolders contains only stems that actually loaded — missing frames
-  // have already been filtered out before this is called.
-  private normalizeAndRegister(
+  // Registers all Phaser animations for a single character from pre-filtered loadedFolders.
+  // Standard folders use ANIM_CONFIG; unknown folders fall back to DEFAULT_ANIM_CONFIG;
+  // the 'jump' folder is split into three phase-animations.
+  private registerCharacterAnims(
+    charId: string,
     loadedFolders: Record<string, string[]>,
   ): string | null {
     const normCache: Record<string, string[]> = {};
@@ -226,25 +220,42 @@ export class PreloadScene extends Phaser.Scene {
       if (normCache[folder]) return normCache[folder];
       const stems  = loadedFolders[folder] ?? [];
       const result = stems
-        .map(stem => this.normalizeToCanvas(phaserKey(folder, stem)))
+        .map(stem => this.normalizeToCanvas(phaserKey(charId, folder, stem)))
         .filter((k): k is string => k !== null);
       normCache[folder] = result;
       return result;
     };
 
-    // Register simple folder → single Phaser animation
+    // Standard folders from ANIM_CONFIG
     for (const [folder, cfg] of Object.entries(ANIM_CONFIG)) {
       if (!loadedFolders[folder]) continue;
       const normKeys = normFolder(folder);
       if (normKeys.length === 0) continue;
-      if (this.anims.exists(cfg.animKey)) this.anims.remove(cfg.animKey);
+      const animKey = `${charId}_${folder}`;
+      if (this.anims.exists(animKey)) this.anims.remove(animKey);
       this.anims.create({
-        key: cfg.animKey,
+        key: animKey,
         frames: normKeys.map(k => ({ key: k })),
         frameRate: cfg.frameRate,
         repeat: cfg.repeat,
       });
-      console.log(`[PreloadScene] registered ${cfg.animKey} (${normKeys.length}f)`);
+      console.log(`[PreloadScene] registered ${animKey} (${normKeys.length}f)`);
+    }
+
+    // Unknown folders (custom Monari abilities not yet in ANIM_CONFIG) use defaults
+    for (const folder of Object.keys(loadedFolders)) {
+      if (folder in ANIM_CONFIG || folder === 'jump') continue;
+      const normKeys = normFolder(folder);
+      if (normKeys.length === 0) continue;
+      const animKey = `${charId}_${folder}`;
+      if (this.anims.exists(animKey)) this.anims.remove(animKey);
+      this.anims.create({
+        key: animKey,
+        frames: normKeys.map(k => ({ key: k })),
+        frameRate: DEFAULT_ANIM_CONFIG.frameRate,
+        repeat: DEFAULT_ANIM_CONFIG.repeat,
+      });
+      console.log(`[PreloadScene] registered ${animKey} (${normKeys.length}f) [default config]`);
     }
 
     // Jump folder → 3 phase-animations (takeoff / air-hold / land)
@@ -260,15 +271,15 @@ export class PreloadScene extends Phaser.Scene {
         const land = normJump.slice(-1);
 
         const phases = [
-          { key: 'flarepaw_jump_takeoff', frames: takeoff, frameRate: 14, repeat: 0  },
-          { key: 'flarepaw_jump_air',     frames: air,     frameRate: 1,  repeat: -1 },
-          { key: 'flarepaw_jump_land',    frames: land,    frameRate: 1,  repeat: 0  },
+          { key: `${charId}_jump_takeoff`, frames: takeoff, ...JUMP_PHASE_CONFIG.takeoff },
+          { key: `${charId}_jump_air`,     frames: air,     ...JUMP_PHASE_CONFIG.air     },
+          { key: `${charId}_jump_land`,    frames: land,    ...JUMP_PHASE_CONFIG.land    },
         ];
         for (const { key, frames, frameRate, repeat } of phases) {
           if (this.anims.exists(key)) this.anims.remove(key);
           this.anims.create({ key, frames: frames.map(k => ({ key: k })), frameRate, repeat });
         }
-        console.log(`[PreloadScene] registered jump phases (${normJump.length}f split into 3)`);
+        console.log(`[PreloadScene] registered ${charId} jump phases (${normJump.length}f split into 3)`);
       }
     }
 

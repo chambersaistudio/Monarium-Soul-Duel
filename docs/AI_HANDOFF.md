@@ -59,6 +59,41 @@ Claude
 
 ## Handoff Log
 
+### 2026-06-07 — Universal character animation pipeline
+
+#### Agent
+Claude
+
+#### Summary of What Changed
+The sprite system is now fully universal. Any character/Monari can be added by dropping PNG folders under `public/assets/characters/[charId]/[animName]/` and running `npm run gen:manifest`. No PreloadScene or MinariFighter code changes needed for new characters.
+
+Key changes:
+- `tools/gen-manifest.js` — scans all character directories, writes per-character `sprite-manifest.json` AND unified `src/generated/characters-manifest.ts`
+- `src/config/animationConfig.ts` — new human-editable config: `ANIM_CONFIG` (FPS + loop per folder), `JUMP_PHASE_CONFIG`, `DEFAULT_ANIM_CONFIG`. Idle slowed to 6fps. `aura_step` folder pre-wired.
+- `src/scenes/PreloadScene.ts` — fully rewritten; loops over all chars in `CHARACTERS_MANIFEST`; animation keys are now `${charId}_${folder}`; texture keys are `${charId}_${folder}_${stem}`; normalised keys are `n_${rawKey}`
+- `src/entities/MinariFighter.ts` — all hardcoded `flarepaw_*` animation keys replaced with `` `${this.fighterId}_*` ``; sprite loading no longer gated on `data.id === 'flarepaw'` — any character with frames gets a real sprite
+- `src/generated/flarepaw-manifest.ts` — **deleted** (superseded by `characters-manifest.ts`)
+
+#### New or Changed Game States
+- No game state changes. All existing states (`idle`, `run`, `jump`, `guard`, etc.) work identically; the animation key convention changed but behavior is the same.
+
+#### New or Changed Controls
+- No input changes.
+
+#### New or Changed Assets
+- `src/generated/characters-manifest.ts` — auto-generated, replaces old `flarepaw-manifest.ts`
+- `src/config/animationConfig.ts` — new human-editable file; edit to tune animation speeds
+- To add a new character: drop PNG folders → run `npm run gen:manifest` → done
+
+#### New Known Issues
+- None introduced.
+
+#### What UI May Need Next
+- Any HUD that reads `flarepaw_*_loaded` registry keys should now read `${charId}_*_loaded` to support multiple characters
+- When Droplet or Amari get real sprite frames, run `npm run gen:manifest` and they'll appear in game automatically
+
+---
+
 ### 2026-06-07 — Aura Step dodge mechanic
 
 #### Agent

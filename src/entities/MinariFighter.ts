@@ -108,11 +108,11 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.shadow = scene.add.ellipse(0, 0, data.bodyWidth * 1.5, 14, 0x000000, 0.3);
     scene.add.existing(this.shadow);
 
-    // Attempt to use a real sprite for Flarepaw
-    const animMode  = scene.registry.get('flarepaw_anim_mode') as string | undefined;
-    const spriteKey = scene.registry.get('flarepaw_sprite_key') as string | undefined;
+    // Attempt to use a real sprite if one was loaded for this character
+    const animMode  = scene.registry.get(`${data.id}_anim_mode`) as string | undefined;
+    const spriteKey = scene.registry.get(`${data.id}_sprite_key`) as string | undefined;
 
-    if (data.id === 'flarepaw' && spriteKey && animMode !== 'none') {
+    if (spriteKey && animMode !== 'none') {
       this.sprite    = scene.add.sprite(0, 0, spriteKey);
       this.useSprite = true;
 
@@ -203,52 +203,53 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     // Frames are authored right-facing; flip sprite (not container) when facing left
     this.sprite.setFlipX(this.facing === -1);
 
+    const id   = this.fighterId;
     const velX = Math.abs(this.phBody.velocity.x);
 
     switch (this.state) {
       case 'jump':
       case 'fall':
-        if (this.scene.anims.exists('flarepaw_jump_takeoff')) {
+        if (this.scene.anims.exists(`${id}_jump_takeoff`)) {
           if (this.jumpPhase === 'air') {
-            this.playAnim('flarepaw_jump_air', false);
+            this.playAnim(`${id}_jump_air`, false);
           } else {
-            this.playAnim('flarepaw_jump_takeoff', false);
+            this.playAnim(`${id}_jump_takeoff`, false);
           }
         } else {
-          this.playAnim('flarepaw_idle');
+          this.playAnim(`${id}_idle`);
         }
         break;
       case 'run':
-        this.playAnim('flarepaw_run');
+        this.playAnim(`${id}_run`);
         break;
       case 'guard':
         if (this.flameGuardActive) {
-          this.playAnim('flarepaw_flame_guard', false);
+          this.playAnim(`${id}_flame_guard`, false);
         } else {
-          this.playAnim('flarepaw_guard', false);
+          this.playAnim(`${id}_guard`, false);
         }
         break;
       case 'attacking':
-        if (this.scene.anims.exists('flarepaw_attack')) {
+        if (this.scene.anims.exists(`${id}_attack`)) {
           if (!this.attackAnimPlaying) {
             // Start or restart animation for each new attack press
-            this.playAnim('flarepaw_attack', true);
+            this.playAnim(`${id}_attack`, true);
             this.attackAnimPlaying = true;
           }
           // If animation has finished (repeat:0), hold the last frame —
           // do not restart it; the state machine will return to idle/run.
         } else {
-          this.playAnim('flarepaw_idle');
+          this.playAnim(`${id}_idle`);
         }
         break;
       case 'hurt':
-        if (this.scene.anims.exists('flarepaw_hurt')) {
+        if (this.scene.anims.exists(`${id}_hurt`)) {
           if (!this.hurtAnimPlaying) {
-            this.playAnim('flarepaw_hurt', true);
+            this.playAnim(`${id}_hurt`, true);
             this.hurtAnimPlaying = true;
           }
         } else {
-          this.playAnim('flarepaw_idle');
+          this.playAnim(`${id}_idle`);
         }
         break;
       case 'idle':
@@ -256,11 +257,11 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       default:
         // Landing frame briefly overrides idle/run after touching down
         if (this.jumpPhase === 'landing') {
-          this.playAnim('flarepaw_jump_land', false);
+          this.playAnim(`${id}_jump_land`, false);
         } else if (velX > 10) {
-          this.playAnim('flarepaw_run');
+          this.playAnim(`${id}_run`);
         } else {
-          this.playAnim('flarepaw_idle');
+          this.playAnim(`${id}_idle`);
         }
         break;
     }
@@ -357,7 +358,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.flameGuardTimer  = duration;
 
     // When the sprite animation covers flame guard, suppress the placeholder ring
-    const hasFGSprite = this.useSprite && this.scene.anims.exists('flarepaw_flame_guard');
+    const hasFGSprite = this.useSprite && this.scene.anims.exists(`${this.fighterId}_flame_guard`);
 
     if (!this.flameGuardGfx) {
       this.flameGuardGfx = this.scene.add.graphics();
@@ -586,7 +587,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       }
       // Takeoff animation finished → switch to air-hold frame
       if (this.jumpPhase === 'takeoff' && this.sprite &&
-          !this.sprite.anims.isPlaying && this.lastAnim === 'flarepaw_jump_takeoff') {
+          !this.sprite.anims.isPlaying && this.lastAnim === `${this.fighterId}_jump_takeoff`) {
         this.jumpPhase = 'air';
       }
       this.state = this.phBody.velocity.y < 0 ? 'jump' : 'fall';
