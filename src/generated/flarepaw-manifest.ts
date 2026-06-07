@@ -9,5 +9,5 @@ export const FLAREPAW_FRAMES: Record<string, readonly string[]> = {
   guard: ['frame_054', 'frame_055', 'frame_056', 'frame_057', 'frame_058', 'frame_059', 'frame_060', 'frame_061'],
   hurt: ['frame_049', 'frame_050', 'frame_051', 'frame_052', 'frame_053'],
   idle: ['frame_002', 'frame_003', 'frame_004', 'frame_005', 'frame_006', 'frame_007', 'frame_008', 'frame_010', 'frame_012', 'frame_014', 'frame_015', 'frame_016', 'frame_017', 'frame_018'],
-  run: ['frame_020', 'frame_024', 'frame_025', 'frame_027', 'frame_028', 'frame_030', 'frame_031', 'frame_032'],
+  run: ['frame_024', 'frame_025', 'frame_027', 'frame_028', 'frame_030', 'frame_031', 'frame_032'],
 };
