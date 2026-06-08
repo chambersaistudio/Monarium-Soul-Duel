@@ -19,6 +19,7 @@ export class ModeSelectScene extends Phaser.Scene {
   private cursor    = 0;
   private prevCursor = -1;
   private labels:   Phaser.GameObjects.Text[] = [];
+  private cardYArr: number[] = [];
   private upKey!:   Phaser.Input.Keyboard.Key;
   private downKey!: Phaser.Input.Keyboard.Key;
   private enterKey!: Phaser.Input.Keyboard.Key;
@@ -40,19 +41,19 @@ export class ModeSelectScene extends Phaser.Scene {
       bg.fillRect(0, i, w, 4);
     }
 
-    this.add.text(w / 2, 80, 'SELECT MODE', {
+    this.add.text(w / 2, Math.round(h * 0.14), 'SELECT MODE', {
       fontSize: '36px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.add.text(w / 2, 124, 'Arrow Keys + Enter  /  Click', {
+    this.add.text(w / 2, Math.round(h * 0.24), 'Arrow Keys + Enter  /  Tap', {
       fontSize: '12px', color: '#666666', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
-    // Mode cards
-    const cardY = [240, 380];
+    // Card positions — proportional so they fit any viewport height
+    this.cardYArr = [Math.round(h * 0.46), Math.round(h * 0.74)];
     MODES.forEach((mode, i) => {
-      const cy = cardY[i];
+      const cy = this.cardYArr[i];
 
       // Card background
       const card = this.add.graphics();
@@ -81,14 +82,14 @@ export class ModeSelectScene extends Phaser.Scene {
     });
 
     // Cursor arrow
-    this.add.text(w / 2 - 260, cardY[0], '▶', {
+    this.add.text(w / 2 - 260, this.cardYArr[0], '▶', {
       fontSize: '18px', color: '#ff6600', fontFamily: 'monospace',
     }).setOrigin(0.5).setName('cursor_arrow_0');
-    this.add.text(w / 2 - 260, cardY[1], '▶', {
+    this.add.text(w / 2 - 260, this.cardYArr[1], '▶', {
       fontSize: '18px', color: '#ff6600', fontFamily: 'monospace',
     }).setOrigin(0.5).setName('cursor_arrow_1');
 
-    this.add.text(w / 2, h - 30, '← Back to Title: ESC', {
+    this.add.text(w / 2, h - 20, '← Back to Title: ESC', {
       fontSize: '10px', color: '#444444', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
@@ -108,7 +109,6 @@ export class ModeSelectScene extends Phaser.Scene {
   }
 
   private updateCursor(): void {
-    const cardY = [240, 380];
     this.labels.forEach((lbl, i) => {
       lbl.setColor(i === this.cursor ? '#ff9944' : '#ffffff');
     });
@@ -118,7 +118,7 @@ export class ModeSelectScene extends Phaser.Scene {
     arrows.forEach(a => {
       const idx = a.name === 'cursor_arrow_0' ? 0 : 1;
       a.setAlpha(idx === this.cursor ? 1 : 0.15);
-      a.setY(cardY[idx]);
+      a.setY(this.cardYArr[idx]);
     });
   }
 

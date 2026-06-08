@@ -8,11 +8,8 @@ import {
   SAFE_MODE,
   SAFE_SKIP_FOLDERS,
   SAFE_MAX_FRAMES,
+  NORM_SIZE,
 } from '../config/mobileConfig';
-
-// Normalized canvas size. Reduced on mobile to save GPU memory:
-// 256×256 = 262 KB vs 512×512 = 1 MB per frame (4× reduction).
-const NORM_SIZE = IS_TOUCH_DEVICE ? 256 : 512;
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };

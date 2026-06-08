@@ -6,13 +6,8 @@ import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/class
 import { MINARI_ROSTER } from '../data/minariData';
 import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
 import { AUDIO_KEYS } from '../config/audioConfig';
+import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
-
-const GROUND_Y        = 420;
-const PLAYER_ANCHOR_X = 200;
-const ENEMY_ANCHOR_X  = 760;
-const HP_BAR_W        = 200;
-const HP_BAR_H        = 14;
 
 export class ClassicSoulDuelScene extends Phaser.Scene {
   // Combatants
@@ -20,6 +15,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private enemyActor!:  ClassicActor;
   private engine!:      ClassicBattleEngine;
   private audio!:       AudioManager;
+
+  // Layout — computed in create() from this.scale, referenced by callbacks
+  private groundY!:       number;
+  private playerAnchorX!: number;
+  private enemyAnchorX!:  number;
+  private hpBarW!:        number;
+  private hpBarH!:        number;
 
   // UI — HP
   private playerHpFill!: Phaser.GameObjects.Rectangle;
@@ -36,7 +38,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   // UI — Misc
   private phaseLabel!:  Phaser.GameObjects.Text;
-  private guardLabel!:  Phaser.GameObjects.Text;  // shows "GUARDING" over guarding actor
+  private guardLabel!:  Phaser.GameObjects.Text;
 
   // Input
   private upKey!:   Phaser.Input.Keyboard.Key;
@@ -46,7 +48,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
-  // ── Preload (background image, scene-specific) ─────────────────────────────
+  // ── Preload ────────────────────────────────────────────────────────────────
 
   preload(): void {
     const { background } = CLASSIC_BATTLE_CONFIG;
@@ -57,6 +59,16 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   create(): void {
     const { width: w, height: h } = this.scale;
+    const mob = IS_TOUCH_DEVICE;
+
+    // ── Layout constants (proportional to viewport) ────────────────────────
+    // Mobile uses a slightly higher ground line so characters aren't buried
+    // behind the taller command menu.
+    this.groundY       = Math.round(h * (mob ? 0.62 : 0.70));
+    this.playerAnchorX = Math.round(w * 0.20);
+    this.enemyAnchorX  = Math.round(w * 0.80);
+    this.hpBarW        = mob ? Math.round(w * 0.28) : 200;
+    this.hpBarH        = mob ? 18 : 14;
 
     this.drawBackground(w, h);
 
@@ -65,11 +77,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const enemyData  = MINARI_ROSTER['droplet'];
 
     this.playerActor = new ClassicActor(
-      this, PLAYER_ANCHOR_X, GROUND_Y - playerData.bodyHeight / 2,
+      this, this.playerAnchorX, this.groundY - playerData.bodyHeight / 2,
       playerData, true,
     );
     this.enemyActor = new ClassicActor(
-      this, ENEMY_ANCHOR_X, GROUND_Y - enemyData.bodyHeight / 2,
+      this, this.enemyAnchorX, this.groundY - enemyData.bodyHeight / 2,
       enemyData, false,
     );
 
@@ -110,8 +122,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
     this.refreshHpBars();
-
-    // Guard stance label — hovers above any actor currently in guard
     this.updateGuardLabels();
 
     if (!this.menuVisible) return;
@@ -124,7 +134,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     if (downJust) { this.menuCursor = (this.menuCursor + 1) % this.menuOptionTexts.length; this.refreshMenuCursor(); }
     if (okJust)   { this.confirmMenuSelection(); }
 
-    // Play UI move sound when cursor changes
     if (this.menuCursor !== this.prevCursor) {
       if (this.prevCursor !== -1) this.audio.playUi(AUDIO_KEYS.ui.move);
       this.prevCursor = this.menuCursor;
@@ -137,14 +146,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const bgKey = `bg_${CLASSIC_BATTLE_CONFIG.background}`;
 
     if (this.textures.exists(bgKey)) {
-      // Use the provided background image, scaled to fill
       this.add.image(w / 2, h / 2, bgKey).setDepth(0).setDisplaySize(w, h);
-      // Semi-transparent overlay over the bottom section for readability
       const overlay = this.add.graphics().setDepth(1);
       overlay.fillStyle(0x000000, 0.35);
-      overlay.fillRect(0, GROUND_Y, w, h - GROUND_Y);
+      overlay.fillRect(0, this.groundY, w, h - this.groundY);
     } else {
-      // Procedural gradient fallback
       const bg = this.add.graphics().setDepth(0);
       for (let i = 0; i < h; i += 3) {
         const t = i / h;
@@ -155,12 +161,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         bg.fillRect(0, i, w, 3);
       }
       bg.fillStyle(0x1a1a2e, 1);
-      bg.fillRect(0, GROUND_Y, w, h - GROUND_Y);
+      bg.fillRect(0, this.groundY, w, h - this.groundY);
       bg.lineStyle(2, 0xff6600, 0.35);
-      bg.lineBetween(0, GROUND_Y, w, GROUND_Y);
+      bg.lineBetween(0, this.groundY, w, this.groundY);
       for (let i = 1; i <= 4; i++) {
         bg.lineStyle(1, 0x333366, 0.4);
-        bg.lineBetween(0, GROUND_Y + i * 15, w, GROUND_Y + i * 15);
+        bg.lineBetween(0, this.groundY + i * 15, w, this.groundY + i * 15);
       }
     }
   }
@@ -169,37 +175,44 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private buildHpBars(w: number, playerName: string, enemyName: string): void {
     const depth = 20;
-    const py = 22, ey = 22;
+    const mob   = IS_TOUCH_DEVICE;
+    const py    = mob ? 28 : 22;
+    const nameFontSize = mob ? '15px' : '11px';
+    const numFontSize  = mob ? '13px' : '10px';
+    const nameOffY     = mob ? -20 : -14;
 
     // Player (left side)
-    this.add.text(20, py - 14, playerName.toUpperCase(), {
-      fontSize: '11px', color: '#ff9944', fontFamily: 'monospace',
+    const px = mob ? 14 : 20;
+    this.add.text(px, py + nameOffY, playerName.toUpperCase(), {
+      fontSize: nameFontSize, color: '#ff9944', fontFamily: 'monospace',
     }).setDepth(depth);
-    this.add.rectangle(20, py, HP_BAR_W, HP_BAR_H, 0x222222).setOrigin(0, 0).setDepth(depth);
-    this.playerHpFill = this.add.rectangle(20, py, HP_BAR_W, HP_BAR_H, 0x44cc44)
+    this.add.rectangle(px, py, this.hpBarW, this.hpBarH, 0x222222)
+      .setOrigin(0, 0).setDepth(depth);
+    this.playerHpFill = this.add.rectangle(px, py, this.hpBarW, this.hpBarH, 0x44cc44)
       .setOrigin(0, 0).setDepth(depth + 1);
-    this.playerHpText = this.add.text(20 + HP_BAR_W + 6, py + 1, '', {
-      fontSize: '10px', color: '#aaaaaa', fontFamily: 'monospace',
+    this.playerHpText = this.add.text(px + this.hpBarW + 6, py + 1, '', {
+      fontSize: numFontSize, color: '#aaaaaa', fontFamily: 'monospace',
     }).setDepth(depth + 1);
 
     // Enemy (right side)
-    const ex = w - 20 - HP_BAR_W;
-    this.add.text(ex, ey - 14, enemyName.toUpperCase(), {
-      fontSize: '11px', color: '#44aaff', fontFamily: 'monospace',
+    const ex = w - (mob ? 14 : 20) - this.hpBarW;
+    this.add.text(ex, py + nameOffY, enemyName.toUpperCase(), {
+      fontSize: nameFontSize, color: '#44aaff', fontFamily: 'monospace',
     }).setDepth(depth);
-    this.add.rectangle(ex, ey, HP_BAR_W, HP_BAR_H, 0x222222).setOrigin(0, 0).setDepth(depth);
-    this.enemyHpFill = this.add.rectangle(ex, ey, HP_BAR_W, HP_BAR_H, 0x44cc44)
+    this.add.rectangle(ex, py, this.hpBarW, this.hpBarH, 0x222222)
+      .setOrigin(0, 0).setDepth(depth);
+    this.enemyHpFill = this.add.rectangle(ex, py, this.hpBarW, this.hpBarH, 0x44cc44)
       .setOrigin(0, 0).setDepth(depth + 1);
-    this.enemyHpText = this.add.text(ex - 50, ey + 1, '', {
-      fontSize: '10px', color: '#aaaaaa', fontFamily: 'monospace',
+    this.enemyHpText = this.add.text(ex - (mob ? 62 : 50), py + 1, '', {
+      fontSize: numFontSize, color: '#aaaaaa', fontFamily: 'monospace',
     }).setDepth(depth + 1);
   }
 
   private refreshHpBars(): void {
     const pRatio = Math.max(0, this.playerActor.hp / this.playerActor.maxHp);
     const eRatio = Math.max(0, this.enemyActor.hp  / this.enemyActor.maxHp);
-    this.playerHpFill.width = HP_BAR_W * pRatio;
-    this.enemyHpFill.width  = HP_BAR_W * eRatio;
+    this.playerHpFill.width = this.hpBarW * pRatio;
+    this.enemyHpFill.width  = this.hpBarW * eRatio;
     this.playerHpFill.setFillStyle(this.hpColor(pRatio));
     this.enemyHpFill.setFillStyle(this.hpColor(eRatio));
     this.playerHpText.setText(`${Math.ceil(this.playerActor.hp)}/${this.playerActor.maxHp}`);
@@ -215,13 +228,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Guard stance label ────────────────────────────────────────────────────
 
   private buildPhaseLabel(w: number, _h: number): void {
-    this.phaseLabel = this.add.text(w / 2, GROUND_Y + 12, '', {
-      fontSize: '11px', color: '#555577', fontFamily: 'monospace',
+    const mob = IS_TOUCH_DEVICE;
+    this.phaseLabel = this.add.text(w / 2, this.groundY + 14, '', {
+      fontSize: mob ? '13px' : '11px', color: '#555577', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(15);
 
-    // Persistent guard label (repositioned in update)
     this.guardLabel = this.add.text(0, 0, '🛡 GUARDING', {
-      fontSize: '11px', color: '#88ddff', fontFamily: 'monospace',
+      fontSize: mob ? '13px' : '11px', color: '#88ddff', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(25).setVisible(false);
   }
@@ -253,7 +266,25 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Command menu ──────────────────────────────────────────────────────────
 
   private buildCommandMenu(w: number, h: number, playerId: string): void {
-    const menuW = 320, menuH = 200, menuX = 20, menuY = h - menuH - 12;
+    const mob = IS_TOUCH_DEVICE;
+
+    // Row dimensions — larger on mobile for comfortable touch targets
+    const rowH     = mob ? 44 : 40;
+    const fontSize = mob ? '22px' : '18px';
+    const padTop   = mob ? 14 : 12;
+    const padBot   = 10;
+
+    const moveset = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
+    this.menuCommandIds  = [...moveset, BACK_COMMAND];
+    this.menuOptionTexts = [];
+    this.menuCursor      = 0;
+
+    const nItems = this.menuCommandIds.length;
+    const menuW  = mob ? Math.min(Math.round(w * 0.50), 460) : 320;
+    const menuH  = padTop + nItems * rowH + padBot;
+    const menuX  = mob ? 8 : 20;
+    // Extra bottom margin to clear the iOS home indicator (SAFE_AREA_BOTTOM ≈ 21 px in PWA mode)
+    const menuY  = h - menuH - (mob ? 6 + SAFE_AREA_BOTTOM : 12);
 
     this.menuGroup = this.add.container(menuX, menuY).setDepth(30).setVisible(false);
 
@@ -264,14 +295,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     bg.strokeRoundedRect(0, 0, menuW, menuH, 8);
     this.menuGroup.add(bg);
 
-    this.add.text(menuX + 10, menuY - 18, '── COMMAND ──', {
-      fontSize: '10px', color: '#ff6600', fontFamily: 'monospace',
+    const headerSize = mob ? '13px' : '10px';
+    const headerOffY = mob ? -22 : -18;
+    this.add.text(menuX + 10, menuY + headerOffY, '── COMMAND ──', {
+      fontSize: headerSize, color: '#ff6600', fontFamily: 'monospace',
     }).setDepth(30);
-
-    const moveset = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
-    this.menuCommandIds  = [...moveset, BACK_COMMAND];
-    this.menuOptionTexts = [];
-    this.menuCursor      = 0;
 
     this.menuCommandIds.forEach((id, i) => {
       const label = id === BACK_COMMAND
@@ -280,12 +308,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const cost  = id !== BACK_COMMAND && CLASSIC_MOVES[id]?.auraCost
         ? ` (${CLASSIC_MOVES[id].auraCost} aura)`
         : '';
-      const txt = this.add.text(20, 12 + i * 40, `  ${label}${cost}`, {
-        fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
+      const txt = this.add.text(20, padTop + i * rowH, `  ${label}${cost}`, {
+        fontSize, color: '#ffffff', fontFamily: 'monospace',
       });
-      // Large hit zone for touch-friendly tapping
       txt.setInteractive(
-        new Phaser.Geom.Rectangle(-10, -8, menuW - 20, 42),
+        new Phaser.Geom.Rectangle(-10, -8, menuW - 20, rowH + 4),
         Phaser.Geom.Rectangle.Contains,
       );
       txt.input!.cursor = 'pointer';
@@ -339,7 +366,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const actor = target === 'player' ? this.playerActor : this.enemyActor;
 
     if (blocked) {
-      // Show blocked indicator — reduced damage in a different style
       this.spawnBlockedDisplay(worldX, worldY, amount);
       this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
     } else {
@@ -351,8 +377,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private spawnDamageNumber(worldX: number, worldY: number, amount: number): void {
+    const mob = IS_TOUCH_DEVICE;
     const txt = this.add.text(worldX, worldY, `-${amount}`, {
-      fontSize: '22px', color: '#ffdd44', fontStyle: 'bold', fontFamily: 'monospace',
+      fontSize: mob ? '30px' : '22px',
+      color: '#ffdd44', fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(50);
 
@@ -367,15 +395,16 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private spawnBlockedDisplay(worldX: number, worldY: number, amount: number): void {
-    // "BLOCKED" header
+    const mob = IS_TOUCH_DEVICE;
     const hdr = this.add.text(worldX, worldY - 10, 'BLOCKED!', {
-      fontSize: '16px', color: '#88ddff', fontStyle: 'bold', fontFamily: 'monospace',
+      fontSize: mob ? '20px' : '16px',
+      color: '#88ddff', fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(50);
 
-    // Reduced damage number below in smaller text
-    const sub = this.add.text(worldX, worldY + 12, `-${amount}`, {
-      fontSize: '13px', color: '#aaccee', fontFamily: 'monospace',
+    const sub = this.add.text(worldX, worldY + 14, `-${amount}`, {
+      fontSize: mob ? '16px' : '13px',
+      color: '#aaccee', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(50);
 
@@ -395,31 +424,32 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private onBattleEnd(winner: ClassicActorRole): void {
     const { width: w, height: h } = this.scale;
-    const isWin  = winner === 'player';
+    const mob   = IS_TOUCH_DEVICE;
+    const isWin = winner === 'player';
     const title  = isWin ? 'VICTORY!'  : 'DEFEAT';
     const colour = isWin ? '#ffcc44'   : '#ff4444';
     const sub    = isWin ? 'Your Monari triumphed!' : 'Your Monari was defeated.';
 
-    // Audio
     this.audio.stopBgm();
     this.audio.playSfx(isWin ? AUDIO_KEYS.sfx.victory : AUDIO_KEYS.sfx.defeat, 1.0);
 
-    // Overlay
     const panel = this.add.graphics().setDepth(60);
     panel.fillStyle(0x000000, 0.65);
     panel.fillRect(0, 0, w, h);
 
     this.add.text(w / 2, h / 2 - 50, title, {
-      fontSize: '56px', color: colour, fontStyle: 'bold', fontFamily: 'monospace',
+      fontSize: mob ? '72px' : '56px',
+      color: colour, fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 6,
     }).setOrigin(0.5).setDepth(61);
 
     this.add.text(w / 2, h / 2 + 20, sub, {
-      fontSize: '18px', color: '#cccccc', fontFamily: 'monospace',
+      fontSize: mob ? '22px' : '18px',
+      color: '#cccccc', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
 
     const returnTxt = this.add.text(w / 2, h / 2 + 70, 'Tap or press ENTER to return', {
-      fontSize: '13px', color: '#888888', fontFamily: 'monospace',
+      fontSize: mob ? '16px' : '13px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
     this.tweens.add({ targets: returnTxt, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
 

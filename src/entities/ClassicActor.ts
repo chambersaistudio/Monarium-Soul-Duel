@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
 import type { MinariData } from '../types/minari';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
+import { NORM_SIZE, IS_TOUCH_DEVICE } from '../config/mobileConfig';
 
-// Mirror the normalization constants used in PreloadScene / MinariFighter
-const DISPLAY_HEIGHT = 220;
-const NORM_SIZE      = 512;
+// On mobile the normalized texture is 256 px (vs 512 px desktop), so SPRITE_SCALE
+// must be computed from the actual NORM_SIZE to get the correct display height.
+// Mobile uses a slightly smaller display height so characters don't overwhelm the
+// compact landscape viewport (≈390 px tall).
+const DISPLAY_HEIGHT = IS_TOUCH_DEVICE ? 170 : 220;
 const NORM_BASE      = 40;
 const SPRITE_SCALE   = DISPLAY_HEIGHT / NORM_SIZE;
 const FEET_OFFSET    = Math.round(NORM_BASE * SPRITE_SCALE);

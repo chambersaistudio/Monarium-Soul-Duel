@@ -30,8 +30,10 @@ const config: Phaser.Types.Core.GameConfig = {
     BattleScene,
   ],
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // RESIZE: canvas always matches the viewport exactly — no letterbox bars.
+    // All scene positions are proportional to this.scale.width/height.
+    mode: Phaser.Scale.RESIZE,
+    parent: document.body,
   },
   render: {
     antialias: true,

@@ -8,18 +8,19 @@
   <title>MONARIUM: Soul Duel</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
+    html {
       width: 100%;
       height: 100%;
+      background: #0a0a0f;
+    }
+    body {
+      display: block;
+      width: 100%;
+      /* Use dynamic viewport height so the address bar on iOS doesn't shrink the game */
+      height: 100dvh;
       overflow: hidden;
       background: #0a0a0f;
       touch-action: none;
-    }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100dvh;
     }
     canvas { display: block; touch-action: none; outline: none; }
 

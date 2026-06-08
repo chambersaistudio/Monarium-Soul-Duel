@@ -28,3 +28,23 @@ export const SAFE_SKIP_FOLDERS = new Set([
 // Max frames per animation folder in safe mode (evenly spaced from the full set).
 // 4 frames × 5 folders × 8.3 MB ≈ 166 MB for flarepaw — within iOS Safari limits.
 export const SAFE_MAX_FRAMES = 4;
+
+// Normalized canvas size used in PreloadScene and ClassicActor sprite-scale math.
+// Mobile uses 256 px (4× less GPU memory per frame); desktop uses 512 px.
+export const NORM_SIZE: number = IS_TOUCH_DEVICE ? 256 : 512;
+
+// Bottom safe-area inset (home indicator on iPhone, etc.).
+// Measured once at module load time so Phaser scene code can add clearance.
+export const SAFE_AREA_BOTTOM: number = (() => {
+  if (typeof document === 'undefined') return 0;
+  try {
+    const el = document.createElement('div');
+    el.style.cssText =
+      'position:fixed;bottom:0;height:env(safe-area-inset-bottom,0px);' +
+      'pointer-events:none;visibility:hidden;';
+    document.body.appendChild(el);
+    const h = el.offsetHeight;
+    document.body.removeChild(el);
+    return h;
+  } catch { return 0; }
+})();
