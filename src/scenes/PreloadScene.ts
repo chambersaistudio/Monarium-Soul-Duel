@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
+import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 
 const NORM_SIZE = 512;
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
@@ -226,12 +227,16 @@ export class PreloadScene extends Phaser.Scene {
       return result;
     };
 
-    // Standard folders from ANIM_CONFIG
-    for (const [folder, cfg] of Object.entries(ANIM_CONFIG)) {
+    const renderCfg  = CHARACTER_RENDER_CONFIG[charId] ?? DEFAULT_RENDER_CONFIG;
+    const overrides  = renderCfg.animOverrides ?? {};
+
+    // Standard folders from ANIM_CONFIG (with optional per-character overrides)
+    for (const [folder, baseCfg] of Object.entries(ANIM_CONFIG)) {
       if (!loadedFolders[folder]) continue;
       const normKeys = normFolder(folder);
       if (normKeys.length === 0) continue;
       const animKey = `${charId}_${folder}`;
+      const cfg = { ...baseCfg, ...(overrides[folder] ?? {}) };
       if (this.anims.exists(animKey)) this.anims.remove(animKey);
       this.anims.create({
         key: animKey,
@@ -259,7 +264,8 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     // Jump folder → 3 phase-animations (takeoff / air-hold / land)
-    if (loadedFolders['jump']) {
+    // Skip when individual phase folders are present (new pipeline) to avoid key conflicts.
+    if (loadedFolders['jump'] && !loadedFolders['jump_air']) {
       const normJump = normFolder('jump');
       if (normJump.length >= 1) {
         const takeoff = normJump.length >= 2

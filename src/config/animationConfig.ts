@@ -11,13 +11,18 @@ export interface AnimConfig {
 // 'jump' is not listed here — it is split into three phase-animations by
 // PreloadScene (takeoff / air / land).  See JUMP_PHASE_CONFIG below.
 export const ANIM_CONFIG: Record<string, AnimConfig> = {
-  idle:        { frameRate: 6,  repeat: -1             },   // slow breathing cycle
-  run:         { frameRate: 12, repeat: -1             },   // smooth loop
-  attack:      { frameRate: 12, repeat: 0,  fallback: 'idle' },
-  hurt:        { frameRate: 12, repeat: 0,  fallback: 'idle' },
-  guard:       { frameRate: 8,  repeat: -1, fallback: 'idle' },
-  flame_guard: { frameRate: 12, repeat: -1, fallback: 'guard' },
-  aura_step:   { frameRate: 14, repeat: 0,  fallback: 'idle' },
+  idle:         { frameRate: 6,  repeat: -1             },   // slow breathing cycle
+  run:          { frameRate: 12, repeat: -1             },   // smooth loop
+  attack:       { frameRate: 12, repeat: 0,  fallback: 'idle' },
+  hurt:         { frameRate: 12, repeat: 0,  fallback: 'idle' },
+  guard:        { frameRate: 8,  repeat: -1, fallback: 'idle' },
+  flame_guard:  { frameRate: 12, repeat: -1, fallback: 'guard' },
+  aura_step:    { frameRate: 14, repeat: 0,  fallback: 'idle' },
+  jump_start:   { frameRate: 12, repeat: 0  },   // play once when leaving ground
+  jump_air:     { frameRate: 6,  repeat: -1 },   // loop while floating at apex
+  jump_forward: { frameRate: 10, repeat: -1 },   // loop while moving horizontally in air
+  jump_fall:    { frameRate: 6,  repeat: -1 },   // loop while descending
+  land:         { frameRate: 12, repeat: 0  },   // play once on ground contact
   // Add future folders here — they auto-wire when the PNG folder is dropped in.
 };
 

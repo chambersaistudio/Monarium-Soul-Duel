@@ -4,6 +4,7 @@ import type { MoveData } from '../types/combat';
 import { CORE_ATTACKS, MOVES, FORMS, ULTIMATES } from '../data/moveData';
 import { FormSystem } from '../systems/FormSystem';
 import { Projectile } from './Projectile';
+import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 
 export type FighterState =
   | 'idle' | 'run' | 'jump' | 'fall' | 'guard'
@@ -78,7 +79,8 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private hurtElapsed   = 0;
   private guardActive   = false;
 
-  private jumpPhase: 'none' | 'takeoff' | 'air' | 'landing' = 'none';
+  private spriteFacingRight = true;   // per-character; from CHARACTER_RENDER_CONFIG
+  private jumpPhase: 'none' | 'start' | 'air' | 'landing' = 'none';
   private landingTimer      = 0;
   private attackAnimPlaying = false;
   private hurtAnimPlaying   = false;
@@ -104,6 +106,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.facing          = isPlayer ? 1 : -1;
     this.projectileGroup = projectileGroup;
 
+    const renderCfg = CHARACTER_RENDER_CONFIG[data.id] ?? DEFAULT_RENDER_CONFIG;
+    this.spriteFacingRight = renderCfg.spriteFacingRight;
+
     // Shadow — kept in world-space, not parented to container
     this.shadow = scene.add.ellipse(0, 0, data.bodyWidth * 1.5, 14, 0x000000, 0.3);
     scene.add.existing(this.shadow);
@@ -122,7 +127,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       // visible feet (which sit NORM_BASE px above canvas bottom) land at
       // the physics body floor instead of floating above it.
       this.sprite.setOrigin(0.5, 1);
-      this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET);
+      this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET + renderCfg.spriteYOffset);
       this.sprite.setAlpha(1);
 
       // Antialiasing ON — this is an HD 2.5D game
@@ -200,25 +205,41 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   private syncAnim(): void {
     if (!this.sprite) return;
 
-    // Frames are authored right-facing; flip sprite (not container) when facing left
-    this.sprite.setFlipX(this.facing === -1);
+    // Flip logic respects whether sprites are authored facing right or left
+    this.sprite.setFlipX(this.spriteFacingRight ? this.facing === -1 : this.facing === 1);
 
     const id   = this.fighterId;
     const velX = Math.abs(this.phBody.velocity.x);
 
     switch (this.state) {
       case 'jump':
-      case 'fall':
-        if (this.scene.anims.exists(`${id}_jump_takeoff`)) {
-          if (this.jumpPhase === 'air') {
+      case 'fall': {
+        const hasStart   = this.scene.anims.exists(`${id}_jump_start`);
+        const hasFall    = this.scene.anims.exists(`${id}_jump_fall`);
+        const hasFwd     = this.scene.anims.exists(`${id}_jump_forward`);
+        const hasAir     = this.scene.anims.exists(`${id}_jump_air`);
+        const hasTakeoff = this.scene.anims.exists(`${id}_jump_takeoff`); // legacy fallback
+        if (this.jumpPhase === 'start') {
+          if (hasStart) this.playAnim(`${id}_jump_start`, false);
+          else if (hasTakeoff) this.playAnim(`${id}_jump_takeoff`, false);
+          else this.playAnim(`${id}_idle`);
+        } else {
+          const vy = this.phBody.velocity.y;
+          const vx = Math.abs(this.phBody.velocity.x);
+          if (vy > 80 && hasFall) {
+            this.playAnim(`${id}_jump_fall`, false);
+          } else if (vx > 30 && hasFwd) {
+            this.playAnim(`${id}_jump_forward`, false);
+          } else if (hasAir) {
+            this.playAnim(`${id}_jump_air`, false);
+          } else if (hasTakeoff) {
             this.playAnim(`${id}_jump_air`, false);
           } else {
-            this.playAnim(`${id}_jump_takeoff`, false);
+            this.playAnim(`${id}_idle`);
           }
-        } else {
-          this.playAnim(`${id}_idle`);
         }
         break;
+      }
       case 'run':
         this.playAnim(`${id}_run`);
         break;
@@ -257,7 +278,8 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       default:
         // Landing frame briefly overrides idle/run after touching down
         if (this.jumpPhase === 'landing') {
-          this.playAnim(`${id}_jump_land`, false);
+          const landKey = this.scene.anims.exists(`${id}_land`) ? `${id}_land` : `${id}_jump_land`;
+          this.playAnim(landKey, false);
         } else if (velX > 10) {
           this.playAnim(`${id}_run`);
         } else {
@@ -581,22 +603,27 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     // Jump / fall state tracking + phase-based jump animation management
     if (!this.grounded && this.state !== 'attacking' && this.state !== 'hurt' &&
         this.state !== 'stunned' && this.state !== 'guard') {
-      // Leaving ground: start takeoff phase
+      // Leaving ground: start jump_start phase (or skip to air if no start anim exists)
       if (this.jumpPhase === 'none' || this.jumpPhase === 'landing') {
-        this.jumpPhase = 'takeoff';
+        const id = this.fighterId;
+        const hasStart = this.scene.anims.exists(`${id}_jump_start`) ||
+                         this.scene.anims.exists(`${id}_jump_takeoff`);
+        this.jumpPhase = hasStart ? 'start' : 'air';
       }
-      // Takeoff animation finished → switch to air-hold frame
-      if (this.jumpPhase === 'takeoff' && this.sprite &&
-          !this.sprite.anims.isPlaying && this.lastAnim === `${this.fighterId}_jump_takeoff`) {
-        this.jumpPhase = 'air';
+      // Start animation finished → switch to air phase
+      if (this.jumpPhase === 'start' && this.sprite && !this.sprite.anims.isPlaying) {
+        const id = this.fighterId;
+        if (this.lastAnim === `${id}_jump_start` || this.lastAnim === `${id}_jump_takeoff`) {
+          this.jumpPhase = 'air';
+        }
       }
       this.state = this.phBody.velocity.y < 0 ? 'jump' : 'fall';
     } else if (this.grounded) {
       // Just touched down from a jump
       if ((this.state === 'jump' || this.state === 'fall') &&
-          (this.jumpPhase === 'takeoff' || this.jumpPhase === 'air')) {
-        this.jumpPhase   = 'landing';
-        this.landingTimer = 100;
+          (this.jumpPhase === 'start' || this.jumpPhase === 'air')) {
+        this.jumpPhase    = 'landing';
+        this.landingTimer = 300;  // ~3 frames @ 12 fps
       }
       // Count down the brief landing hold
       if (this.jumpPhase === 'landing') {
