@@ -3,8 +3,16 @@ import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
+import {
+  IS_TOUCH_DEVICE,
+  SAFE_MODE,
+  SAFE_SKIP_FOLDERS,
+  SAFE_MAX_FRAMES,
+} from '../config/mobileConfig';
 
-const NORM_SIZE = 512;
+// Normalized canvas size. Reduced on mobile to save GPU memory:
+// 256×256 = 262 KB vs 512×512 = 1 MB per frame (4× reduction).
+const NORM_SIZE = IS_TOUCH_DEVICE ? 256 : 512;
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
@@ -15,6 +23,18 @@ function phaserKey(charId: string, folder: string, stem: string): string {
 
 function normKey(rawKey: string): string {
   return `n_${rawKey}`;
+}
+
+// Return at most maxCount evenly-spaced items from the array.
+// Always includes the first frame so animation registration has something to work with.
+function thinFrames(stems: readonly string[], maxCount: number): string[] {
+  if (stems.length <= maxCount) return [...stems];
+  const result: string[] = [];
+  const step = stems.length / maxCount;
+  for (let i = 0; i < maxCount; i++) {
+    result.push(stems[Math.min(Math.floor(i * step), stems.length - 1)]);
+  }
+  return result;
 }
 
 export class PreloadScene extends Phaser.Scene {
@@ -28,19 +48,31 @@ export class PreloadScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
 
+    // ── Loading bar ────────────────────────────────────────────────────────
     this.add.rectangle(w / 2, h / 2, 300, 20, 0x222222);
     const bar = this.add.rectangle(w / 2 - 150, h / 2, 0, 16, 0xff6600).setOrigin(0, 0.5);
     this.add.text(w / 2, h / 2 - 40, 'MONARIUM', {
       fontSize: '32px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
+
+    // Status line — always visible so mobile users can see progress before crash
     const statusText = this.add.text(w / 2, h / 2 + 30, 'Loading assets…', {
-      fontSize: '12px', color: '#888888', fontFamily: 'monospace',
+      fontSize: '11px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
+    if (SAFE_MODE) {
+      this.add.text(w / 2, h / 2 + 50, `Safe mode — ${NORM_SIZE}px textures`, {
+        fontSize: '10px', color: '#446644', fontFamily: 'monospace',
+      }).setOrigin(0.5);
+    }
+
     this.load.on('progress',     (v: number) => { bar.width = 296 * v; });
-    this.load.on('fileprogress', (f: Phaser.Loader.File) => { statusText.setText(f.key); });
+    this.load.on('fileprogress', (f: Phaser.Loader.File) => {
+      statusText.setText(f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key);
+    });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
+    // ── Character sprites ──────────────────────────────────────────────────
     for (const [charId, manifest] of Object.entries(CHARACTERS_MANIFEST)) {
       // Load runtime JSON manifest first.  On complete, queue any frames it lists
       // that aren't already queued from the compile-time manifest.
@@ -50,7 +82,9 @@ export class PreloadScene extends Phaser.Scene {
         const json = this.cache.json.get(jsonKey) as ManifestJSON | null;
         if (!json?.animations) return;
         for (const [folder, stems] of Object.entries(json.animations)) {
-          for (const stem of stems) {
+          if (SAFE_MODE && SAFE_SKIP_FOLDERS.has(folder)) continue;
+          const filtered = SAFE_MODE ? thinFrames(stems, SAFE_MAX_FRAMES) : stems;
+          for (const stem of filtered) {
             const key = phaserKey(charId, folder, stem);
             if (!this.textures.exists(key)) {
               this.load.image(key, `${manifest.base}/${folder}/${stem}.png`);
@@ -62,7 +96,9 @@ export class PreloadScene extends Phaser.Scene {
       // Seed the load queue from the compile-time manifest so frames load even
       // if sprite-manifest.json is absent or stale.
       for (const [folder, stems] of Object.entries(manifest.animations)) {
-        for (const stem of stems) {
+        if (SAFE_MODE && SAFE_SKIP_FOLDERS.has(folder)) continue;
+        const filtered = SAFE_MODE ? thinFrames(stems, SAFE_MAX_FRAMES) : (stems as string[]);
+        for (const stem of filtered) {
           this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
         }
       }
@@ -105,12 +141,14 @@ export class PreloadScene extends Phaser.Scene {
     // Missing frames are skipped with a warning instead of breaking the animation.
     const loadedFolders: Record<string, string[]> = {};
     for (const [folder, stems] of Object.entries(sourceFrames)) {
+      // In safe mode, skip folders that aren't needed (some might appear in the runtime JSON)
+      if (SAFE_MODE && SAFE_SKIP_FOLDERS.has(folder)) continue;
+
       const ok      = (stems as string[]).filter(s => loaded(phaserKey(charId, folder, s)));
       const skipped = (stems as string[]).filter(s => !loaded(phaserKey(charId, folder, s)));
 
       if (skipped.length > 0) {
-        console.warn(`[PreloadScene] ${charId}/${folder}: skipped ${skipped.length} missing frame(s): ${skipped.join(', ')}`);
-        console.warn(`[PreloadScene] → Run "npm run gen:manifest" to update the manifest`);
+        console.warn(`[PreloadScene] ${charId}/${folder}: skipped ${skipped.length} frame(s)`);
       }
       if (ok.length > 0) {
         loadedFolders[folder] = ok;
@@ -145,10 +183,20 @@ export class PreloadScene extends Phaser.Scene {
   // Draws the content region of a raw texture onto a NORM_SIZE×NORM_SIZE canvas,
   // baseline-aligned.  Uses a reduced-resolution scan to locate opaque pixels so
   // large video-extracted frames (1440×1440) aren't shrunk to a postage stamp.
+  //
+  // IMPORTANT: After successful normalization, the raw texture is REMOVED from
+  // Phaser's cache to free the original 1440×1440 GPU/CPU memory (~8 MB per frame).
+  // This reduces peak memory from ~600 MB to ~50 MB on mobile.
   private normalizeToCanvas(rawKey: string): string | null {
     if (!this.textures.exists(rawKey)) return null;
     const nk = normKey(rawKey);
-    if (this.textures.exists(nk)) return nk;
+    if (this.textures.exists(nk)) {
+      // Already normalized — clean up stale raw if still around
+      if (this.textures.exists(rawKey)) {
+        try { this.textures.remove(rawKey); } catch { /* ok */ }
+      }
+      return nk;
+    }
 
     try {
       const src  = this.textures.get(rawKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
@@ -211,9 +259,14 @@ export class PreloadScene extends Phaser.Scene {
 
       ctx.drawImage(src as CanvasImageSource, contentX, contentY, contentW, contentH, dx, dy, dw, dh);
       this.textures.addCanvas(nk, canvas);
+
+      // Release the original 1440×1440 texture from GPU/CPU memory immediately.
+      // The normalized canvas (NORM_SIZE×NORM_SIZE) is now the only copy needed.
+      try { this.textures.remove(rawKey); } catch { /* ok */ }
+
       return nk;
     } catch {
-      return rawKey;
+      return rawKey;  // keep raw as fallback if normalization failed
     }
   }
 
