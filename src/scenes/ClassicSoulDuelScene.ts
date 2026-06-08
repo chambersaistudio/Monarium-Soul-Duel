@@ -8,6 +8,7 @@ import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
+import type { ClassicBattleContext } from '../types/overworld';
 
 // ── HUD button colour schemes ────────────────────────────────────────────────
 
@@ -123,9 +124,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.drawBackground(w, h);
 
-    // ── Combatants ────────────────────────────────────────────────────────────
-    const playerData = MINARI_ROSTER['flarepaw'];
-    const enemyData  = MINARI_ROSTER['droplet'];
+    // ── Combatants — read from overworld battle context if present ─────────────
+    const ctx          = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
+    const playerMinId  = ctx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId   = ctx?.enemyMinariId  ?? 'droplet';
+    const playerData   = MINARI_ROSTER[playerMinId]  ?? MINARI_ROSTER['flarepaw'];
+    const enemyData    = MINARI_ROSTER[enemyMinId]   ?? MINARI_ROSTER['droplet'];
 
     this.playerActor = new ClassicActor(
       this, this.pAnchorX, this.groundY - playerData.bodyHeight / 2, playerData, true,
@@ -642,12 +646,23 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(61);
     this.tweens.add({ targets: rt, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
 
+    const ctx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
+
     this.time.delayedCall(600, () => {
       const goBack = (): void => {
         this.input.off('pointerup', goBack);
-        this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
-          if (p === 1) this.scene.start('ModeSelectScene');
-        });
+        if (ctx?.returnMap) {
+          this.registry.set('classic_current_map', ctx.returnMap);
+          this.registry.set('classic_spawn_name',  ctx.returnSpawn ?? 'default');
+          this.registry.remove('classic_battle_context');
+          this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+            if (p === 1) this.scene.start('ClassicOverworldScene');
+          });
+        } else {
+          this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+            if (p === 1) this.scene.start('ModeSelectScene');
+          });
+        }
       };
       this.input.keyboard!.once('keydown-ENTER', goBack);
       this.input.once('pointerup', goBack);

@@ -4,9 +4,9 @@ import { AUDIO_KEYS } from '../config/audioConfig';
 
 const MODES = [
   {
-    key:  'ClassicSoulDuelScene',
+    key:  'ClassicOverworldScene',
     name: 'Classic Soul Duel',
-    desc: 'Turn-based command battle — choose moves, watch them play out.',
+    desc: 'Explore the world, bond Minari, battle rivals.',
   },
   {
     key:  'OverworldScene',

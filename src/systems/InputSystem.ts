@@ -52,7 +52,10 @@ export class InputSystem {
       l:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.L),
       i:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.I),
       u:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.U),
+      w:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      a:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       s:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      d:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       e:       kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       enter:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER),
       esc:     kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
@@ -103,14 +106,14 @@ export class InputSystem {
     };
   }
 
-  // Overworld movement — merges keyboard and touch D-pad state
+  // Overworld movement — merges arrow keys, WASD, and touch D-pad
   getOverworldMove(): { left: boolean; right: boolean; up: boolean; down: boolean } {
     const k = this.keys;
     return {
-      left:  k.left.isDown  || this.touchMove.left,
-      right: k.right.isDown || this.touchMove.right,
-      up:    k.up.isDown    || this.touchMove.up,
-      down:  k.down.isDown  || this.touchMove.down,
+      left:  k.left.isDown  || k.a.isDown || this.touchMove.left,
+      right: k.right.isDown || k.d.isDown || this.touchMove.right,
+      up:    k.up.isDown    || k.w.isDown || this.touchMove.up,
+      down:  k.down.isDown  || k.s.isDown || this.touchMove.down,
     };
   }
 

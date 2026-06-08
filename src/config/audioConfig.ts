@@ -14,8 +14,9 @@
 /** Key-to-path map loaded by PreloadScene. */
 export const AUDIO_FILES: Record<string, string[]> = {
   // ── BGM ────────────────────────────────────────────────────────────────────
-  bgm_menu:         ['assets/audio/bgm/menu.ogg',   'assets/audio/bgm/menu.mp3'],
-  bgm_battle:       ['assets/audio/bgm/battle.ogg', 'assets/audio/bgm/battle.mp3'],
+  bgm_menu:         ['assets/audio/bgm/menu.ogg',      'assets/audio/bgm/menu.mp3'],
+  bgm_battle:       ['assets/audio/bgm/battle.ogg',   'assets/audio/bgm/battle.mp3'],
+  bgm_overworld:    ['assets/audio/bgm/overworld.ogg', 'assets/audio/bgm/overworld.mp3'],
 
   // ── UI sounds ──────────────────────────────────────────────────────────────
   ui_move:          ['assets/audio/ui/move.ogg',    'assets/audio/ui/move.mp3'],
@@ -37,8 +38,9 @@ export const AUDIO_FILES: Record<string, string[]> = {
 /** Typed constants so scenes never hard-code string keys. */
 export const AUDIO_KEYS = {
   bgm: {
-    menu:   'bgm_menu',
-    battle: 'bgm_battle',
+    menu:      'bgm_menu',
+    battle:    'bgm_battle',
+    overworld: 'bgm_overworld',
   },
   ui: {
     move:    'ui_move',

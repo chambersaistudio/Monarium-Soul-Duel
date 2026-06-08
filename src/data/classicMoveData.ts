@@ -61,13 +61,28 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     returnToAnchor: false,
     holdsStance: true,  // stays in guard pose through opponent's turn
   },
+  shadow_coil: {
+    id: 'shadow_coil',
+    displayName: 'Shadow Coil',
+    animFolder: 'attack',
+    approachAnim: 'run',
+    returnAnim: 'run',
+    targetReaction: 'hurt',
+    movementType: 'dash_to_target',
+    hitFrameIndex: 1,
+    power: 28,
+    damageType: 'none',
+    returnToAnchor: true,
+    auraCost: 15,
+  },
 };
 
 // ── Per-character command menus ────────────────────────────────────────────────
 // Ordered list of move IDs shown in the command menu for each character.
 export const CLASSIC_COMMAND_SETS: Record<string, string[]> = {
-  flarepaw: ['basic_attack', 'flame_paw_barrage', 'guard'],
-  droplet:  ['basic_attack', 'aqua_ripple', 'guard'],
+  flarepaw:  ['basic_attack', 'flame_paw_barrage', 'guard'],
+  droplet:   ['basic_attack', 'aqua_ripple', 'guard'],
+  umbravine: ['basic_attack', 'shadow_coil', 'guard'],
 };
 
 // Sentinel value for the Back / do-nothing menu slot (handled by the scene, not engine)

@@ -101,6 +101,20 @@ export class PreloadScene extends Phaser.Scene {
       }
     }
 
+    // ── Overworld backgrounds ──────────────────────────────────────────────
+    // Load all 6 maps upfront so scene transitions are instant.
+    const owBgs: Array<[string, string]> = [
+      ['ow_bg_starter_village',   'assets/backgrounds/overworld/starter_village.png'],
+      ['ow_bg_bond_lab_interior', 'assets/backgrounds/overworld/bond_lab_interior.png'],
+      ['ow_bg_training_field',    'assets/backgrounds/overworld/training_field.png'],
+      ['ow_bg_forest_route',      'assets/backgrounds/overworld/forest_route.png'],
+      ['ow_bg_crystal_cave',      'assets/backgrounds/overworld/crystal_cave.png'],
+      ['ow_bg_coastal_beach',     'assets/backgrounds/overworld/coastal_beach.png'],
+    ];
+    for (const [key, path] of owBgs) {
+      this.load.image(key, path);
+    }
+
     // ── Audio ──────────────────────────────────────────────────────────────
     // All files are optional — 404s are captured by loaderror and the
     // AudioManager skips missing keys at runtime.

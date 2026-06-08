@@ -75,6 +75,7 @@ export class ClassicActor extends Phaser.GameObjects.Container {
       this.sprite.setOrigin(0.5, 1);
       this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET + renderCfg.spriteYOffset);
       this.add(this.sprite);
+      this.setupAuraGlow();
     }
 
     // Placeholder body (always created; hidden when real sprite is loaded)
@@ -141,6 +142,36 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   /** Call every scene update to keep the shadow aligned under the actor. */
   updateShadow(): void {
     this.shadow.setPosition(this.x, this.y + this.minariData.bodyHeight / 2 + 5);
+  }
+
+  // ── Aura glow ──────────────────────────────────────────────────────────────
+
+  private setupAuraGlow(): void {
+    if (!this.sprite) return;
+    // preFX is WebGL-only — optional chaining is safe; returns undefined on canvas
+    const color = this.elementToAuraColor(this.minariData.element);
+    const glow  = this.sprite.preFX?.addGlow(color, 3.5, 0, false, 0.1, 24);
+    if (!glow) return;
+    const obj = { s: 3.5 };
+    this.scene.tweens.add({
+      targets: obj, s: 5.5, duration: 1600,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      onUpdate: () => { glow.outerStrength = obj.s; },
+    });
+  }
+
+  private elementToAuraColor(element: string): number {
+    const map: Record<string, number> = {
+      fire:      0xff4400,
+      water:     0x00aaff,
+      shadow:    0x9922ff,
+      wind:      0x44ff88,
+      earth:     0x44ff88,
+      lightning: 0xffdd00,
+      light:     0xffeeaa,
+      void:      0xcc00ff,
+    };
+    return map[element] ?? 0xffcc44;
   }
 
   flashDamage(): void {
