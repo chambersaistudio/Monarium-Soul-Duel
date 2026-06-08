@@ -70,6 +70,30 @@
       "flarepaw_jump_04",
       "flarepaw_jump_05"
     ],
+    "jump_air": [
+      "jump_air001",
+      "jump_air002"
+    ],
+    "jump_fall": [
+      "frame_034",
+      "frame_036"
+    ],
+    "jump_forward": [
+      "frame_024",
+      "frame_026",
+      "frame_028",
+      "frame_030"
+    ],
+    "jump_start": [
+      "jump_start001",
+      "jump_start002",
+      "jump_start003"
+    ],
+    "land": [
+      "frame_038",
+      "frame_040",
+      "frame_042"
+    ],
     "run": [
       "frame_024",
       "frame_025",

@@ -7,6 +7,16 @@ export interface CharacterManifest {
 }
 
 export const CHARACTERS_MANIFEST: Record<string, CharacterManifest> = {
+  droplet: {
+    base: 'assets/characters/droplet',
+    animations: {
+      attack: ['frame_031', 'frame_032'],
+      guard: ['frame_046', 'frame_048', 'frame_050'],
+      hurt: ['frame_040', 'frame_042'],
+      idle: ['frame_002', 'frame_004', 'frame_006', 'frame_007', 'frame_008', 'frame_010', 'frame_012', 'frame_013', 'frame_014'],
+      run: ['frame_017', 'frame_018'],
+    },
+  },
   flarepaw: {
     base: 'assets/characters/flarepaw',
     animations: {
@@ -16,6 +26,11 @@ export const CHARACTERS_MANIFEST: Record<string, CharacterManifest> = {
       hurt: ['frame_049', 'frame_050', 'frame_051', 'frame_052', 'frame_053'],
       idle: ['frame_002', 'frame_003', 'frame_004', 'frame_005', 'frame_006', 'frame_007', 'frame_008', 'frame_010', 'frame_012', 'frame_014', 'frame_015', 'frame_016', 'frame_017', 'frame_018'],
       jump: ['flarepaw_jump_01', 'flarepaw_jump_02', 'flarepaw_jump_03', 'flarepaw_jump_04', 'flarepaw_jump_05'],
+      jump_air: ['jump_air001', 'jump_air002'],
+      jump_fall: ['frame_034', 'frame_036'],
+      jump_forward: ['frame_024', 'frame_026', 'frame_028', 'frame_030'],
+      jump_start: ['jump_start001', 'jump_start002', 'jump_start003'],
+      land: ['frame_038', 'frame_040', 'frame_042'],
       run: ['frame_024', 'frame_025', 'frame_027', 'frame_028', 'frame_030', 'frame_031', 'frame_032'],
     },
   },
