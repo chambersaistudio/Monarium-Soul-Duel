@@ -204,10 +204,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private drawBackground(w: number, h: number): void {
     const bgKey = `bg_${CLASSIC_BATTLE_CONFIG.background}`;
     if (this.textures.exists(bgKey)) {
-      this.add.image(w / 2, h / 2, bgKey).setDepth(0).setDisplaySize(w, h);
-      const ov = this.add.graphics().setDepth(1);
-      ov.fillStyle(0x000000, 0.35);
-      ov.fillRect(0, this.groundY, w, h - this.groundY);
+      // Cover-scale: fill the viewport while preserving aspect ratio (edges crop, no stretch)
+      const frame  = this.textures.getFrame(bgKey);
+      const scale  = Math.max(w / frame.realWidth, h / frame.realHeight);
+      this.add.image(w / 2, h / 2, bgKey).setDepth(0).setScale(scale);
+
+      // Subtle top scrim so HP bars read against any background
+      const topScrim = this.add.graphics().setDepth(1);
+      topScrim.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.52, 0.52, 0, 0);
+      topScrim.fillRect(0, 0, w, 90);
+
+      // Slightly darken the floor zone to visually ground the characters
+      const floorOv = this.add.graphics().setDepth(1);
+      floorOv.fillStyle(0x000000, 0.28);
+      floorOv.fillRect(0, this.groundY, w, h - this.groundY);
     } else {
       const bg = this.add.graphics().setDepth(0);
       for (let i = 0; i < h; i += 3) {

@@ -9,7 +9,7 @@ export const CLASSIC_BATTLE_CONFIG = {
    * Then update this string.  Scene falls back to a procedural gradient if
    * the file is absent.
    */
-  background: 'default_battle_bg',
+  background: 'forest_shrine_01',
 
   /**
    * BGM audio key to loop during battle.
