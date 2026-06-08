@@ -1,34 +1,20 @@
 import Phaser from 'phaser';
+import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
+import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
+import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 
-const FRAME_BASE = 'assets/characters/flarepaw';
-const NORM_SIZE  = 512;  // target canvas size for all normalised frames (px)
-const NORM_BASE  = 40;   // px from canvas bottom kept below feet baseline
+const NORM_SIZE = 512;
+const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
-// ── Frame key groups ───────────────────────────────────────────────────────────
-const IDLE_KEYS  = ['fp_idle_000','fp_idle_001','fp_idle_002','fp_idle_003','fp_idle_004'];
-const RUN_KEYS   = ['fp_run_001', 'fp_run_002', 'fp_run_003', 'fp_run_004', 'fp_run_005'];
-const JUMP_KEYS  = ['fp_jump_001','fp_jump_002','fp_jump_003','fp_jump_004','fp_jump_005'];
+type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
 
-// ── Load manifest: Phaser key → public path ────────────────────────────────────
-const LOAD_SPECS: Array<{ key: string; path: string }> = [
-  { key: 'fp_idle_000', path: `${FRAME_BASE}/idle/idle_000.png` },
-  { key: 'fp_idle_001', path: `${FRAME_BASE}/idle/idle_001.png` },
-  { key: 'fp_idle_002', path: `${FRAME_BASE}/idle/idle_002.png` },
-  { key: 'fp_idle_003', path: `${FRAME_BASE}/idle/idle_003.png` },
-  { key: 'fp_idle_004', path: `${FRAME_BASE}/idle/idle_004.png` },
-  { key: 'fp_run_001',  path: `${FRAME_BASE}/run/run_001.png` },
-  { key: 'fp_run_002',  path: `${FRAME_BASE}/run/run_002.png` },
-  { key: 'fp_run_003',  path: `${FRAME_BASE}/run/run_003.png` },
-  { key: 'fp_run_004',  path: `${FRAME_BASE}/run/run_004.png` },
-  { key: 'fp_run_005',  path: `${FRAME_BASE}/run/run_005.png` },
-  { key: 'fp_jump_001', path: `${FRAME_BASE}/jump/jump_001.png` },
-  { key: 'fp_jump_002', path: `${FRAME_BASE}/jump/jump_002.png` },
-  { key: 'fp_jump_003', path: `${FRAME_BASE}/jump/jump_003.png` },
-  { key: 'fp_jump_004', path: `${FRAME_BASE}/jump/jump_004.png` },
-  { key: 'fp_jump_005', path: `${FRAME_BASE}/jump/jump_005.png` },
-  { key: 'fp_guard_001',       path: `${FRAME_BASE}/guard/guard_001.png` },
-  { key: 'fp_flame_guard_001', path: `${FRAME_BASE}/flame_guard/flame_guard_001.png` },
-];
+function phaserKey(charId: string, folder: string, stem: string): string {
+  return `${charId}_${folder}_${stem}`;
+}
+
+function normKey(rawKey: string): string {
+  return `n_${rawKey}`;
+}
 
 export class PreloadScene extends Phaser.Scene {
   private loadErrors = new Set<string>();
@@ -54,70 +40,168 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('fileprogress', (f: Phaser.Loader.File) => { statusText.setText(f.key); });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
-    for (const { key, path } of LOAD_SPECS) {
-      this.load.image(key, path);
+    for (const [charId, manifest] of Object.entries(CHARACTERS_MANIFEST)) {
+      // Load runtime JSON manifest first.  On complete, queue any frames it lists
+      // that aren't already queued from the compile-time manifest.
+      const jsonKey = `${charId}_manifest`;
+      this.load.json(jsonKey, `${manifest.base}/sprite-manifest.json`);
+      this.load.on(`filecomplete-json-${jsonKey}`, () => {
+        const json = this.cache.json.get(jsonKey) as ManifestJSON | null;
+        if (!json?.animations) return;
+        for (const [folder, stems] of Object.entries(json.animations)) {
+          for (const stem of stems) {
+            const key = phaserKey(charId, folder, stem);
+            if (!this.textures.exists(key)) {
+              this.load.image(key, `${manifest.base}/${folder}/${stem}.png`);
+            }
+          }
+        }
+      });
+
+      // Seed the load queue from the compile-time manifest so frames load even
+      // if sprite-manifest.json is absent or stale.
+      for (const [folder, stems] of Object.entries(manifest.animations)) {
+        for (const stem of stems) {
+          this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
+        }
+      }
     }
   }
 
   create(): void {
-    const loaded = (k: string) => this.textures.exists(k) && !this.loadErrors.has(k);
-
-    const idleOk  = IDLE_KEYS.every(loaded);
-    const runOk   = RUN_KEYS.every(loaded);
-    const jumpOk  = JUMP_KEYS.every(loaded);
-    const guardOk = loaded('fp_guard_001');
-    const fgOk    = loaded('fp_flame_guard_001');
-
-    if (idleOk || runOk || jumpOk) {
-      const firstKey = this.normalizeAndRegister(idleOk, runOk, jumpOk, guardOk, fgOk);
-      this.registry.set('flarepaw_sprite_key', firstKey);
-      this.registry.set('flarepaw_anim_mode', 'frames');
-      console.log('[PreloadScene] Flarepaw individual frames loaded ✓');
-    } else {
-      this.registry.set('flarepaw_sprite_key', null);
-      this.registry.set('flarepaw_anim_mode', 'none');
-      console.warn('[PreloadScene] No Flarepaw frames found — placeholder graphics active.');
+    for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
+      this.createCharacter(charId);
     }
-
     this.scene.start('TitleScene');
   }
 
-  // 'fp_idle_000' → 'fpn_idle_000'  (prefix swap fp → fpn)
-  private normKey(rawKey: string): string {
-    return 'fpn' + rawKey.slice(2);
+  private createCharacter(charId: string): void {
+    const manifest = CHARACTERS_MANIFEST[charId];
+    const jsonKey  = `${charId}_manifest`;
+
+    const jsonOk = !this.loadErrors.has(jsonKey) && this.cache.json.has(jsonKey);
+    const sourceFrames: Record<string, readonly string[]> =
+      jsonOk
+        ? ((this.cache.json.get(jsonKey) as ManifestJSON).animations ?? manifest.animations)
+        : manifest.animations;
+
+    if (jsonOk) {
+      console.log(`[PreloadScene] ${charId}: using runtime sprite-manifest.json`);
+    } else {
+      console.log(`[PreloadScene] ${charId}: sprite-manifest.json absent — using compile-time manifest`);
+    }
+
+    const loaded = (k: string) => this.textures.exists(k) && !this.loadErrors.has(k);
+
+    // Build per-folder frame lists from ONLY the frames that actually loaded.
+    // Missing frames are skipped with a warning instead of breaking the animation.
+    const loadedFolders: Record<string, string[]> = {};
+    for (const [folder, stems] of Object.entries(sourceFrames)) {
+      const ok      = (stems as string[]).filter(s => loaded(phaserKey(charId, folder, s)));
+      const skipped = (stems as string[]).filter(s => !loaded(phaserKey(charId, folder, s)));
+
+      if (skipped.length > 0) {
+        console.warn(`[PreloadScene] ${charId}/${folder}: skipped ${skipped.length} missing frame(s): ${skipped.join(', ')}`);
+        console.warn(`[PreloadScene] → Run "npm run gen:manifest" to update the manifest`);
+      }
+      if (ok.length > 0) {
+        loadedFolders[folder] = ok;
+        console.log(`[PreloadScene] ${charId}/${folder} (${ok.length}f): [${ok.join(', ')}]`);
+      }
+    }
+
+    if (loadedFolders['idle'] || loadedFolders['run']) {
+      const firstKey = this.registerCharacterAnims(charId, loadedFolders);
+      this.registry.set(`${charId}_sprite_key`, firstKey);
+      this.registry.set(`${charId}_anim_mode`,  'frames');
+
+      for (const folder of Object.keys(ANIM_CONFIG)) {
+        this.registry.set(`${charId}_${folder}_loaded`, !!loadedFolders[folder]);
+      }
+      this.registry.set(`${charId}_jump_loaded`, !!loadedFolders['jump']);
+
+      const summary = Object.entries(loadedFolders).map(([f, s]) => `${f}:${s.length}`).join('  ');
+      console.log(`[PreloadScene] ${charId} ✓  ${summary}`);
+    } else {
+      this.registry.set(`${charId}_sprite_key`, null);
+      this.registry.set(`${charId}_anim_mode`,  'none');
+
+      for (const folder of Object.keys(ANIM_CONFIG)) {
+        this.registry.set(`${charId}_${folder}_loaded`, false);
+      }
+      this.registry.set(`${charId}_jump_loaded`, false);
+      console.warn(`[PreloadScene] No ${charId} frames found — placeholder graphics active.`);
+    }
   }
 
-  // Draws a raw Phaser texture onto a NORM_SIZE×NORM_SIZE canvas, baseline-aligned.
-  // Returns the normalised texture key (or the raw key if normalisation fails).
+  // Draws the content region of a raw texture onto a NORM_SIZE×NORM_SIZE canvas,
+  // baseline-aligned.  Uses a reduced-resolution scan to locate opaque pixels so
+  // large video-extracted frames (1440×1440) aren't shrunk to a postage stamp.
   private normalizeToCanvas(rawKey: string): string | null {
     if (!this.textures.exists(rawKey)) return null;
-    const nk = this.normKey(rawKey);
+    const nk = normKey(rawKey);
     if (this.textures.exists(nk)) return nk;
 
     try {
-      const src  = this.textures.get(rawKey).getSourceImage() as
-        HTMLImageElement | HTMLCanvasElement;
+      const src  = this.textures.get(rawKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
       const srcW = (src as HTMLImageElement).naturalWidth  || (src as HTMLCanvasElement).width  || 0;
       const srcH = (src as HTMLImageElement).naturalHeight || (src as HTMLCanvasElement).height || 0;
       if (!srcW || !srcH) return rawKey;
 
-      const canvas = document.createElement('canvas');
+      // Step 1: find content bbox via reduced-resolution pixel scan (max 256px wide)
+      const SCAN_MAX  = 256;
+      const scanScale = Math.min(1, SCAN_MAX / Math.max(srcW, srcH));
+      const scanW     = Math.max(1, Math.round(srcW * scanScale));
+      const scanH     = Math.max(1, Math.round(srcH * scanScale));
+
+      const scanCanvas  = document.createElement('canvas');
+      scanCanvas.width  = scanW;
+      scanCanvas.height = scanH;
+      const scanCtx     = scanCanvas.getContext('2d')!;
+      scanCtx.drawImage(src as CanvasImageSource, 0, 0, scanW, scanH);
+      const pixels      = scanCtx.getImageData(0, 0, scanW, scanH).data;
+
+      let minX = scanW, maxX = -1, minY = scanH, maxY = -1;
+      for (let y = 0; y < scanH; y++) {
+        for (let x = 0; x < scanW; x++) {
+          if (pixels[(y * scanW + x) * 4 + 3] > 10) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      // Map bbox back to source space with a small padding margin
+      let contentX = 0, contentY = 0, contentW = srcW, contentH = srcH;
+      if (minX <= maxX && minY <= maxY) {
+        const pad = Math.ceil(4 / scanScale);
+        contentX  = Math.max(0, Math.floor(minX / scanScale) - pad);
+        contentY  = Math.max(0, Math.floor(minY / scanScale) - pad);
+        const r   = Math.min(srcW, Math.ceil((maxX + 1) / scanScale) + pad);
+        const b   = Math.min(srcH, Math.ceil((maxY + 1) / scanScale) + pad);
+        contentW  = r - contentX;
+        contentH  = b - contentY;
+      }
+
+      // Step 2: draw only the content region into NORM_SIZE canvas, baseline-aligned
+      const canvas  = document.createElement('canvas');
       canvas.width  = NORM_SIZE;
       canvas.height = NORM_SIZE;
-      const ctx = canvas.getContext('2d')!;
+      const ctx     = canvas.getContext('2d')!;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Scale to fit available area (10px side margin, NORM_BASE bottom, 10px top clearance)
       const availW = NORM_SIZE - 20;
       const availH = NORM_SIZE - NORM_BASE - 10;
-      const scale  = Math.min(availW / srcW, availH / srcH);
-      const dw = srcW * scale;
-      const dh = srcH * scale;
-      const dx = (NORM_SIZE - dw) / 2;               // horizontal centre
-      const dy = NORM_SIZE - NORM_BASE - dh;          // baseline-aligned
+      const scale  = Math.min(availW / contentW, availH / contentH);
+      const dw     = contentW * scale;
+      const dh     = contentH * scale;
+      const dx     = (NORM_SIZE - dw) / 2;
+      const dy     = NORM_SIZE - NORM_BASE - dh;
 
-      ctx.drawImage(src as CanvasImageSource, dx, dy, dw, dh);
+      ctx.drawImage(src as CanvasImageSource, contentX, contentY, contentW, contentH, dx, dy, dw, dh);
       this.textures.addCanvas(nk, canvas);
       return nk;
     } catch {
@@ -125,43 +209,87 @@ export class PreloadScene extends Phaser.Scene {
     }
   }
 
-  private normalizeAndRegister(
-    idleOk: boolean, runOk: boolean, jumpOk: boolean,
-    guardOk: boolean, fgOk: boolean,
+  // Registers all Phaser animations for a single character from pre-filtered loadedFolders.
+  // Standard folders use ANIM_CONFIG; unknown folders fall back to DEFAULT_ANIM_CONFIG;
+  // the 'jump' folder is split into three phase-animations.
+  private registerCharacterAnims(
+    charId: string,
+    loadedFolders: Record<string, string[]>,
   ): string | null {
-    const normAll = (keys: string[]) =>
-      keys.map(k => this.normalizeToCanvas(k)).filter((k): k is string => k !== null);
+    const normCache: Record<string, string[]> = {};
+    const normFolder = (folder: string): string[] => {
+      if (normCache[folder]) return normCache[folder];
+      const stems  = loadedFolders[folder] ?? [];
+      const result = stems
+        .map(stem => this.normalizeToCanvas(phaserKey(charId, folder, stem)))
+        .filter((k): k is string => k !== null);
+      normCache[folder] = result;
+      return result;
+    };
 
-    const normIdle  = idleOk  ? normAll(IDLE_KEYS)              : [];
-    const normRun   = runOk   ? normAll(RUN_KEYS)               : [];
-    const normJump  = jumpOk  ? normAll(JUMP_KEYS)              : [];
-    const normGuard = guardOk ? normAll(['fp_guard_001'])        : [];
-    const normFG    = fgOk    ? normAll(['fp_flame_guard_001'])  : [];
+    const renderCfg  = CHARACTER_RENDER_CONFIG[charId] ?? DEFAULT_RENDER_CONFIG;
+    const overrides  = renderCfg.animOverrides ?? {};
 
-    type AnimSpec = { animKey: string; frameRate: number; repeat: number; normKeys: string[] };
-    const animSpecs: AnimSpec[] = [
-      { animKey: 'flarepaw_idle',         frameRate: 6,  repeat: -1, normKeys: normIdle           },
-      { animKey: 'flarepaw_run',          frameRate: 10, repeat: -1, normKeys: normRun            },
-      // Jump split into 3 phases: takeoff (001-002), air-hold (003), landing (005)
-      { animKey: 'flarepaw_jump_takeoff', frameRate: 14, repeat: 0,  normKeys: normJump.slice(0, 2) },
-      { animKey: 'flarepaw_jump_air',     frameRate: 1,  repeat: -1, normKeys: normJump.slice(2, 3) },
-      { animKey: 'flarepaw_jump_land',    frameRate: 1,  repeat: 0,  normKeys: normJump.slice(4, 5) },
-      { animKey: 'flarepaw_guard',        frameRate: 1,  repeat: 0,  normKeys: normGuard          },
-      { animKey: 'flarepaw_flame_guard',  frameRate: 1,  repeat: 0,  normKeys: normFG             },
-    ];
-
-    for (const { animKey, frameRate, repeat, normKeys } of animSpecs) {
+    // Standard folders from ANIM_CONFIG (with optional per-character overrides)
+    for (const [folder, baseCfg] of Object.entries(ANIM_CONFIG)) {
+      if (!loadedFolders[folder]) continue;
+      const normKeys = normFolder(folder);
       if (normKeys.length === 0) continue;
+      const animKey = `${charId}_${folder}`;
+      const cfg = { ...baseCfg, ...(overrides[folder] ?? {}) };
       if (this.anims.exists(animKey)) this.anims.remove(animKey);
       this.anims.create({
         key: animKey,
         frames: normKeys.map(k => ({ key: k })),
-        frameRate,
-        repeat,
+        frameRate: cfg.frameRate,
+        repeat: cfg.repeat,
       });
+      console.log(`[PreloadScene] registered ${animKey} (${normKeys.length}f)`);
+    }
+
+    // Unknown folders (custom Monari abilities not yet in ANIM_CONFIG) use defaults
+    for (const folder of Object.keys(loadedFolders)) {
+      if (folder in ANIM_CONFIG || folder === 'jump') continue;
+      const normKeys = normFolder(folder);
+      if (normKeys.length === 0) continue;
+      const animKey = `${charId}_${folder}`;
+      if (this.anims.exists(animKey)) this.anims.remove(animKey);
+      this.anims.create({
+        key: animKey,
+        frames: normKeys.map(k => ({ key: k })),
+        frameRate: DEFAULT_ANIM_CONFIG.frameRate,
+        repeat: DEFAULT_ANIM_CONFIG.repeat,
+      });
+      console.log(`[PreloadScene] registered ${animKey} (${normKeys.length}f) [default config]`);
+    }
+
+    // Jump folder → 3 phase-animations (takeoff / air-hold / land)
+    // Skip when individual phase folders are present (new pipeline) to avoid key conflicts.
+    if (loadedFolders['jump'] && !loadedFolders['jump_air']) {
+      const normJump = normFolder('jump');
+      if (normJump.length >= 1) {
+        const takeoff = normJump.length >= 2
+          ? normJump.slice(0, 2)
+          : normJump;
+        const air = normJump.length >= 3
+          ? normJump.slice(2, Math.max(3, normJump.length - 1))
+          : normJump.slice(0, 1);
+        const land = normJump.slice(-1);
+
+        const phases = [
+          { key: `${charId}_jump_takeoff`, frames: takeoff, ...JUMP_PHASE_CONFIG.takeoff },
+          { key: `${charId}_jump_air`,     frames: air,     ...JUMP_PHASE_CONFIG.air     },
+          { key: `${charId}_jump_land`,    frames: land,    ...JUMP_PHASE_CONFIG.land    },
+        ];
+        for (const { key, frames, frameRate, repeat } of phases) {
+          if (this.anims.exists(key)) this.anims.remove(key);
+          this.anims.create({ key, frames: frames.map(k => ({ key: k })), frameRate, repeat });
+        }
+        console.log(`[PreloadScene] registered ${charId} jump phases (${normJump.length}f split into 3)`);
+      }
     }
 
     // First valid texture key for sprite initialisation in MinariFighter
-    return normIdle[0] ?? normRun[0] ?? normJump[0] ?? null;
+    return normFolder('idle')[0] ?? normFolder('run')[0] ?? null;
   }
 }

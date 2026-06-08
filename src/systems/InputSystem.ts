@@ -5,6 +5,8 @@ export interface BattleInput {
   right: boolean;
   up: boolean;
   down: boolean;
+  leftJustDown: boolean;
+  rightJustDown: boolean;
   coreAttack: boolean;
   special: boolean;
   dodge: boolean;
@@ -64,11 +66,13 @@ export class InputSystem {
   getBattleInput(): BattleInput {
     const k = this.keys;
     return {
-      left:       k.left.isDown,
-      right:      k.right.isDown,
-      up:         Phaser.Input.Keyboard.JustDown(k.up),
-      down:       k.down.isDown || k.s.isDown,
-      coreAttack: Phaser.Input.Keyboard.JustDown(k.j),
+      left:          k.left.isDown,
+      right:         k.right.isDown,
+      up:            Phaser.Input.Keyboard.JustDown(k.up),
+      down:          k.down.isDown || k.s.isDown,
+      leftJustDown:  Phaser.Input.Keyboard.JustDown(k.left),
+      rightJustDown: Phaser.Input.Keyboard.JustDown(k.right),
+      coreAttack:    Phaser.Input.Keyboard.JustDown(k.j),
       special:    Phaser.Input.Keyboard.JustDown(k.k),
       dodge:      Phaser.Input.Keyboard.JustDown(k.l),
       ability:    Phaser.Input.Keyboard.JustDown(k.i),
