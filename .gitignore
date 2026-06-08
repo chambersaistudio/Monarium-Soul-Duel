@@ -4,3 +4,6 @@ dist/
 *.local
 assets/raw/**
 !assets/raw/.gitkeep
+__pycache__/
+*.pyc
+*.pyo
