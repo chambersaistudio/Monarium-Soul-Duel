@@ -115,6 +115,21 @@ export class PreloadScene extends Phaser.Scene {
       this.load.image(key, path);
     }
 
+    // ── Overworld logic masks (optional — 404 silently ignored) ───────────
+    // Paint these PNGs using the color codes in OverworldMaskSystem.ts and
+    // drop them next to the background images.  The game works without them.
+    const owMasks: Array<[string, string]> = [
+      ['ow_mask_starter_village',   'assets/backgrounds/overworld/starter_village_mask.png'],
+      ['ow_mask_bond_lab_interior', 'assets/backgrounds/overworld/bond_lab_interior_mask.png'],
+      ['ow_mask_training_field',    'assets/backgrounds/overworld/training_field_mask.png'],
+      ['ow_mask_forest_route',      'assets/backgrounds/overworld/forest_route_mask.png'],
+      ['ow_mask_crystal_cave',      'assets/backgrounds/overworld/crystal_cave_mask.png'],
+      ['ow_mask_coastal_beach',     'assets/backgrounds/overworld/coastal_beach_mask.png'],
+    ];
+    for (const [key, path] of owMasks) {
+      this.load.image(key, path);
+    }
+
     // ── Audio ──────────────────────────────────────────────────────────────
     // All files are optional — 404s are captured by loaderror and the
     // AudioManager skips missing keys at runtime.

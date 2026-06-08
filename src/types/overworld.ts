@@ -11,10 +11,12 @@ export interface MapSpawn {
 }
 
 export interface MapExit {
-  id:          string;
-  rect:        NormRect;
-  targetMap:   string;
-  targetSpawn: string;
+  id:               string;
+  rect:             NormRect;
+  targetMap:        string;
+  targetSpawn:      string;
+  /** If true, player must press ENTER/E while in the zone instead of auto-travel. */
+  requiresInteract?: boolean;
 }
 
 export interface NpcDef {
@@ -43,17 +45,21 @@ export interface EncounterOrb {
 }
 
 export interface MapDef {
-  id:             string;
-  displayName:    string;
-  bgKey:          string;
-  bgPath:         string;
-  spawns:         Record<string, MapSpawn>;
-  defaultSpawn:   string;
-  /** Normalized AABB rects that block the player. */
-  collisionRects: NormRect[];
-  exits:          MapExit[];
-  npcs:           NpcDef[];
-  encounterOrbs:  EncounterOrb[];
+  id:               string;
+  displayName:      string;
+  bgKey:            string;
+  bgPath:           string;
+  /** Optional logic-mask PNG key (loaded by PreloadScene). Omit if no mask exists yet. */
+  maskKey?:         string;
+  spawns:           Record<string, MapSpawn>;
+  defaultSpawn:     string;
+  /** Fallback AABB rects used only when no mask is loaded. */
+  collisionRects:   NormRect[];
+  exits:            MapExit[];
+  npcs:             NpcDef[];
+  encounterOrbs:    EncounterOrb[];
+  /** Weighted encounter table — minariId → weight. Used by wild-encounter logic. */
+  encounterTable?:  Record<string, number>;
 }
 
 export interface ClassicBattleContext {

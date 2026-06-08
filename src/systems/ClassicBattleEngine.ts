@@ -8,6 +8,10 @@ const ENEMY_ANCHOR_X  = 760;
 const CONTACT_OFFSET  = 100;  // px from the target's centre where the attacker stops
 const APPROACH_SPEED  = 380;  // px/s
 
+// Aura gains per action type
+const AURA_GAIN_ATTACK = 10;
+const AURA_GAIN_OTHER  = 5;
+
 export class ClassicBattleEngine {
   private phase: ClassicBattlePhase = 'battle_intro';
   private actionQueue: PendingAction[] = [];
@@ -39,7 +43,7 @@ export class ClassicBattleEngine {
     this.openCommandMenu();
   }
 
-  /** Call when the player picks a command from the menu. */
+  /** Call when the player picks a command from the move menu. */
   submitPlayerMove(moveId: string): void {
     if (this.phase !== 'player_command') return;
     this.callbacks.onHideCommandMenu();
@@ -49,6 +53,30 @@ export class ClassicBattleEngine {
     ];
     this.setPhase('action_queue');
     this.executeNextAction();
+  }
+
+  /**
+   * Call when the player attempts a capture but the ball escapes.
+   * The enemy still gets to act this turn; the player's turn is wasted.
+   */
+  submitCaptureFailed(): void {
+    if (this.phase !== 'player_command') return;
+    this.callbacks.onHideCommandMenu();
+    this.actionQueue = [
+      { role: 'enemy', moveId: this.selectEnemyMove() },
+    ];
+    this.setPhase('action_queue');
+    this.executeNextAction();
+  }
+
+  /**
+   * Called on a successful capture — enemy concedes immediately.
+   * The battle ends as a player victory without further combat.
+   */
+  forfeit(): void {
+    this.releaseGuardStances();
+    this.setPhase('victory');
+    this.callbacks.onBattleEnd('player');
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
@@ -83,6 +111,12 @@ export class ClassicBattleEngine {
       return;
     }
 
+    // Deduct aura cost (clamp at 0 — engine allows executing even if broke)
+    const auraCost = move.auraCost ?? 0;
+    if (auraCost > 0) {
+      attacker.aura = Math.max(0, attacker.aura - auraCost);
+    }
+
     const anchorX  = action.role === 'player' ? PLAYER_ANCHOR_X : ENEMY_ANCHOR_X;
     const contactX = action.role === 'player'
       ? defender.x - CONTACT_OFFSET
@@ -93,18 +127,19 @@ export class ClassicBattleEngine {
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       attacker.isGuarding = true;
-      // Resolve immediately — the stance is held by the flag until turn end
+      this.gainAura(attacker, AURA_GAIN_OTHER);
       this.busy = false;
       this.afterAction();
       return;
     }
 
-    // ── Non-stance stay moves (future buffs, etc.) ─────────────────────────
+    // ── Non-stance stay moves (buffs, etc.) ────────────────────────────────
     if (move.movementType === 'stay') {
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       this.scene.time.delayedCall(700, () => {
         attacker.playAnim('idle');
+        this.gainAura(attacker, AURA_GAIN_OTHER);
         this.busy = false;
         this.afterAction();
       });
@@ -151,6 +186,9 @@ export class ClassicBattleEngine {
             if (!isBlocked) defender.flashDamage();
           }
 
+          // Aura gain for attacker after landing an attack
+          this.gainAura(attacker, AURA_GAIN_ATTACK);
+
           // ── Target reaction ─────────────────────────────────────────
           this.setPhase('target_reaction');
           if (move.targetReaction === 'hurt' && !isBlocked) {
@@ -159,7 +197,6 @@ export class ClassicBattleEngine {
               if (!defender.isGuarding) defender.playAnim('idle');
             });
           }
-          // If blocked, defender keeps the guard animation — no change needed
 
           // ── Return to anchor ────────────────────────────────────────
           this.scene.time.delayedCall(500, () => {
@@ -192,7 +229,6 @@ export class ClassicBattleEngine {
   }
 
   private afterAction(): void {
-    // Check for battle end
     if (this.enemy.hp <= 0) {
       this.releaseGuardStances();
       this.setPhase('victory');
@@ -207,20 +243,17 @@ export class ClassicBattleEngine {
     }
 
     if (this.actionQueue.length > 0) {
-      // Opponent's action still pending — brief pause then execute
       this.scene.time.delayedCall(400, () => {
         this.setPhase('action_queue');
         this.executeNextAction();
       });
     } else {
-      // Both actions done — release guard stances and end the turn
       this.releaseGuardStances();
       this.setPhase('turn_end');
       this.scene.time.delayedCall(600, () => this.openCommandMenu());
     }
   }
 
-  /** Release any active guard stances and return those actors to idle. */
   private releaseGuardStances(): void {
     for (const actor of [this.player, this.enemy]) {
       if (actor.isGuarding) {
@@ -228,6 +261,10 @@ export class ClassicBattleEngine {
         actor.playAnim('idle');
       }
     }
+  }
+
+  private gainAura(actor: ClassicActor, amount: number): void {
+    actor.aura = Math.min(actor.maxAura, actor.aura + amount);
   }
 
   private travelMs(fromX: number, toX: number): number {

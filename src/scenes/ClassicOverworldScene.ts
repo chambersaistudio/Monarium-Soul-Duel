@@ -2,52 +2,61 @@ import Phaser from 'phaser';
 import { InputSystem } from '../systems/InputSystem';
 import { VirtualDpad } from '../systems/VirtualDpad';
 import { AudioManager } from '../systems/AudioManager';
+import { OverworldMaskSystem } from '../systems/OverworldMaskSystem';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import { OVERWORLD_MAPS } from '../data/overworldMaps';
 import { CHALLENGERS } from '../data/challengerData';
 import { PLAYER_PROFILE, renzoCounterPick } from '../data/playerProfile';
 import { MINARI_ROSTER } from '../data/minariData';
-import type { MapDef, NpcDef, EncounterOrb, ClassicBattleContext } from '../types/overworld';
+import type { MapDef, NpcDef, MapExit, EncounterOrb, ClassicBattleContext } from '../types/overworld';
 
-// Player visual size at 960-wide reference viewport
+// Player visual dimensions at reference viewport width (960 px)
 const PLAYER_W_REF = 28;
 const PLAYER_H_REF = 44;
 
 export class ClassicOverworldScene extends Phaser.Scene {
-  // Renamed to avoid collision with Phaser.Scene.input (InputPlugin)
   private inputSys!:  InputSystem;
   private dpad:       VirtualDpad | null = null;
   private audio!:     AudioManager;
+  private maskSys:    OverworldMaskSystem | null = null;
 
   private mapDef!:    MapDef;
   private mapId!:     string;
 
   // Player state
-  private playerX:    number = 0;
-  private playerY:    number = 0;
+  private playerX    = 0;
+  private playerY    = 0;
+  private prevX      = 0;
+  private prevY      = 0;
   private playerGfx!: Phaser.GameObjects.Graphics;
   private nameLabel!: Phaser.GameObjects.Text;
 
   // Scaled dimensions (set in create)
-  private playerW:    number = PLAYER_W_REF;
-  private playerH:    number = PLAYER_H_REF;
-  private walkSpeed:  number = PLAYER_PROFILE.walkSpeed;
+  private playerW    = PLAYER_W_REF;
+  private playerH    = PLAYER_H_REF;
+  private walkSpeed: number = PLAYER_PROFILE.walkSpeed;
 
-  // Interact prompt
-  private interactPrompt!:  Phaser.GameObjects.Text;
-  private promptTarget:     NpcDef | null = null;
+  // Interact prompt — can target an NPC or a requiresInteract exit
+  private interactPrompt!: Phaser.GameObjects.Text;
+  private promptTarget:    NpcDef | null = null;
+  private promptExit:      MapExit | null = null;
 
   // Dialogue overlay
-  private dialogActive   = false;
-  private dialogLines:   string[] = [];
-  private dialogIndex    = 0;
-  private dialogPanel:   (Phaser.GameObjects.Graphics | Phaser.GameObjects.Text)[] = [];
+  private dialogActive    = false;
+  private dialogLines:    string[] = [];
+  private dialogIndex     = 0;
+  private dialogPanel:    (Phaser.GameObjects.Graphics | Phaser.GameObjects.Text)[] = [];
   private dialogBodyText!: Phaser.GameObjects.Text;
-  private dialogOnEnd:   (() => void) | null = null;
+  private dialogOnEnd:    (() => void) | null = null;
 
   // Starter confirm overlay
   private starterPanelActive = false;
+
+  // Debug overlay
+  private debugMode    = false;
+  private debugOverlay: Phaser.GameObjects.Graphics | null = null;
+  private debugLabels: Phaser.GameObjects.Text[] = [];
 
   constructor() { super({ key: 'ClassicOverworldScene' }); }
 
@@ -59,7 +68,6 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
 
-    // Scale player proportionally to viewport
     const scl    = w / 960;
     this.playerW = Math.round(PLAYER_W_REF * scl);
     this.playerH = Math.round(PLAYER_H_REF * scl);
@@ -69,10 +77,18 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.buildNpcs(w, h);
     this.buildOrbs(w, h);
 
+    // Load logic mask if available
+    if (this.mapDef.maskKey && this.textures.exists(this.mapDef.maskKey)) {
+      this.maskSys = new OverworldMaskSystem();
+      if (!this.maskSys.load(this, this.mapDef.maskKey)) this.maskSys = null;
+    }
+
     const spawnName = (this.registry.get('classic_spawn_name') as string) ?? this.mapDef.defaultSpawn;
     const spawn     = this.mapDef.spawns[spawnName] ?? this.mapDef.spawns[this.mapDef.defaultSpawn];
     this.playerX    = spawn.x * w;
     this.playerY    = spawn.y * h;
+    this.prevX      = this.playerX;
+    this.prevY      = this.playerY;
 
     this.playerGfx = this.add.graphics().setDepth(20);
     this.drawPlayer();
@@ -90,7 +106,6 @@ export class ClassicOverworldScene extends Phaser.Scene {
       padding: { x: 6, y: 3 },
     }).setOrigin(0.5, 1).setDepth(22).setVisible(false);
 
-    // Map name badge
     this.add.text(w / 2, IS_TOUCH_DEVICE ? 12 : 10, this.mapDef.displayName, {
       fontSize: IS_TOUCH_DEVICE ? '13px' : '11px',
       color: '#ffaa44', fontFamily: 'monospace',
@@ -102,15 +117,32 @@ export class ClassicOverworldScene extends Phaser.Scene {
     if (IS_TOUCH_DEVICE) {
       this.dpad = new VirtualDpad(this, this.inputSys);
     }
+
+    const kb = this.input.keyboard!;
+
     // ESC → mode select
-    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
       .on('down', () => this.returnToModeSelect());
+
+    // R → safety reset to Starter Village
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+      .on('down', () => this.safetyReset());
+
+    // D or ?debug=1 → debug overlay
+    const debugParam = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('debug')
+      : null;
+    if (debugParam === '1') this.debugMode = true;
+
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+      .on('down', () => { this.debugMode = !this.debugMode; this.updateDebugOverlay(w, h); });
+
+    if (this.debugMode) this.updateDebugOverlay(w, h);
 
     // ── Audio ─────────────────────────────────────────────────────────────────
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
 
-    // Cleanup on shutdown
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.inputSys?.destroy();
       this.dpad?.destroy();
@@ -126,28 +158,37 @@ export class ClassicOverworldScene extends Phaser.Scene {
       return;
     }
 
-    const dt  = delta / 1000;
-    const mv  = this.inputSys.getOverworldMove();
+    const dt = delta / 1000;
+    const mv = this.inputSys.getOverworldMove();
     const { width: w, height: h } = this.scale;
 
-    const dx = (mv.right ? 1 : 0) - (mv.left ? 1 : 0);
-    const dy = (mv.down  ? 1 : 0) - (mv.up   ? 1 : 0);
+    const dx  = (mv.right ? 1 : 0) - (mv.left ? 1 : 0);
+    const dy  = (mv.down  ? 1 : 0) - (mv.up   ? 1 : 0);
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+    this.prevX = this.playerX;
+    this.prevY = this.playerY;
 
     if (dx !== 0 || dy !== 0) {
       this.playerX += (dx / len) * this.walkSpeed * dt;
       this.playerY += (dy / len) * this.walkSpeed * dt;
     }
 
+    // Check exits BEFORE collision so the player isn't pushed away from them
+    if (this.checkExits(w, h)) return;
+
     this.resolveCollisions(w, h);
-    this.checkExits(w, h);
     this.checkOrbContact(w, h);
     this.drawPlayer();
     this.updateNameLabel();
     this.updateInteractPrompt(w, h);
 
     if (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e')) {
-      if (this.promptTarget) this.triggerInteract(this.promptTarget);
+      if (this.promptTarget) {
+        this.triggerInteract(this.promptTarget);
+      } else if (this.promptExit) {
+        this.travelToMap(this.promptExit.targetMap, this.promptExit.targetSpawn);
+      }
     }
   }
 
@@ -240,46 +281,80 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── Collision ─────────────────────────────────────────────────────────────────
 
   private resolveCollisions(w: number, h: number): void {
-    const pw = this.playerW, ph = this.playerH;
-    const pl = this.playerX - pw / 2;
-    const pt = this.playerY - ph;
+    if (this.maskSys?.isLoaded) {
+      // Mask-based collision with wall sliding
+      const nw = (this.playerW * 0.4) / w;
+      const nh = (this.playerH * 0.5) / h;
+      const nx = this.playerX / w;
+      const ny = this.playerY / h;
 
-    for (const rect of this.mapDef.collisionRects) {
-      const rx = rect.x * w, ry = rect.y * h;
-      const rw = rect.w * w, rh = rect.h * h;
+      if (this.maskSys.isBodyBlocked(nx, ny, nw, nh)) {
+        const prevNx = this.prevX / w;
+        const prevNy = this.prevY / h;
 
-      if (pl < rx + rw && pl + pw > rx && pt < ry + rh && pt + ph > ry) {
-        const oL = (pl + pw) - rx;
-        const oR = (rx + rw) - pl;
-        const oT = (pt + ph) - ry;
-        const oB = (ry + rh) - pt;
-        const min = Math.min(oL, oR, oT, oB);
+        if (!this.maskSys.isBodyBlocked(prevNx, ny, nw, nh)) {
+          this.playerX = this.prevX;      // slide along Y axis
+        } else if (!this.maskSys.isBodyBlocked(nx, prevNy, nw, nh)) {
+          this.playerY = this.prevY;      // slide along X axis
+        } else {
+          this.playerX = this.prevX;
+          this.playerY = this.prevY;
+        }
+      }
+    } else {
+      // Fallback: AABB vs collisionRects
+      const pw = this.playerW, ph = this.playerH;
+      const pl = this.playerX - pw / 2;
+      const pt = this.playerY - ph;
 
-        if      (min === oL) this.playerX -= oL;
-        else if (min === oR) this.playerX += oR;
-        else if (min === oT) this.playerY -= oT;
-        else                 this.playerY += oB;
+      for (const rect of this.mapDef.collisionRects) {
+        const rx = rect.x * w, ry = rect.y * h;
+        const rw = rect.w * w, rh = rect.h * h;
+
+        if (pl < rx + rw && pl + pw > rx && pt < ry + rh && pt + ph > ry) {
+          const oL = (pl + pw) - rx;
+          const oR = (rx + rw) - pl;
+          const oT = (pt + ph) - ry;
+          const oB = (ry + rh) - pt;
+          const min = Math.min(oL, oR, oT, oB);
+
+          if      (min === oL) this.playerX -= oL;
+          else if (min === oR) this.playerX += oR;
+          else if (min === oT) this.playerY -= oT;
+          else                 this.playerY += oB;
+        }
       }
     }
+
+    // Screen clamp — player center stays within viewport
+    const { width: sw, height: sh } = this.scale;
+    this.playerX = Phaser.Math.Clamp(this.playerX, this.playerW / 2, sw - this.playerW / 2);
+    this.playerY = Phaser.Math.Clamp(this.playerY, this.playerH / 2, sh - this.playerH / 2);
   }
 
   // ── Exits ─────────────────────────────────────────────────────────────────────
 
-  private checkExits(w: number, h: number): void {
+  /** Returns true if a travel was triggered (caller should bail out of update). */
+  private checkExits(w: number, h: number): boolean {
     for (const exit of this.mapDef.exits) {
+      if (exit.requiresInteract) continue;
       const ex = exit.rect.x * w, ey = exit.rect.y * h;
       const ew = exit.rect.w * w, eh = exit.rect.h * h;
       if (this.playerX >= ex && this.playerX <= ex + ew &&
           this.playerY >= ey && this.playerY <= ey + eh) {
         this.travelToMap(exit.targetMap, exit.targetSpawn);
-        return;
+        return true;
       }
     }
+    return false;
   }
 
   // ── Encounter orb contact ─────────────────────────────────────────────────────
 
   private checkOrbContact(w: number, h: number): void {
+    const starter = this.registry.get('classic_player_starter') as string | null;
+    if (!starter) return;  // no starter yet — can't battle
+
     for (const orb of this.mapDef.encounterOrbs) {
       const dist = Phaser.Math.Distance.Between(
         this.playerX, this.playerY, orb.x * w, orb.y * h,
@@ -291,25 +366,49 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── Interact prompt ───────────────────────────────────────────────────────────
 
   private updateInteractPrompt(w: number, h: number): void {
-    let nearest: NpcDef | null = null;
+    let nearestNpc:  NpcDef | null  = null;
+    let nearestExit: MapExit | null = null;
     let nearDist = Infinity;
 
+    // Check NPCs
     for (const npc of this.mapDef.npcs) {
       const dist = Phaser.Math.Distance.Between(
         this.playerX, this.playerY, npc.x * w, npc.y * h,
       );
       const threshold = npc.interactRadius * Math.min(w, h);
-      if (dist < threshold && dist < nearDist) { nearest = npc; nearDist = dist; }
+      if (dist < threshold && dist < nearDist) {
+        nearestNpc  = npc;
+        nearestExit = null;
+        nearDist = dist;
+      }
     }
 
-    if (nearest) {
-      this.promptTarget = nearest;
-      const label = IS_TOUCH_DEVICE ? `[A] ${nearest.displayName}` : `[ENTER] ${nearest.displayName}`;
-      this.interactPrompt.setText(label)
+    // Check requiresInteract exits
+    for (const exit of this.mapDef.exits) {
+      if (!exit.requiresInteract) continue;
+      const ex = exit.rect.x * w, ey = exit.rect.y * h;
+      const ew = exit.rect.w * w, eh = exit.rect.h * h;
+      const cx = ex + ew / 2, cy = ey + eh / 2;
+      const dist = Phaser.Math.Distance.Between(this.playerX, this.playerY, cx, cy);
+      const threshold = Math.max(ew, eh) * 0.7;
+      if (dist < threshold && dist < nearDist) {
+        nearestExit = exit;
+        nearestNpc  = null;
+        nearDist = dist;
+      }
+    }
+
+    if (nearestNpc || nearestExit) {
+      this.promptTarget = nearestNpc;
+      this.promptExit   = nearestExit;
+      const label = IS_TOUCH_DEVICE ? '[A] ' : '[ENTER] ';
+      const name  = nearestNpc ? nearestNpc.displayName : `→ ${nearestExit!.targetMap.replace(/_/g, ' ')}`;
+      this.interactPrompt.setText(label + name)
         .setPosition(this.playerX, this.playerY - this.playerH - 18)
         .setVisible(true);
     } else {
       this.promptTarget = null;
+      this.promptExit   = null;
       this.interactPrompt.setVisible(false);
     }
   }
@@ -345,7 +444,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const starter = this.registry.get('classic_player_starter') as string | null;
     if (!starter) {
       this.showDialog([
-        'Renzo: You don\'t have a Minari yet!',
+        "Renzo: You don't have a Minari yet!",
         'Renzo: Visit the Bond Lab and choose your starter first.',
       ]);
       return;
@@ -470,7 +569,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.showDialog([
       `You bonded with ${myName}!`,
       `Renzo: Ha! Then I'll take ${renzoName}. Type advantage — fair is fair.`,
-      'Renzo: Meet me at the Training Field when you\'re ready to spar.',
+      "Renzo: Meet me at the Training Field when you're ready to spar.",
     ]);
   }
 
@@ -561,6 +660,95 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.cameras.main.fade(300, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p === 1) this.scene.start('ModeSelectScene');
     });
+  }
+
+  /** R key: reset to Starter Village default spawn, clearing battle state. */
+  private safetyReset(): void {
+    if (this.dialogActive || this.starterPanelActive) return;
+    this.registry.set('classic_current_map', 'starter_village');
+    this.registry.set('classic_spawn_name',  'default');
+    this.registry.remove('classic_battle_context');
+    this.cameras.main.fade(300, 0, 0, 0, false, (_: unknown, p: number) => {
+      if (p === 1) this.scene.restart();
+    });
+  }
+
+  // ── Debug overlay ─────────────────────────────────────────────────────────────
+
+  private updateDebugOverlay(w: number, h: number): void {
+    this.debugOverlay?.destroy();
+    this.debugLabels.forEach(l => l.destroy());
+    this.debugLabels = [];
+
+    if (!this.debugMode) { this.debugOverlay = null; return; }
+
+    const g = this.add.graphics().setDepth(95).setAlpha(0.75);
+    this.debugOverlay = g;
+
+    const label = (txt: string, x: number, y: number, color: string): void => {
+      this.debugLabels.push(
+        this.add.text(x, y, txt, {
+          fontSize: '8px', color, fontFamily: 'monospace',
+          stroke: '#000000', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(96),
+      );
+    };
+
+    // Exit zones — cyan
+    for (const exit of this.mapDef.exits) {
+      const ex = exit.rect.x * w, ey = exit.rect.y * h;
+      const ew = exit.rect.w * w, eh = exit.rect.h * h;
+      g.lineStyle(2, 0x00ffff, 1);
+      g.strokeRect(ex, ey, ew, eh);
+      g.fillStyle(0x00ffff, 0.12);
+      g.fillRect(ex, ey, ew, eh);
+      label(exit.id + (exit.requiresInteract ? ' [E]' : ''), ex + ew / 2, ey + eh / 2, '#00ffff');
+    }
+
+    // NPC interact zones — green
+    for (const npc of this.mapDef.npcs) {
+      const nx = npc.x * w, ny = npc.y * h;
+      const r  = npc.interactRadius * Math.min(w, h);
+      g.lineStyle(2, 0x00ff00, 1);
+      g.strokeCircle(nx, ny, r);
+      g.fillStyle(0x00ff00, 0.12);
+      g.fillCircle(nx, ny, r);
+      label(npc.id, nx, ny, '#00ff00');
+    }
+
+    // Encounter orb zones — magenta
+    for (const orb of this.mapDef.encounterOrbs) {
+      const ox = orb.x * w, oy = orb.y * h;
+      g.lineStyle(2, 0xff00ff, 1);
+      g.strokeCircle(ox, oy, 28);
+      g.fillStyle(0xff00ff, 0.12);
+      g.fillCircle(ox, oy, 28);
+      label(orb.minariId, ox, oy, '#ff00ff');
+    }
+
+    // Fallback collision rects — red (only visible when no mask is loaded)
+    if (!this.maskSys?.isLoaded) {
+      g.lineStyle(2, 0xff0000, 1);
+      for (const rect of this.mapDef.collisionRects) {
+        const rx = rect.x * w, ry = rect.y * h;
+        const rw = rect.w * w, rh = rect.h * h;
+        g.strokeRect(rx, ry, rw, rh);
+        g.fillStyle(0xff0000, 0.12);
+        g.fillRect(rx, ry, rw, rh);
+      }
+    }
+
+    // Player body AABB outline — white
+    g.lineStyle(1, 0xffffff, 0.6);
+    g.strokeRect(
+      this.playerX - this.playerW / 2,
+      this.playerY - this.playerH,
+      this.playerW,
+      this.playerH,
+    );
+
+    // Map title + debug hint
+    label(`[DEBUG] ${this.mapId}  |  D=toggle  R=reset`, w / 2, h - 16, '#ffff00');
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
