@@ -1,6 +1,6 @@
 {
   "character": "flarepaw",
-  "generated": "2026-06-07",
+  "generated": "2026-06-08",
   "animations": {
     "attack": [
       "frame_032",
@@ -62,6 +62,13 @@
       "frame_016",
       "frame_017",
       "frame_018"
+    ],
+    "jump": [
+      "flarepaw_jump_01",
+      "flarepaw_jump_02",
+      "flarepaw_jump_03",
+      "flarepaw_jump_04",
+      "flarepaw_jump_05"
     ],
     "run": [
       "frame_024",
