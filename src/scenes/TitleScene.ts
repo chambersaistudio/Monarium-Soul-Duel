@@ -93,7 +93,7 @@ export class TitleScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
       this.cameras.main.fade(400, 0, 0, 0, false, (_cam: unknown, progress: number) => {
-        if (progress === 1) this.scene.start('OverworldScene');
+        if (progress === 1) this.scene.start('ModeSelectScene');
       });
     }
 

@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { TitleScene } from './scenes/TitleScene';
+import { ModeSelectScene } from './scenes/ModeSelectScene';
 import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
+import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -18,7 +20,15 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [BootScene, PreloadScene, TitleScene, OverworldScene, BattleScene],
+  scene: [
+    BootScene,
+    PreloadScene,
+    TitleScene,
+    ModeSelectScene,
+    ClassicSoulDuelScene,
+    OverworldScene,
+    BattleScene,
+  ],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
