@@ -74,6 +74,13 @@ export class TitleScene extends Phaser.Scene {
 
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+
+    // Tap / click anywhere also advances (mobile and desktop)
+    this.input.once('pointerup', () => {
+      this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+        if (p === 1) this.scene.start('ModeSelectScene');
+      });
+    });
   }
 
   private drawBackground(): void {

@@ -253,7 +253,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Command menu ──────────────────────────────────────────────────────────
 
   private buildCommandMenu(w: number, h: number, playerId: string): void {
-    const menuW = 320, menuH = 160, menuX = 20, menuY = h - menuH - 12;
+    const menuW = 320, menuH = 200, menuX = 20, menuY = h - menuH - 12;
 
     this.menuGroup = this.add.container(menuX, menuY).setDepth(30).setVisible(false);
 
@@ -280,10 +280,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const cost  = id !== BACK_COMMAND && CLASSIC_MOVES[id]?.auraCost
         ? ` (${CLASSIC_MOVES[id].auraCost} aura)`
         : '';
-      const txt = this.add.text(20, 16 + i * 32, `  ${label}${cost}`, {
-        fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
+      const txt = this.add.text(20, 12 + i * 40, `  ${label}${cost}`, {
+        fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
       });
-      txt.setInteractive({ useHandCursor: true });
+      // Large hit zone for touch-friendly tapping
+      txt.setInteractive(
+        new Phaser.Geom.Rectangle(-10, -8, menuW - 20, 42),
+        Phaser.Geom.Rectangle.Contains,
+      );
+      txt.input!.cursor = 'pointer';
       txt.on('pointerover',  () => { this.menuCursor = i; this.refreshMenuCursor(); });
       txt.on('pointerdown',  () => { this.menuCursor = i; this.confirmMenuSelection(); });
       this.menuGroup.add(txt);
@@ -413,17 +418,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       fontSize: '18px', color: '#cccccc', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
 
-    const returnTxt = this.add.text(w / 2, h / 2 + 70, 'Press ENTER to return', {
+    const returnTxt = this.add.text(w / 2, h / 2 + 70, 'Tap or press ENTER to return', {
       fontSize: '13px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
     this.tweens.add({ targets: returnTxt, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
 
     this.time.delayedCall(600, () => {
-      this.input.keyboard!.once('keydown-ENTER', () => {
+      const goBack = (): void => {
+        this.input.off('pointerup', goBack);
         this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
           if (p === 1) this.scene.start('ModeSelectScene');
         });
-      });
+      };
+      this.input.keyboard!.once('keydown-ENTER', goBack);
+      this.input.once('pointerup', goBack);
     });
   }
 }

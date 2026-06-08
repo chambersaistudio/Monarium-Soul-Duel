@@ -17,8 +17,8 @@ const config: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: 800 },
-      debug: false
-    }
+      debug: false,
+    },
   },
   scene: [
     BootScene,
@@ -31,12 +31,28 @@ const config: Phaser.Types.Core.GameConfig = {
   ],
   scale: {
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH
+    autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   render: {
     antialias: true,
-    pixelArt: false
-  }
+    pixelArt: false,
+  },
+  input: {
+    activePointers: 3,  // support simultaneous touch points for D-pad
+  },
+  disableContextMenu: true,
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// Unlock Web Audio API on first interaction (required by iOS Safari)
+function tryUnlockAudio(): void {
+  try {
+    if (game.sound instanceof Phaser.Sound.WebAudioSoundManager) {
+      const ctx = game.sound.context;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    }
+  } catch { /* ok — sound manager not ready yet */ }
+}
+document.addEventListener('touchstart', tryUnlockAudio, { once: true, passive: true });
+document.addEventListener('pointerdown', tryUnlockAudio, { once: true, passive: true });

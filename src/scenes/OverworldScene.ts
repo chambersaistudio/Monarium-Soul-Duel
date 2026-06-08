@@ -3,6 +3,8 @@ import { OverworldPlayer } from '../entities/OverworldPlayer';
 import { RivalNPC } from '../entities/RivalNPC';
 import { SoulSpriteOrb } from '../entities/SoulSpriteOrb';
 import { InputSystem } from '../systems/InputSystem';
+import { VirtualDpad } from '../systems/VirtualDpad';
+import { IS_TOUCH_DEVICE } from '../config/mobileConfig';
 
 type DialogueState = 'none' | 'showing' | 'transitioning';
 
@@ -11,6 +13,7 @@ export class OverworldScene extends Phaser.Scene {
   private rival!: RivalNPC;
   private orbs: SoulSpriteOrb[] = [];
   private inputSys!: InputSystem;
+  private dpad: VirtualDpad | null = null;
   private dialogueState: DialogueState = 'none';
   private dialogueBox!: Phaser.GameObjects.Container;
   private bgGfx!: Phaser.GameObjects.Graphics;
@@ -41,6 +44,12 @@ export class OverworldScene extends Phaser.Scene {
     });
 
     this.inputSys = new InputSystem(this);
+
+    // Virtual D-pad — shown on touch devices (or when ?touch=1)
+    if (IS_TOUCH_DEVICE) {
+      this.dpad = new VirtualDpad(this, this.inputSys);
+    }
+
     this.dialogueBox = this.createDialogueBox(w, h);
     this.dialogueBox.setVisible(false);
 
@@ -49,9 +58,10 @@ export class OverworldScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 2, letterSpacing: 6
     }).setOrigin(0.5).setDepth(50);
 
-    this.add.text(20, 20, '← Arrow Keys to move  |  E / Enter = Interact', {
-      fontSize: '11px', color: '#666666', fontFamily: 'monospace'
-    }).setDepth(50);
+    this.add.text(20, 20,
+      IS_TOUCH_DEVICE ? 'D-pad = move  |  Tap A to interact' : '← Arrow Keys to move  |  E / Enter = Interact',
+      { fontSize: '11px', color: '#666666', fontFamily: 'monospace' }
+    ).setDepth(50);
 
     this.cameras.main.fadeIn(400);
   }
@@ -140,9 +150,10 @@ export class OverworldScene extends Phaser.Scene {
       }
     ).setDepth(201);
 
-    const promptText = this.add.text(boxX + boxW - 20, boxY + boxH - 18, '[E / ENTER] Battle!', {
-      fontSize: '12px', color: '#ffff88', fontFamily: 'monospace'
-    }).setOrigin(1, 1).setDepth(201);
+    const promptText = this.add.text(boxX + boxW - 20, boxY + boxH - 18,
+      IS_TOUCH_DEVICE ? 'Tap A to Battle!' : '[E / ENTER] Battle!', {
+        fontSize: '12px', color: '#ffff88', fontFamily: 'monospace'
+      }).setOrigin(1, 1).setDepth(201);
 
     this.tweens.add({ targets: promptText, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
 
@@ -197,6 +208,7 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.dpad?.destroy();
     this.inputSys?.destroy();
   }
 }

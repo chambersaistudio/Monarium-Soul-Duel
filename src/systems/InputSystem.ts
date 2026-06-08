@@ -31,6 +31,10 @@ export class InputSystem {
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {};
   private scene: Phaser.Scene;
 
+  // Touch state — set by VirtualDpad
+  private touchMove = { left: false, right: false, up: false, down: false };
+  private touchInteractPending = false;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.setupKeys();
@@ -63,6 +67,21 @@ export class InputSystem {
     };
   }
 
+  // ── Touch state setters (called by VirtualDpad) ──────────────────────────
+
+  setTouchMove(dx: number, dy: number): void {
+    this.touchMove.left  = dx < 0;
+    this.touchMove.right = dx > 0;
+    this.touchMove.up    = dy < 0;
+    this.touchMove.down  = dy > 0;
+  }
+
+  triggerTouchInteract(): void {
+    this.touchInteractPending = true;
+  }
+
+  // ── Input queries ────────────────────────────────────────────────────────
+
   getBattleInput(): BattleInput {
     const k = this.keys;
     return {
@@ -84,19 +103,25 @@ export class InputSystem {
     };
   }
 
-  // Overworld movement — does NOT consume JustDown for interact keys
+  // Overworld movement — merges keyboard and touch D-pad state
   getOverworldMove(): { left: boolean; right: boolean; up: boolean; down: boolean } {
     const k = this.keys;
     return {
-      left:  k.left.isDown,
-      right: k.right.isDown,
-      up:    k.up.isDown,
-      down:  k.down.isDown,
+      left:  k.left.isDown  || this.touchMove.left,
+      right: k.right.isDown || this.touchMove.right,
+      up:    k.up.isDown    || this.touchMove.up,
+      down:  k.down.isDown  || this.touchMove.down,
     };
   }
 
+  // isJustDown merges keyboard and touch interact for 'enter'/'e'
   isJustDown(key: string): boolean {
-    return this.keys[key] ? Phaser.Input.Keyboard.JustDown(this.keys[key]) : false;
+    const kbDown = this.keys[key] ? Phaser.Input.Keyboard.JustDown(this.keys[key]) : false;
+    if ((key === 'enter' || key === 'e') && this.touchInteractPending) {
+      this.touchInteractPending = false;
+      return true;
+    }
+    return kbDown;
   }
 
   isDown(key: string): boolean {
