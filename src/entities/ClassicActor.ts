@@ -24,6 +24,8 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   maxHp: number;
   aura: number;
   maxAura: number;
+  /** True while this actor is in a guard stance (set/cleared by ClassicBattleEngine). */
+  isGuarding = false;
 
   private sprite:    Phaser.GameObjects.Sprite | null   = null;
   private body_gfx:  Phaser.GameObjects.Graphics | null = null;

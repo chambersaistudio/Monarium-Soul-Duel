@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
+import { AUDIO_FILES } from '../config/audioConfig';
 
 const NORM_SIZE = 512;
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
@@ -65,6 +66,13 @@ export class PreloadScene extends Phaser.Scene {
           this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
         }
       }
+    }
+
+    // ── Audio ──────────────────────────────────────────────────────────────
+    // All files are optional — 404s are captured by loaderror and the
+    // AudioManager skips missing keys at runtime.
+    for (const [key, paths] of Object.entries(AUDIO_FILES)) {
+      this.load.audio(key, paths);
     }
   }
 

@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../systems/AudioManager';
+import { AUDIO_KEYS } from '../config/audioConfig';
 
 interface Particle {
   x: number; y: number; vx: number; vy: number;
@@ -10,6 +12,7 @@ export class TitleScene extends Phaser.Scene {
   private bgGfx!: Phaser.GameObjects.Graphics;
   private particleGfx!: Phaser.GameObjects.Graphics;
   private enterKey!: Phaser.Input.Keyboard.Key;
+  private audio!: AudioManager;
 
   constructor() {
     super({ key: 'TitleScene' });
@@ -68,6 +71,9 @@ export class TitleScene extends Phaser.Scene {
     ).setOrigin(0.5).setDepth(2);
 
     this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+
+    this.audio = new AudioManager(this);
+    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
   }
 
   private drawBackground(): void {

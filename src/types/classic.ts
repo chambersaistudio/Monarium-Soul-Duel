@@ -29,6 +29,12 @@ export interface ClassicMoveConfig {
   damageType: string;
   returnToAnchor: boolean;
   auraCost?: number;
+  /**
+   * If true, the actor stays in this animation through the opponent's entire
+   * turn, only returning to idle after all queued actions are resolved.
+   * Used for Guard and future defensive stances.
+   */
+  holdsStance?: boolean;
 }
 
 export interface PendingAction {
@@ -41,10 +47,11 @@ export interface EngineCallbacks {
   onShowCommandMenu: () => void;
   onHideCommandMenu: () => void;
   onDamageDealt: (
-    target: ClassicActorRole,
-    amount: number,
-    worldX: number,
-    worldY: number,
+    target:  ClassicActorRole,
+    amount:  number,
+    blocked: boolean,
+    worldX:  number,
+    worldY:  number,
   ) => void;
   onBattleEnd: (winner: ClassicActorRole) => void;
 }

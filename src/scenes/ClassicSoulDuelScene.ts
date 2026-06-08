@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import { ClassicActor } from '../entities/ClassicActor';
 import { ClassicBattleEngine } from '../systems/ClassicBattleEngine';
+import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
+import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
+import { AUDIO_KEYS } from '../config/audioConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
 
 const GROUND_Y        = 420;
@@ -16,6 +19,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private playerActor!: ClassicActor;
   private enemyActor!:  ClassicActor;
   private engine!:      ClassicBattleEngine;
+  private audio!:       AudioManager;
 
   // UI — HP
   private playerHpFill!: Phaser.GameObjects.Rectangle;
@@ -24,21 +28,30 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private enemyHpText!:  Phaser.GameObjects.Text;
 
   // UI — Command menu
-  private menuGroup!:        Phaser.GameObjects.Container;
-  private menuOptionTexts:   Phaser.GameObjects.Text[] = [];
-  private menuCommandIds:    string[] = [];
-  private menuCursor         = 0;
-  private menuVisible        = false;
+  private menuGroup!:      Phaser.GameObjects.Container;
+  private menuOptionTexts: Phaser.GameObjects.Text[] = [];
+  private menuCommandIds:  string[] = [];
+  private menuCursor       = 0;
+  private menuVisible      = false;
 
   // UI — Misc
-  private phaseLabel!: Phaser.GameObjects.Text;
+  private phaseLabel!:  Phaser.GameObjects.Text;
+  private guardLabel!:  Phaser.GameObjects.Text;  // shows "GUARDING" over guarding actor
 
   // Input
-  private upKey!:    Phaser.Input.Keyboard.Key;
-  private downKey!:  Phaser.Input.Keyboard.Key;
+  private upKey!:   Phaser.Input.Keyboard.Key;
+  private downKey!: Phaser.Input.Keyboard.Key;
   private enterKey!: Phaser.Input.Keyboard.Key;
+  private prevCursor = -1;
 
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
+
+  // ── Preload (background image, scene-specific) ─────────────────────────────
+
+  preload(): void {
+    const { background } = CLASSIC_BATTLE_CONFIG;
+    this.load.image(`bg_${background}`, `assets/backgrounds/classic/${background}.png`);
+  }
 
   // ── Scene lifecycle ────────────────────────────────────────────────────────
 
@@ -66,13 +79,17 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.playerActor,
       this.enemyActor,
       {
-        onPhaseChange:    (p)          => this.onPhaseChange(p),
-        onShowCommandMenu:()           => this.showMenu(),
-        onHideCommandMenu:()           => this.hideMenu(),
-        onDamageDealt:    (t, d, x, y) => this.spawnDamageNumber(t, d, x, y),
-        onBattleEnd:      (w)          => this.onBattleEnd(w),
+        onPhaseChange:     (p)          => this.onPhaseChange(p),
+        onShowCommandMenu: ()           => this.showMenu(),
+        onHideCommandMenu: ()           => this.hideMenu(),
+        onDamageDealt:     (t, d, b, x, y) => this.onDamageDealt(t, d, b, x, y),
+        onBattleEnd:       (w)          => this.onBattleEnd(w),
       },
     );
+
+    // ── Audio ──────────────────────────────────────────────────────────────
+    this.audio = new AudioManager(this);
+    this.audio.playBgm(AUDIO_KEYS.bgm.battle);
 
     // ── UI ─────────────────────────────────────────────────────────────────
     this.buildHpBars(w, playerData.name, enemyData.name);
@@ -94,44 +111,57 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemyActor.updateShadow();
     this.refreshHpBars();
 
+    // Guard stance label — hovers above any actor currently in guard
+    this.updateGuardLabels();
+
     if (!this.menuVisible) return;
 
-    if (Phaser.Input.Keyboard.JustDown(this.upKey)) {
-      this.menuCursor = (this.menuCursor - 1 + this.menuOptionTexts.length) % this.menuOptionTexts.length;
-      this.refreshMenuCursor();
-    }
-    if (Phaser.Input.Keyboard.JustDown(this.downKey)) {
-      this.menuCursor = (this.menuCursor + 1) % this.menuOptionTexts.length;
-      this.refreshMenuCursor();
-    }
-    if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
-      this.confirmMenuSelection();
+    const upJust   = Phaser.Input.Keyboard.JustDown(this.upKey);
+    const downJust = Phaser.Input.Keyboard.JustDown(this.downKey);
+    const okJust   = Phaser.Input.Keyboard.JustDown(this.enterKey);
+
+    if (upJust)   { this.menuCursor = (this.menuCursor - 1 + this.menuOptionTexts.length) % this.menuOptionTexts.length; this.refreshMenuCursor(); }
+    if (downJust) { this.menuCursor = (this.menuCursor + 1) % this.menuOptionTexts.length; this.refreshMenuCursor(); }
+    if (okJust)   { this.confirmMenuSelection(); }
+
+    // Play UI move sound when cursor changes
+    if (this.menuCursor !== this.prevCursor) {
+      if (this.prevCursor !== -1) this.audio.playUi(AUDIO_KEYS.ui.move);
+      this.prevCursor = this.menuCursor;
     }
   }
 
   // ── Background ─────────────────────────────────────────────────────────────
 
   private drawBackground(w: number, h: number): void {
-    const bg = this.add.graphics().setDepth(0);
-    // Sky gradient
-    for (let i = 0; i < h; i += 3) {
-      const t = i / h;
-      const r = Math.floor(Phaser.Math.Linear(10, 30, t));
-      const g = Math.floor(Phaser.Math.Linear(5,  15, t));
-      const b = Math.floor(Phaser.Math.Linear(20, 10, t));
-      bg.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 1);
-      bg.fillRect(0, i, w, 3);
-    }
-    // Ground platform
-    bg.fillStyle(0x1a1a2e, 1);
-    bg.fillRect(0, GROUND_Y, w, h - GROUND_Y);
-    bg.lineStyle(2, 0xff6600, 0.35);
-    bg.lineBetween(0, GROUND_Y, w, GROUND_Y);
+    const bgKey = `bg_${CLASSIC_BATTLE_CONFIG.background}`;
 
-    // Subtle floor highlight strips
-    bg.lineStyle(1, 0x333366, 0.4);
-    for (let i = 1; i <= 4; i++) {
-      bg.lineBetween(0, GROUND_Y + i * 15, w, GROUND_Y + i * 15);
+    if (this.textures.exists(bgKey)) {
+      // Use the provided background image, scaled to fill
+      this.add.image(w / 2, h / 2, bgKey).setDepth(0).setDisplaySize(w, h);
+      // Semi-transparent overlay over the bottom section for readability
+      const overlay = this.add.graphics().setDepth(1);
+      overlay.fillStyle(0x000000, 0.35);
+      overlay.fillRect(0, GROUND_Y, w, h - GROUND_Y);
+    } else {
+      // Procedural gradient fallback
+      const bg = this.add.graphics().setDepth(0);
+      for (let i = 0; i < h; i += 3) {
+        const t = i / h;
+        const r = Math.floor(Phaser.Math.Linear(10, 30, t));
+        const g = Math.floor(Phaser.Math.Linear(5,  15, t));
+        const b = Math.floor(Phaser.Math.Linear(20, 10, t));
+        bg.fillStyle(Phaser.Display.Color.GetColor(r, g, b), 1);
+        bg.fillRect(0, i, w, 3);
+      }
+      bg.fillStyle(0x1a1a2e, 1);
+      bg.fillRect(0, GROUND_Y, w, h - GROUND_Y);
+      bg.lineStyle(2, 0xff6600, 0.35);
+      bg.lineBetween(0, GROUND_Y, w, GROUND_Y);
+      for (let i = 1; i <= 4; i++) {
+        bg.lineStyle(1, 0x333366, 0.4);
+        bg.lineBetween(0, GROUND_Y + i * 15, w, GROUND_Y + i * 15);
+      }
     }
   }
 
@@ -182,6 +212,44 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     return 0xdd3322;
   }
 
+  // ── Guard stance label ────────────────────────────────────────────────────
+
+  private buildPhaseLabel(w: number, _h: number): void {
+    this.phaseLabel = this.add.text(w / 2, GROUND_Y + 12, '', {
+      fontSize: '11px', color: '#555577', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(15);
+
+    // Persistent guard label (repositioned in update)
+    this.guardLabel = this.add.text(0, 0, '🛡 GUARDING', {
+      fontSize: '11px', color: '#88ddff', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(25).setVisible(false);
+  }
+
+  private updateGuardLabels(): void {
+    const guardingActor = this.playerActor.isGuarding
+      ? this.playerActor
+      : this.enemyActor.isGuarding
+        ? this.enemyActor
+        : null;
+
+    if (guardingActor) {
+      this.guardLabel.setVisible(true);
+      this.guardLabel.setPosition(guardingActor.x, guardingActor.y - 70);
+    } else {
+      this.guardLabel.setVisible(false);
+    }
+  }
+
+  private onPhaseChange(phase: ClassicBattlePhase): void {
+    const labels: Partial<Record<ClassicBattlePhase, string>> = {
+      player_command:   'Choose a command...',
+      approach_target:  'Approaching...',
+      return_to_anchor: 'Returning...',
+    };
+    this.phaseLabel.setText(labels[phase] ?? '');
+  }
+
   // ── Command menu ──────────────────────────────────────────────────────────
 
   private buildCommandMenu(w: number, h: number, playerId: string): void {
@@ -198,13 +266,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.add.text(menuX + 10, menuY - 18, '── COMMAND ──', {
       fontSize: '10px', color: '#ff6600', fontFamily: 'monospace',
-    }).setDepth(30).setName('__cmd_header__');
+    }).setDepth(30);
 
-    // Build move list (moves + Back)
     const moveset = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
-    this.menuCommandIds = [...moveset, BACK_COMMAND];
+    this.menuCommandIds  = [...moveset, BACK_COMMAND];
     this.menuOptionTexts = [];
-    this.menuCursor = 0;
+    this.menuCursor      = 0;
 
     this.menuCommandIds.forEach((id, i) => {
       const label = id === BACK_COMMAND
@@ -229,15 +296,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private refreshMenuCursor(): void {
     this.menuOptionTexts.forEach((t, i) => {
       t.setColor(i === this.menuCursor ? '#ffcc44' : '#cccccc');
-      // Cursor glyph at start of text
-      const base = t.text.replace(/^[▶ ]/, '');
-      t.setText((i === this.menuCursor ? '▶' : ' ') + ' ' + base.trimStart());
+      const base = t.text.replace(/^[▶ ]\s*/, '');
+      t.setText((i === this.menuCursor ? '▶ ' : '  ') + base);
     });
   }
 
   private showMenu(): void {
-    this.menuVisible = true;
-    this.menuCursor  = 0;
+    this.menuVisible  = true;
+    this.menuCursor   = 0;
+    this.prevCursor   = -1;
     this.menuGroup.setVisible(true);
     this.refreshMenuCursor();
   }
@@ -250,42 +317,35 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private confirmMenuSelection(): void {
     if (!this.menuVisible) return;
     const selected = this.menuCommandIds[this.menuCursor];
-    if (selected === BACK_COMMAND) {
-      // No-op for now; placeholder for switch/escape
-      return;
-    }
+    if (selected === BACK_COMMAND) return;
+    this.audio.playUi(AUDIO_KEYS.ui.confirm);
     this.engine.submitPlayerMove(selected);
   }
 
-  // ── Phase label ───────────────────────────────────────────────────────────
+  // ── Damage + block display ────────────────────────────────────────────────
 
-  private buildPhaseLabel(w: number, _h: number): void {
-    this.phaseLabel = this.add.text(w / 2, GROUND_Y + 12, '', {
-      fontSize: '11px', color: '#555577', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(15);
-  }
-
-  private onPhaseChange(phase: ClassicBattlePhase): void {
-    const labels: Partial<Record<ClassicBattlePhase, string>> = {
-      player_command:   'Choose a command...',
-      approach_target:  'Approaching...',
-      perform_action:   '',
-      apply_hit:        '',
-      target_reaction:  '',
-      return_to_anchor: 'Returning...',
-      turn_end:         '',
-    };
-    this.phaseLabel.setText(labels[phase] ?? '');
-  }
-
-  // ── Damage number ─────────────────────────────────────────────────────────
-
-  private spawnDamageNumber(
-    _target: ClassicActorRole,
+  private onDamageDealt(
+    target:  ClassicActorRole,
     amount:  number,
+    blocked: boolean,
     worldX:  number,
     worldY:  number,
   ): void {
+    const actor = target === 'player' ? this.playerActor : this.enemyActor;
+
+    if (blocked) {
+      // Show blocked indicator — reduced damage in a different style
+      this.spawnBlockedDisplay(worldX, worldY, amount);
+      this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
+    } else {
+      this.spawnDamageNumber(worldX, worldY, amount);
+      this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
+      this.audio.playSfx(AUDIO_KEYS.sfx.hurtImpact, 0.6);
+      this.audio.playCreatureHurt(actor.actorId);
+    }
+  }
+
+  private spawnDamageNumber(worldX: number, worldY: number, amount: number): void {
     const txt = this.add.text(worldX, worldY, `-${amount}`, {
       fontSize: '22px', color: '#ffdd44', fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 3,
@@ -301,6 +361,31 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     });
   }
 
+  private spawnBlockedDisplay(worldX: number, worldY: number, amount: number): void {
+    // "BLOCKED" header
+    const hdr = this.add.text(worldX, worldY - 10, 'BLOCKED!', {
+      fontSize: '16px', color: '#88ddff', fontStyle: 'bold', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(50);
+
+    // Reduced damage number below in smaller text
+    const sub = this.add.text(worldX, worldY + 12, `-${amount}`, {
+      fontSize: '13px', color: '#aaccee', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(50);
+
+    for (const obj of [hdr, sub]) {
+      this.tweens.add({
+        targets:  obj,
+        y:        obj.y - 50,
+        alpha:    0,
+        duration: 1100,
+        ease:     'Cubic.Out',
+        onComplete: () => obj.destroy(),
+      });
+    }
+  }
+
   // ── Battle end ────────────────────────────────────────────────────────────
 
   private onBattleEnd(winner: ClassicActorRole): void {
@@ -310,6 +395,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const colour = isWin ? '#ffcc44'   : '#ff4444';
     const sub    = isWin ? 'Your Monari triumphed!' : 'Your Monari was defeated.';
 
+    // Audio
+    this.audio.stopBgm();
+    this.audio.playSfx(isWin ? AUDIO_KEYS.sfx.victory : AUDIO_KEYS.sfx.defeat, 1.0);
+
+    // Overlay
     const panel = this.add.graphics().setDepth(60);
     panel.fillStyle(0x000000, 0.65);
     panel.fillRect(0, 0, w, h);
@@ -323,7 +413,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       fontSize: '18px', color: '#cccccc', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
 
-    const returnTxt = this.add.text(w / 2, h / 2 + 70, 'Press ENTER to return to mode select', {
+    const returnTxt = this.add.text(w / 2, h / 2 + 70, 'Press ENTER to return', {
       fontSize: '13px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(61);
     this.tweens.add({ targets: returnTxt, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });

@@ -3,10 +3,10 @@ import type { ClassicBattlePhase, PendingAction, ClassicActorRole, EngineCallbac
 import { ClassicActor } from '../entities/ClassicActor';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS } from '../data/classicMoveData';
 
-const PLAYER_ANCHOR_X  = 200;
-const ENEMY_ANCHOR_X   = 760;
-const CONTACT_OFFSET   = 100;  // px from the target's center where the attacker stops
-const APPROACH_SPEED   = 380;  // px/s
+const PLAYER_ANCHOR_X = 200;
+const ENEMY_ANCHOR_X  = 760;
+const CONTACT_OFFSET  = 100;  // px from the target's centre where the attacker stops
+const APPROACH_SPEED  = 380;  // px/s
 
 export class ClassicBattleEngine {
   private phase: ClassicBattlePhase = 'battle_intro';
@@ -88,83 +88,19 @@ export class ClassicBattleEngine {
       ? defender.x - CONTACT_OFFSET
       : defender.x + CONTACT_OFFSET;
 
-    if (move.movementType === 'dash_to_target') {
-      this.setPhase('approach_target');
-      attacker.setFacing(action.role === 'player' ? 1 : -1);
-      attacker.playAnim(move.approachAnim);
+    // ── Guard / stance-hold moves ───────────────────────────────────────────
+    if (move.holdsStance) {
+      this.setPhase('perform_action');
+      attacker.playAnim(move.animFolder, true);
+      attacker.isGuarding = true;
+      // Resolve immediately — the stance is held by the flag until turn end
+      this.busy = false;
+      this.afterAction();
+      return;
+    }
 
-      const approachMs = this.travelMs(attacker.x, contactX);
-      this.scene.tweens.add({
-        targets:  attacker,
-        x:        contactX,
-        duration: approachMs,
-        ease:     'Linear',
-        onComplete: () => {
-          // ── Perform action ───────────────────────────────────────────────
-          this.setPhase('perform_action');
-          attacker.playAnim(move.animFolder, true);
-
-          // Determine when the hit frame fires
-          const animKey  = `${attacker.actorId}_${move.animFolder}`;
-          const animData = this.scene.anims.get(animKey);
-          const hitMs    = animData
-            ? (1000 / (animData.frameRate || 12)) * (move.hitFrameIndex + 1)
-            : 200;
-
-          this.scene.time.delayedCall(hitMs, () => {
-            // ── Apply hit ───────────────────────────────────────────────
-            this.setPhase('apply_hit');
-            if (move.power > 0) {
-              const dmg = this.calcDamage(attacker, move);
-              defender.hp = Math.max(0, defender.hp - dmg);
-              this.callbacks.onDamageDealt(
-                action.role === 'player' ? 'enemy' : 'player',
-                dmg,
-                defender.x,
-                defender.y - 40,
-              );
-              defender.flashDamage();
-            }
-
-            // ── Target reaction ─────────────────────────────────────────
-            this.setPhase('target_reaction');
-            if (move.targetReaction === 'hurt') {
-              defender.playAnim('hurt', true);
-              this.scene.time.delayedCall(350, () => defender.playAnim('idle'));
-            }
-
-            // ── Return to anchor ────────────────────────────────────────
-            this.scene.time.delayedCall(500, () => {
-              if (move.returnToAnchor) {
-                this.setPhase('return_to_anchor');
-                // Face away from opponent to run back
-                attacker.setFacing(action.role === 'player' ? -1 : 1);
-                attacker.playAnim(move.returnAnim);
-
-                this.scene.tweens.add({
-                  targets:  attacker,
-                  x:        anchorX,
-                  duration: this.travelMs(attacker.x, anchorX),
-                  ease:     'Linear',
-                  onComplete: () => {
-                    attacker.setFacing(action.role === 'player' ? 1 : -1);
-                    attacker.playAnim('idle');
-                    this.busy = false;
-                    this.afterAction();
-                  },
-                });
-              } else {
-                attacker.playAnim('idle');
-                this.busy = false;
-                this.afterAction();
-              }
-            });
-          });
-        },
-      });
-
-    } else {
-      // 'stay' — guard / buff / etc.
+    // ── Non-stance stay moves (future buffs, etc.) ─────────────────────────
+    if (move.movementType === 'stay') {
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       this.scene.time.delayedCall(700, () => {
@@ -172,32 +108,125 @@ export class ClassicBattleEngine {
         this.busy = false;
         this.afterAction();
       });
+      return;
     }
+
+    // ── Dash-to-target moves ───────────────────────────────────────────────
+    this.setPhase('approach_target');
+    attacker.setFacing(action.role === 'player' ? 1 : -1);
+    attacker.playAnim(move.approachAnim);
+
+    this.scene.tweens.add({
+      targets:  attacker,
+      x:        contactX,
+      duration: this.travelMs(attacker.x, contactX),
+      ease:     'Linear',
+      onComplete: () => {
+        // ── Perform action ───────────────────────────────────────────────
+        this.setPhase('perform_action');
+        attacker.playAnim(move.animFolder, true);
+
+        const animKey  = `${attacker.actorId}_${move.animFolder}`;
+        const animData = this.scene.anims.get(animKey);
+        const hitMs    = animData
+          ? (1000 / (animData.frameRate || 12)) * (move.hitFrameIndex + 1)
+          : 200;
+
+        this.scene.time.delayedCall(hitMs, () => {
+          // ── Apply hit ───────────────────────────────────────────────
+          this.setPhase('apply_hit');
+
+          const isBlocked = defender.isGuarding && move.power > 0;
+
+          if (move.power > 0) {
+            const dmg = this.calcDamage(attacker, defender, move);
+            defender.hp = Math.max(0, defender.hp - dmg);
+            this.callbacks.onDamageDealt(
+              action.role === 'player' ? 'enemy' : 'player',
+              dmg,
+              isBlocked,
+              defender.x,
+              defender.y - 40,
+            );
+            if (!isBlocked) defender.flashDamage();
+          }
+
+          // ── Target reaction ─────────────────────────────────────────
+          this.setPhase('target_reaction');
+          if (move.targetReaction === 'hurt' && !isBlocked) {
+            defender.playAnim('hurt', true);
+            this.scene.time.delayedCall(350, () => {
+              if (!defender.isGuarding) defender.playAnim('idle');
+            });
+          }
+          // If blocked, defender keeps the guard animation — no change needed
+
+          // ── Return to anchor ────────────────────────────────────────
+          this.scene.time.delayedCall(500, () => {
+            if (move.returnToAnchor) {
+              this.setPhase('return_to_anchor');
+              attacker.setFacing(action.role === 'player' ? -1 : 1);
+              attacker.playAnim(move.returnAnim);
+
+              this.scene.tweens.add({
+                targets:  attacker,
+                x:        anchorX,
+                duration: this.travelMs(attacker.x, anchorX),
+                ease:     'Linear',
+                onComplete: () => {
+                  attacker.setFacing(action.role === 'player' ? 1 : -1);
+                  attacker.playAnim('idle');
+                  this.busy = false;
+                  this.afterAction();
+                },
+              });
+            } else {
+              attacker.playAnim('idle');
+              this.busy = false;
+              this.afterAction();
+            }
+          });
+        });
+      },
+    });
   }
 
   private afterAction(): void {
     // Check for battle end
     if (this.enemy.hp <= 0) {
+      this.releaseGuardStances();
       this.setPhase('victory');
       this.callbacks.onBattleEnd('player');
       return;
     }
     if (this.player.hp <= 0) {
+      this.releaseGuardStances();
       this.setPhase('defeat');
       this.callbacks.onBattleEnd('enemy');
       return;
     }
 
     if (this.actionQueue.length > 0) {
-      // Enemy action still pending — brief pause then execute it
+      // Opponent's action still pending — brief pause then execute
       this.scene.time.delayedCall(400, () => {
         this.setPhase('action_queue');
         this.executeNextAction();
       });
     } else {
-      // Both actions done — end turn
+      // Both actions done — release guard stances and end the turn
+      this.releaseGuardStances();
       this.setPhase('turn_end');
       this.scene.time.delayedCall(600, () => this.openCommandMenu());
+    }
+  }
+
+  /** Release any active guard stances and return those actors to idle. */
+  private releaseGuardStances(): void {
+    for (const actor of [this.player, this.enemy]) {
+      if (actor.isGuarding) {
+        actor.isGuarding = false;
+        actor.playAnim('idle');
+      }
     }
   }
 
@@ -205,9 +234,15 @@ export class ClassicBattleEngine {
     return Math.max(150, (Math.abs(toX - fromX) / APPROACH_SPEED) * 1000);
   }
 
-  private calcDamage(attacker: ClassicActor, move: { power: number }): number {
+  private calcDamage(
+    attacker: ClassicActor,
+    defender: ClassicActor,
+    move:     { power: number },
+  ): number {
     const atkStat = attacker.minariData.stats.power;
     const roll    = 0.85 + Math.random() * 0.15;
-    return Math.round((move.power * (atkStat / 60)) * roll);
+    let dmg       = Math.round((move.power * (atkStat / 60)) * roll);
+    if (defender.isGuarding) dmg = Math.round(dmg * 0.3);
+    return Math.max(1, dmg);
   }
 }

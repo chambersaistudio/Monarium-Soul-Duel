@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../systems/AudioManager';
+import { AUDIO_KEYS } from '../config/audioConfig';
 
 const MODES = [
   {
@@ -14,12 +16,13 @@ const MODES = [
 ];
 
 export class ModeSelectScene extends Phaser.Scene {
-  private cursor     = 0;
-  private labels:    Phaser.GameObjects.Text[] = [];
-  private upKey!:    Phaser.Input.Keyboard.Key;
-  private downKey!:  Phaser.Input.Keyboard.Key;
+  private cursor    = 0;
+  private prevCursor = -1;
+  private labels:   Phaser.GameObjects.Text[] = [];
+  private upKey!:   Phaser.Input.Keyboard.Key;
+  private downKey!: Phaser.Input.Keyboard.Key;
   private enterKey!: Phaser.Input.Keyboard.Key;
-  private justMoved  = false;
+  private audio!:   AudioManager;
 
   constructor() { super({ key: 'ModeSelectScene' }); }
 
@@ -98,6 +101,9 @@ export class ModeSelectScene extends Phaser.Scene {
       });
     });
 
+    this.audio = new AudioManager(this);
+    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+
     this.updateCursor();
   }
 
@@ -117,6 +123,7 @@ export class ModeSelectScene extends Phaser.Scene {
   }
 
   private confirmSelection(): void {
+    this.audio.playUi(AUDIO_KEYS.ui.confirm);
     const dest = MODES[this.cursor].key;
     this.cameras.main.fade(350, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p === 1) this.scene.start(dest);
@@ -128,8 +135,14 @@ export class ModeSelectScene extends Phaser.Scene {
     const dnDown = Phaser.Input.Keyboard.JustDown(this.downKey);
     const ok     = Phaser.Input.Keyboard.JustDown(this.enterKey);
 
-    if (upDown)   { this.cursor = (this.cursor - 1 + MODES.length) % MODES.length; this.updateCursor(); }
-    if (dnDown)   { this.cursor = (this.cursor + 1) % MODES.length; this.updateCursor(); }
-    if (ok)       { this.confirmSelection(); }
+    if (upDown) { this.cursor = (this.cursor - 1 + MODES.length) % MODES.length; this.updateCursor(); }
+    if (dnDown) { this.cursor = (this.cursor + 1) % MODES.length; this.updateCursor(); }
+    if (ok)     { this.confirmSelection(); }
+
+    // Play UI move sound when cursor changes
+    if (this.cursor !== this.prevCursor) {
+      if (this.prevCursor !== -1) this.audio.playUi(AUDIO_KEYS.ui.move);
+      this.prevCursor = this.cursor;
+    }
   }
 }

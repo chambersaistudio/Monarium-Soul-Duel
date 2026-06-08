@@ -59,6 +59,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     power: 0,
     damageType: 'none',
     returnToAnchor: false,
+    holdsStance: true,  // stays in guard pose through opponent's turn
   },
 };
 
