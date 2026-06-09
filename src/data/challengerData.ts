@@ -16,8 +16,8 @@
 export interface ChallengerDef {
   id:          string;
   displayName: string;
-  /** Default starter Minari id — overridden at runtime by renzoCounterPick(). */
-  defaultStarterMinariId: string;
+  /** Default starter Monari id — overridden at runtime by renzoCounterPick(). */
+  defaultStarterMonariId: string;
   /** Overworld NPC tint color. */
   color:       number;
   /** Asset folder path for future sprite sheets. */
@@ -36,11 +36,11 @@ export const CHALLENGERS: Record<string, ChallengerDef> = {
   renzo: {
     id:          'renzo',
     displayName: 'Renzo',
-    defaultStarterMinariId: 'droplet',
+    defaultStarterMonariId: 'droplet',
     color:       0x4488ff,
     assetPath:   'assets/npcs/renzo',
     preBattleDialog: [
-      'Renzo: Alright, Amari. Let\'s see what you and your Minari are made of!',
+      'Renzo: Alright, Amari. Let\'s see what you and your Monari are made of!',
       'Renzo: Don\'t hold back — I\'m going all out.',
     ],
     postBattleWinDialog: [
@@ -58,7 +58,7 @@ export const CHALLENGERS: Record<string, ChallengerDef> = {
   amari_npc: {
     id:          'amari_npc',
     displayName: 'Amari (Advanced)',
-    defaultStarterMinariId: 'flarepaw',
+    defaultStarterMonariId: 'flarepaw',
     color:       0xff6600,
     assetPath:   'assets/npcs/amari',
     preBattleDialog: ['Amari: Let\'s see how far you\'ve come!'],
@@ -69,7 +69,7 @@ export const CHALLENGERS: Record<string, ChallengerDef> = {
   erix: {
     id:          'erix',
     displayName: 'Erix',
-    defaultStarterMinariId: 'uvee',   // placeholder — uvee not yet in roster
+    defaultStarterMonariId: 'uvee',   // placeholder — uvee not yet in roster
     color:       0xaa44ff,
     assetPath:   'assets/npcs/erix',
     preBattleDialog: ['Erix: My Uvee and I have trained for this moment.'],

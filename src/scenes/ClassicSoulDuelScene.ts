@@ -92,8 +92,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private readonly MOVE_COLS = 2;
 
   // Misc UI
-  private phaseLabel!: Phaser.GameObjects.Text;
-  private guardLabel!: Phaser.GameObjects.Text;
+  private phaseLabel!:       Phaser.GameObjects.Text;
+  private playerGuardLabel!: Phaser.GameObjects.Text;
+  private enemyGuardLabel!:  Phaser.GameObjects.Text;
 
   // Input
   private upKey!:    Phaser.Input.Keyboard.Key;
@@ -325,17 +326,29 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       fontSize: mob ? '12px' : '11px', color: '#555577', fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(15);
 
-    this.guardLabel = this.add.text(0, 0, '🛡 GUARDING', {
+    // Two separate guard labels — one per actor — so enemy guard is always clear.
+    const guardStyle = {
       fontSize: mob ? '13px' : '11px', color: '#88ddff', fontFamily: 'monospace',
+      backgroundColor: '#001e2ecc', padding: { x: 6, y: 3 },
       stroke: '#000000', strokeThickness: 2,
-    }).setOrigin(0.5).setDepth(25).setVisible(false);
+    };
+    this.playerGuardLabel = this.add.text(this.pAnchorX, 0, '[ GUARD ]', guardStyle)
+      .setOrigin(0.5).setDepth(25).setVisible(false);
+    this.enemyGuardLabel  = this.add.text(this.eAnchorX, 0, '[ GUARD ]', guardStyle)
+      .setOrigin(0.5).setDepth(25).setVisible(false);
   }
 
   private updateGuardLabel(): void {
-    const ga = this.playerActor.isGuarding ? this.playerActor
-             : this.enemyActor.isGuarding  ? this.enemyActor : null;
-    if (ga) { this.guardLabel.setVisible(true).setPosition(ga.x, ga.y - 70); }
-    else    { this.guardLabel.setVisible(false); }
+    if (this.playerActor.isGuarding) {
+      this.playerGuardLabel.setVisible(true).setY(this.playerActor.y - 80);
+    } else {
+      this.playerGuardLabel.setVisible(false);
+    }
+    if (this.enemyActor.isGuarding) {
+      this.enemyGuardLabel.setVisible(true).setY(this.enemyActor.y - 80);
+    } else {
+      this.enemyGuardLabel.setVisible(false);
+    }
   }
 
   private onPhaseChange(phase: ClassicBattlePhase): void {
@@ -586,7 +599,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private handleCaptureAttempt(): void {
     if (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild') {
-      this.showInfoOverlay('CAPTURE', "Can't capture a rival's Minari!");
+      this.showInfoOverlay('CAPTURE', "Can't capture a rival's Monari!");
       return;
     }
     const hpRatio    = this.enemyActor.hp / this.enemyActor.maxHp;

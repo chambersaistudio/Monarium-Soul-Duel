@@ -150,11 +150,11 @@ export class ClassicActor extends Phaser.GameObjects.Container {
     if (!this.sprite) return;
     // preFX is WebGL-only — optional chaining is safe; returns undefined on canvas
     const color = this.elementToAuraColor(this.minariData.element);
-    const glow  = this.sprite.preFX?.addGlow(color, 3.5, 0, false, 0.1, 24);
+    const glow  = this.sprite.preFX?.addGlow(color, 1.0, 0, false, 0.05, 12);
     if (!glow) return;
-    const obj = { s: 3.5 };
+    const obj = { s: 1.0 };
     this.scene.tweens.add({
-      targets: obj, s: 5.5, duration: 1600,
+      targets: obj, s: 2.0, duration: 2000,
       yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       onUpdate: () => { glow.outerStrength = obj.s; },
     });

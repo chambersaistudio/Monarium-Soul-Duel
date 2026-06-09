@@ -53,6 +53,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // Starter confirm overlay
   private starterPanelActive = false;
 
+  // Cooldown: prevents the same input that closes dialogue from instantly re-opening it
+  private interactLockUntil = 0;
+
   // Debug overlay
   private debugMode    = false;
   private debugOverlay: Phaser.GameObjects.Graphics | null = null;
@@ -89,6 +92,13 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.playerY    = spawn.y * h;
     this.prevX      = this.playerX;
     this.prevY      = this.playerY;
+
+    // Brief interact lock after returning from battle so Renzo dialogue
+    // doesn't immediately retrigger (the Enter press that closed the
+    // victory screen should not be treated as an interact in the overworld).
+    if (spawnName === 'from_battle') {
+      this.interactLockUntil = this.time.now + 600;
+    }
 
     this.playerGfx = this.add.graphics().setDepth(20);
     this.drawPlayer();
@@ -183,7 +193,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.updateNameLabel();
     this.updateInteractPrompt(w, h);
 
-    if (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e')) {
+    if (this.time.now >= this.interactLockUntil &&
+        (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e'))) {
       if (this.promptTarget) {
         this.triggerInteract(this.promptTarget);
       } else if (this.promptExit) {
@@ -444,8 +455,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const starter = this.registry.get('classic_player_starter') as string | null;
     if (!starter) {
       this.showDialog([
-        "Renzo: You don't have a Minari yet!",
-        'Renzo: Visit the Bond Lab and choose your starter first.',
+        "Renzo: You need a Monari first. Head to the Bond Lab and choose your starter.",
       ]);
       return;
     }
@@ -541,6 +551,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const confirm = (): void => {
       all.forEach(o => o.destroy());
       this.starterPanelActive = false;
+      this.interactLockUntil = this.time.now + 400;
       this.input.keyboard!.off('keydown-ENTER', confirm);
       this.input.keyboard!.off('keydown-ESC', cancel);
       this.confirmStarterChoice(starterId);
@@ -548,6 +559,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const cancel = (): void => {
       all.forEach(o => o.destroy());
       this.starterPanelActive = false;
+      this.interactLockUntil = this.time.now + 400;
       this.input.keyboard!.off('keydown-ENTER', confirm);
       this.input.keyboard!.off('keydown-ESC', cancel);
     };
@@ -610,9 +622,14 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     this.dialogPanel.push(bg, this.dialogBodyText, hint);
 
-    this.input.on('pointerdown', this.onDialogAdvance, this);
-    this.input.keyboard!.on('keydown-ENTER', this.onDialogAdvance, this);
-    this.input.keyboard!.on('keydown-SPACE', this.onDialogAdvance, this);
+    // Delay listener registration by 180 ms so the tap/key that opened
+    // the dialogue box doesn't immediately advance the first line.
+    this.time.delayedCall(180, () => {
+      if (!this.dialogActive) return;
+      this.input.on('pointerdown', this.onDialogAdvance, this);
+      this.input.keyboard!.on('keydown-ENTER', this.onDialogAdvance, this);
+      this.input.keyboard!.on('keydown-SPACE', this.onDialogAdvance, this);
+    });
   }
 
   private readonly onDialogAdvance = (): void => { this.advanceDialog(); };
@@ -639,6 +656,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.dialogPanel.forEach(o => o.destroy());
     this.dialogPanel  = [];
     this.dialogActive = false;
+
+    // Lock interact input briefly so the key that closed dialogue
+    // doesn't instantly reopen it in the same frame.
+    this.interactLockUntil = this.time.now + 400;
 
     const cb = this.dialogOnEnd;
     this.dialogOnEnd = null;

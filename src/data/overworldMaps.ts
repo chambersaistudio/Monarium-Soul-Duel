@@ -80,7 +80,7 @@ export const OVERWORLD_MAPS: Record<string, MapDef> = {
         color:          0xffdd88,
         role:           'professor',
         dialog:         [
-          'Professor: Welcome to the Bond Lab! Three Minari await a partner.',
+          'Professor: Welcome to the Bond Lab! Three Monari await a partner.',
           'Professor: Approach a pedestal to choose your first Soulbond companion.',
         ],
       },
@@ -129,7 +129,7 @@ export const OVERWORLD_MAPS: Record<string, MapDef> = {
     spawns: {
       default:      { x: 0.30, y: 0.60 },
       from_village: { x: 0.86, y: 0.50 },
-      from_battle:  { x: 0.30, y: 0.60 },
+      from_battle:  { x: 0.20, y: 0.78 },  // bottom-left, well outside Renzo's interact radius
     },
     defaultSpawn: 'from_village',
     collisionRects: [],
