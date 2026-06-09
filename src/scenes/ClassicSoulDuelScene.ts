@@ -5,7 +5,11 @@ import { SoulSyncSystem } from '../systems/SoulSyncSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
+import { PLAYER_PROFILE } from '../data/playerProfile';
 import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
+import { UI_THEME, elementColor } from '../config/uiTheme';
+import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
+import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
@@ -22,6 +26,16 @@ const MAIN_BTN_THEMES: Record<string, BtnTheme> = {
   capture: { fill: 0x062010, selFill: 0x0f4422, border: 0x33cc77, accent: 0x228855 },
   run:     { fill: 0x14141e, selFill: 0x262636, border: 0x7788aa, accent: 0x556688 },
 };
+
+function elementLabelForMove(type?: string): string {
+  switch (type) {
+    case 'ember': return 'Ember';
+    case 'water': return 'Aqua';
+    case 'physical': return 'Physical';
+    case 'none': return 'Guard';
+    default: return 'Neutral';
+  }
+}
 
 function dmgTypeTheme(type: string): BtnTheme {
   switch (type) {
@@ -78,7 +92,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private readonly MAIN_BTNS = [
     { key: 'fight',   label: 'FIGHT',   icon: '⚔' },
     { key: 'bag',     label: 'BAG',     icon: '🎒' },
-    { key: 'capture', label: 'CAPTURE', icon: '◎'  },
+    { key: 'capture', label: 'BOND', icon: '◎'  },
     { key: 'run',     label: 'RUN',     icon: '↩'  },
   ] as const;
 
@@ -125,6 +139,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   preload(): void {
     const { background } = CLASSIC_BATTLE_CONFIG;
     this.load.image(`bg_${background}`, `assets/backgrounds/classic/${background}.png`);
+    ['flarepaw', 'droplet', 'sproutodon', 'umbravine', 'umbrelette', 'uvee'].forEach(id => {
+      preloadVisualCandidates(this, 'monari', id, visualCandidates(getMonariVisualPaths(id)));
+    });
+    ['player', 'renzo', 'warren_ellis'].forEach(id => {
+      preloadVisualCandidates(this, 'character', id, visualCandidates(getCharacterVisualPaths(id)));
+    });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -277,54 +297,84 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private buildHpBars(w: number, playerName: string, enemyName: string): void {
     const mob  = IS_TOUCH_DEVICE;
     const d    = 20;
-    const py   = mob ? 28 : 22;
-    const nOff = mob ? -20 : -14;
-    const nFs  = mob ? '15px' : '11px';
-    const vFs  = mob ? '13px' : '10px';
-    const px   = mob ? 14 : 20;
+    const cardW = mob ? Math.round(w * 0.43) : 300;
+    const cardH = mob ? 82 : 88;
+    this.hpBarW   = cardW - (mob ? 96 : 108);
+    this.hpBarH   = mob ? 12 : 11;
+    this.auraBarH = mob ? 8 : 7;
+    this.syncBarH = 5;
 
-    // ── Player side ────────────────────────────────────────────────────────
-    this.add.text(px, py + nOff, playerName.toUpperCase(), {
-      fontSize: nFs, color: '#ff9944', fontFamily: 'monospace',
-    }).setDepth(d);
+    const profile = this.registry.get('player_profile') as PlayerProfile | null;
+    const playerMinId = this.battleCtx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId = this.battleCtx?.enemyMinariId ?? 'droplet';
+    const playerLevel = profile?.monariLevels[playerMinId]?.level ?? 7;
+    const enemyLevel = 7;
+    const bondLv = profile?.bonds[playerMinId]?.bondLevel ?? 1;
 
-    this.add.rectangle(px, py, this.hpBarW, this.hpBarH, 0x222222).setOrigin(0, 0).setDepth(d);
-    this.playerHpFill = this.add.rectangle(px, py, this.hpBarW, this.hpBarH, 0x44cc44).setOrigin(0, 0).setDepth(d + 1);
-    this.playerHpText = this.add.text(px + this.hpBarW + 6, py + 1, '', {
-      fontSize: vFs, color: '#aaaaaa', fontFamily: 'monospace',
-    }).setDepth(d + 1);
+    const drawCard = (x: number, y: number, side: 'player' | 'enemy', name: string, id: string, level: number, bond: number) => {
+      const g = this.add.graphics().setDepth(d);
+      drawGlassPanel(g, x, y, cardW, cardH, {
+        radius: 18,
+        fill: UI_THEME.colors.panelDeep,
+        stroke: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
+        glow: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
+        alpha: 0.86,
+      });
+      const portraitKey = bestLoadedVisualKey(this, 'monari', id, elementColor(MINARI_ROSTER[id]?.element));
+      const portraitX = side === 'player' ? x + 40 : x + cardW - 40;
+      const img = this.add.image(portraitX, y + 42, portraitKey).setDepth(d + 2);
+      const frame = this.textures.getFrame(portraitKey);
+      img.setScale(Math.min(0.62, 58 / Math.max(frame.realWidth, frame.realHeight))).setAlpha(0.96);
+      const nameX = side === 'player' ? x + 78 : x + 14;
+      const align = side === 'player' ? 'left' : 'right';
+      this.add.text(nameX, y + 11, name, {
+        fontSize: mob ? '13px' : '14px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+      }).setOrigin(0, 0).setDepth(d + 2);
+      this.add.text(side === 'player' ? x + cardW - 14 : x + 14, y + 13, `Lv. ${level}`, {
+        fontSize: '11px', color: '#ffe39a', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+      }).setOrigin(side === 'player' ? 1 : 0, 0).setDepth(d + 2);
+      const badgeW = 70;
+      const badgeX = side === 'player' ? x + cardW - badgeW - 12 : x + 12;
+      const badge = this.add.graphics().setDepth(d + 1);
+      badge.fillStyle(UI_THEME.colors.gold, 0.16).fillRoundedRect(badgeX, y + cardH - 22, badgeW, 16, 8);
+      badge.lineStyle(1, UI_THEME.colors.gold, 0.5).strokeRoundedRect(badgeX, y + cardH - 22, badgeW, 16, 8);
+      this.add.text(badgeX + badgeW / 2, y + cardH - 14, `Bond Lv. ${bond}`, {
+        fontSize: '9px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(d + 2);
+      const bx = nameX;
+      const by = y + 33;
+      const labels = ['HP', 'Aura', 'Soul Sync'];
+      labels.forEach((label, i) => this.add.text(bx - 30, by + i * 14 - 1, label, {
+        fontSize: '8px', color: i === 2 ? '#ffe18c' : '#a9a5c9', fontFamily: UI_THEME.fonts.family,
+      }).setOrigin(0, 0).setDepth(d + 2));
+      const track = (yy: number, hh: number) => this.add.rectangle(bx, yy, this.hpBarW, hh, UI_THEME.bars.track, 0.9).setOrigin(0, 0).setDepth(d + 1);
+      track(by, this.hpBarH); track(by + 14, this.auraBarH); track(by + 28, this.syncBarH);
+      return { bx, by };
+    };
 
-    // Player aura bar (below HP bar)
-    const pauraY = py + this.hpBarH + 3;
-    this.add.rectangle(px, pauraY, this.hpBarW, this.auraBarH, 0x111133).setOrigin(0, 0).setDepth(d);
-    this.playerAuraFill = this.add.rectangle(px, pauraY, this.hpBarW, this.auraBarH, 0x3388ff).setOrigin(0, 0).setDepth(d + 1);
+    const p = drawCard(14, mob ? 16 : 18, 'player', playerName, playerMinId, playerLevel, bondLv);
+    const e = drawCard(w - cardW - 14, mob ? 16 : 18, 'enemy', enemyName, enemyMinId, enemyLevel, 1);
 
-    // Player sync bar (below aura bar)
-    const psyncY = pauraY + this.auraBarH + 2;
-    this.add.rectangle(px, psyncY, this.hpBarW, this.syncBarH, 0x0a0a1a).setOrigin(0, 0).setDepth(d);
-    this.playerSyncFill = this.add.rectangle(px, psyncY, this.hpBarW, this.syncBarH, 0xaa44ff).setOrigin(0, 0).setDepth(d + 1);
+    this.playerHpFill = this.add.rectangle(p.bx, p.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 3);
+    this.playerAuraFill = this.add.rectangle(p.bx, p.by + 14, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 3);
+    this.playerSyncFill = this.add.rectangle(p.bx, p.by + 28, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 3);
+    this.playerHpText = this.add.text(p.bx + this.hpBarW - 2, p.by - 1, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.family,
+    }).setOrigin(1, 0).setDepth(d + 4);
 
-    // ── Enemy side ─────────────────────────────────────────────────────────
-    const ex = w - (mob ? 14 : 20) - this.hpBarW;
-    this.add.text(ex, py + nOff, enemyName.toUpperCase(), {
-      fontSize: nFs, color: '#44aaff', fontFamily: 'monospace',
-    }).setDepth(d);
+    this.enemyHpFill = this.add.rectangle(e.bx, e.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 3);
+    this.enemyAuraFill = this.add.rectangle(e.bx, e.by + 14, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 3);
+    this.enemySyncFill = this.add.rectangle(e.bx, e.by + 28, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 3);
+    this.enemyHpText = this.add.text(e.bx + this.hpBarW - 2, e.by - 1, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.family,
+    }).setOrigin(1, 0).setDepth(d + 4);
 
-    this.add.rectangle(ex, py, this.hpBarW, this.hpBarH, 0x222222).setOrigin(0, 0).setDepth(d);
-    this.enemyHpFill = this.add.rectangle(ex, py, this.hpBarW, this.hpBarH, 0x44cc44).setOrigin(0, 0).setDepth(d + 1);
-    this.enemyHpText = this.add.text(ex - (mob ? 62 : 50), py + 1, '', {
-      fontSize: vFs, color: '#aaaaaa', fontFamily: 'monospace',
-    }).setDepth(d + 1);
-
-    // Enemy aura bar
-    const eauraY = py + this.hpBarH + 3;
-    this.add.rectangle(ex, eauraY, this.hpBarW, this.auraBarH, 0x111133).setOrigin(0, 0).setDepth(d);
-    this.enemyAuraFill = this.add.rectangle(ex, eauraY, this.hpBarW, this.auraBarH, 0x3388ff).setOrigin(0, 0).setDepth(d + 1);
-
-    // Enemy sync bar (below aura bar)
-    const esyncY = eauraY + this.auraBarH + 2;
-    this.add.rectangle(ex, esyncY, this.hpBarW, this.syncBarH, 0x0a0a1a).setOrigin(0, 0).setDepth(d);
-    this.enemySyncFill = this.add.rectangle(ex, esyncY, this.hpBarW, this.syncBarH, 0xaa44ff).setOrigin(0, 0).setDepth(d + 1);
+    const playerKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
+    const hud = this.add.graphics().setDepth(d);
+    drawGlassPanel(hud, 14, mob ? 104 : 112, 190, 42, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.7 });
+    this.add.image(35, mob ? 125 : 133, playerKey).setDisplaySize(30, 30).setDepth(d + 2);
+    this.add.text(56, mob ? 113 : 121, PLAYER_PROFILE.displayName, { fontSize: '12px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(d + 2);
+    this.add.text(56, mob ? 130 : 138, `Soul Rank ${profile?.soulRank.level ?? 1}`, { fontSize: '10px', color: '#ffdf7c', fontFamily: UI_THEME.fonts.family }).setDepth(d + 2);
   }
 
   private refreshHpBars(): void {
@@ -352,15 +402,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private syncColor(tier: SoulSyncTier): number {
     switch (tier) {
-      case 'locked_in': return 0xcc44ff;
-      case 'stable':    return 0x7744cc;
-      case 'shaken':    return 0xaa4488;
-      case 'broken':    return 0x662244;
+      case 'locked_in': return UI_THEME.bars.soulSync;
+      case 'stable':    return UI_THEME.bars.soulSyncDeep;
+      case 'shaken':    return 0xffc64a;
+      case 'broken':    return 0x8f6a2a;
     }
   }
 
   private hpColor(r: number): number {
-    return r > 0.5 ? 0x44cc44 : r > 0.25 ? 0xddcc00 : 0xdd3322;
+    return r > 0.5 ? UI_THEME.bars.hp : r > 0.25 ? UI_THEME.bars.hpWarn : UI_THEME.bars.hpDanger;
   }
 
   // ── Phase / guard labels ────────────────────────────────────────────────────
@@ -458,7 +508,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const lbl = this.add.text(
         bx + this.mainBtnW / 2, by + this.mainBtnH / 2,
         cfg.label,
-        { fontSize: mob ? '17px' : '15px', color: '#888899', fontFamily: 'monospace', fontStyle: 'bold', align: 'center' },
+        { fontSize: mob ? '17px' : '15px', color: '#d9d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold', align: 'center' },
       ).setOrigin(0.5);
       lbl.setInteractive(
         new Phaser.Geom.Rectangle(-this.mainBtnW / 2 - 4, -this.mainBtnH / 2 - 4, this.mainBtnW + 8, this.mainBtnH + 8),
@@ -505,9 +555,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const label = id === BACK_COMMAND
         ? '← BACK'
         : (CLASSIC_MOVES[id]?.displayName?.toUpperCase() ?? id.toUpperCase());
-      const costTag = (id !== BACK_COMMAND && CLASSIC_MOVES[id]?.auraCost)
-        ? `  ◆${CLASSIC_MOVES[id]!.auraCost}`
-        : '';
+      const move = id !== BACK_COMMAND ? CLASSIC_MOVES[id] : undefined;
+      const costTag = move ? `  • Aura ${move.auraCost ?? 0} • ${elementLabelForMove(move.damageType)}` : '';
 
       const lbl = this.add.text(
         bx + 14, by + this.moveBtnH / 2,
@@ -542,13 +591,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     dimmed = false,
   ): void {
     gfx.clear();
-    gfx.fillStyle(selected ? theme.selFill : theme.fill, dimmed ? 0.4 : selected ? 1 : 0.85);
-    gfx.fillRoundedRect(0, 0, w, h, 6);
-    gfx.lineStyle(selected ? 2 : 1, theme.border, dimmed ? 0.15 : selected ? 0.85 : 0.22);
-    gfx.strokeRoundedRect(0, 0, w, h, 6);
+    gfx.fillStyle(selected ? theme.accent : theme.fill, selected && !dimmed ? 0.20 : 0.08);
+    gfx.fillRoundedRect(-3, -3, w + 6, h + 6, UI_THEME.buttons.radius + 3);
+    gfx.fillStyle(selected ? theme.selFill : theme.fill, dimmed ? UI_THEME.buttons.disabledAlpha : selected ? UI_THEME.buttons.selectedAlpha : UI_THEME.buttons.alpha);
+    gfx.fillRoundedRect(0, 0, w, h, UI_THEME.buttons.radius);
+    gfx.lineStyle(selected ? 2 : 1, theme.border, dimmed ? 0.18 : selected ? 0.9 : 0.38);
+    gfx.strokeRoundedRect(0, 0, w, h, UI_THEME.buttons.radius);
     if (selected && !dimmed) {
-      gfx.lineStyle(1, 0xffffff, 0.1);
-      gfx.lineBetween(8, 1, w - 8, 1);
+      gfx.lineStyle(1, 0xffffff, 0.16);
+      gfx.lineBetween(12, 2, w - 12, 2);
     }
   }
 
@@ -557,7 +608,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.drawHudBtn(gfx, this.mainBtnW, this.mainBtnH, MAIN_BTN_THEMES[this.MAIN_BTNS[i].key], i === this.mainCursor);
     });
     this.mainBtnTexts.forEach((t, i) => {
-      t.setColor(i === this.mainCursor ? '#ffffff' : '#667788');
+      const locked = this.MAIN_BTNS[i].key === 'capture' && (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild');
+      t.setColor(locked ? '#6f6a90' : i === this.mainCursor ? '#ffffff' : '#b8b2dc');
     });
   }
 
@@ -565,7 +617,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.moveBtnGfxs.forEach((gfx, i) => {
       const id = this.menuCommandIds[i];
       const cost = (id !== BACK_COMMAND) ? (CLASSIC_MOVES[id]?.auraCost ?? 0) : 0;
-      const dimmed = cost > 0 && this.playerActor.aura < cost;
+      const dimmed = (cost > 0 && this.playerActor.aura < cost);
       this.drawHudBtn(gfx, this.moveBtnW, this.moveBtnH, this.moveBtnThemes[i], i === this.menuCursor, dimmed);
     });
     this.moveBtnTexts.forEach((t, i) => {

@@ -6,7 +6,7 @@ const MODES = [
   {
     key:  'ClassicOverworldScene',
     name: 'Classic Soul Duel',
-    desc: 'Explore the world, bond Minari, battle rivals.',
+    desc: 'Explore the world, bond Monari, battle rivals.',
   },
   {
     key:  'OverworldScene',

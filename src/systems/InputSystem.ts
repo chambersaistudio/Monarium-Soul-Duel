@@ -33,6 +33,7 @@ export class InputSystem {
 
   // Touch state — set by VirtualDpad
   private touchMove = { left: false, right: false, up: false, down: false };
+  private touchVector = { x: 0, y: 0 };
   private touchInteractPending = false;
 
   constructor(scene: Phaser.Scene) {
@@ -73,10 +74,13 @@ export class InputSystem {
   // ── Touch state setters (called by VirtualDpad) ──────────────────────────
 
   setTouchMove(dx: number, dy: number): void {
-    this.touchMove.left  = dx < 0;
-    this.touchMove.right = dx > 0;
-    this.touchMove.up    = dy < 0;
-    this.touchMove.down  = dy > 0;
+    const dead = 0.01;
+    this.touchVector.x = Math.abs(dx) > dead ? Phaser.Math.Clamp(dx, -1, 1) : 0;
+    this.touchVector.y = Math.abs(dy) > dead ? Phaser.Math.Clamp(dy, -1, 1) : 0;
+    this.touchMove.left  = this.touchVector.x < -dead;
+    this.touchMove.right = this.touchVector.x > dead;
+    this.touchMove.up    = this.touchVector.y < -dead;
+    this.touchMove.down  = this.touchVector.y > dead;
   }
 
   triggerTouchInteract(): void {
@@ -115,6 +119,15 @@ export class InputSystem {
       up:    k.up.isDown    || k.w.isDown || this.touchMove.up,
       down:  k.down.isDown  || k.s.isDown || this.touchMove.down,
     };
+  }
+
+
+  getOverworldVector(): { x: number; y: number } {
+    const k = this.keys;
+    const keyX = (k.right.isDown || k.d.isDown ? 1 : 0) - (k.left.isDown || k.a.isDown ? 1 : 0);
+    const keyY = (k.down.isDown || k.s.isDown ? 1 : 0) - (k.up.isDown || k.w.isDown ? 1 : 0);
+    if (keyX !== 0 || keyY !== 0) return { x: keyX, y: keyY };
+    return { x: this.touchVector.x, y: this.touchVector.y };
   }
 
   // isJustDown merges keyboard and touch interact for 'enter'/'e'

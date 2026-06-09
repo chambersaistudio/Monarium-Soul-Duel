@@ -10,81 +10,69 @@
  * Paths are relative to the public/ directory (no leading slash).
  */
 
-// ── Path bases ────────────────────────────────────────────────────────────────
-
 const M = 'assets/monari';
 const C = 'assets/characters';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export interface MonariPaths {
-  id:        string;
-  portrait:  string;
+export interface VisualAssetPaths {
+  id: string;
+  portrait: string;
+  icon: string;
   reference: string;
+  fallbackKey: string;
 }
 
-export interface CharacterPaths {
-  id:        string;
-  portrait:  string;
-  reference: string;
+export type MonariPaths = VisualAssetPaths;
+export type CharacterPaths = VisualAssetPaths;
+
+function monari(id: string, reference = 'full_body.png'): MonariPaths {
+  return {
+    id,
+    portrait: `${M}/${id}/portraits/neutral.png`,
+    icon: `${M}/${id}/portraits/icon.png`,
+    reference: `${M}/${id}/reference/${reference}`,
+    fallbackKey: `generated_monari_${id}`,
+  };
 }
 
-// ── Monari ────────────────────────────────────────────────────────────────────
+function character(id: string, reference = 'full_body.png'): CharacterPaths {
+  return {
+    id,
+    portrait: `${C}/${id}/portraits/neutral.png`,
+    icon: `${C}/${id}/portraits/icon.png`,
+    reference: `${C}/${id}/reference/${reference}`,
+    fallbackKey: `generated_character_${id}`,
+  };
+}
 
 export const MONARI_PATHS: Record<string, MonariPaths> = {
-  flarepaw: {
-    id:        'flarepaw',
-    portrait:  `${M}/flarepaw/portraits/neutral.png`,
-    reference: `${M}/flarepaw/reference/flarepaw_sheet.png`,
-  },
-  droplet: {
-    id:        'droplet',
-    portrait:  `${M}/droplet/portraits/neutral.png`,
-    reference: `${M}/droplet/reference/fullbody.png`,
-  },
-  umbrelette: {
-    id:        'umbrelette',
-    portrait:  `${M}/umbrelette/portraits/neutral.png`,
-    reference: `${M}/umbrelette/reference/fullbody.png`,
-  },
-  uvee: {
-    id:        'uvee',
-    portrait:  `${M}/uvee/portraits/neutral.png`,
-    reference: `${M}/uvee/reference/fullbody.png`,
-  },
-  sproutodon: {
-    id:        'sproutodon',
-    portrait:  `${M}/sproutodon/portraits/neutral.png`,
-    reference: `${M}/sproutodon/reference/fullbody.png`,
-  },
+  flarepaw: monari('flarepaw', 'flarepaw_sheet.png'),
+  droplet: monari('droplet', 'fullbody.png'),
+  umbrelette: monari('umbrelette', 'fullbody.png'),
+  uvee: monari('uvee', 'fullbody.png'),
+  sproutodon: monari('sproutodon', 'fullbody.png'),
+  umbravine: monari('umbravine', 'fullbody.png'),
 };
-
-// ── Human characters ──────────────────────────────────────────────────────────
 
 export const CHARACTER_PATHS: Record<string, CharacterPaths> = {
-  player: {
-    id:        'player',
-    portrait:  `${C}/player/portraits/neutral.png`,
-    reference: `${C}/player/reference/fullbody.png`,
-  },
-  renzo: {
-    id:        'renzo',
-    portrait:  `${C}/renzo/portraits/neutral.png`,
-    reference: `${C}/renzo/reference/fullbody.png`,
-  },
-  amari: {
-    id:        'amari',
-    portrait:  `${C}/amari/portraits/neutral.png`,
-    reference: `${C}/amari/reference/fullbody.png`,
-  },
-  erix: {
-    id:        'erix',
-    portrait:  `${C}/erix/portraits/neutral.png`,
-    reference: `${C}/erix/reference/fullbody.png`,
-  },
-  warren_ellis: {
-    id:        'warren_ellis',
-    portrait:  `${C}/warren_ellis/portraits/neutral.png`,
-    reference: `${C}/warren_ellis/reference/fullbody.png`,
-  },
+  player: character('player', 'fullbody.png'),
+  renzo: character('renzo', 'fullbody.png'),
+  amari: character('amari', 'fullbody.png'),
+  erix: character('erix', 'fullbody.png'),
+  warren_ellis: character('warren_ellis', 'fullbody.png'),
 };
+
+export function getMonariVisualPaths(id: string): MonariPaths {
+  return MONARI_PATHS[id] ?? monari(id);
+}
+
+export function getCharacterVisualPaths(id: string): CharacterPaths {
+  return CHARACTER_PATHS[id] ?? character(id);
+}
+
+export function visualCandidateKeys(kind: 'monari' | 'character', id: string): string[] {
+  return [`${kind}_${id}_portrait`, `${kind}_${id}_icon`, `${kind}_${id}_reference`];
+}
+
+export function visualCandidates(paths: VisualAssetPaths): string[] {
+  return [paths.portrait, paths.icon, paths.reference];
+}
