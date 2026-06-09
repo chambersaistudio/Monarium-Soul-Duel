@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ClassicActor } from '../entities/ClassicActor';
 import { ClassicBattleEngine } from '../systems/ClassicBattleEngine';
+import { SoulSyncSystem } from '../systems/SoulSyncSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
@@ -9,6 +10,7 @@ import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
 import type { ClassicBattleContext } from '../types/overworld';
+import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '../types/progression';
 
 // ── HUD button colour schemes ────────────────────────────────────────────────
 
@@ -91,6 +93,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private moveBtnH        = 0;
   private readonly MOVE_COLS = 2;
 
+  // Soul Sync systems (one per active Monari)
+  private playerSyncSys!: SoulSyncSystem;
+  private enemySyncSys!:  SoulSyncSystem;
+
+  // Sync bar widgets
+  private playerSyncFill!: Phaser.GameObjects.Rectangle;
+  private enemySyncFill!:  Phaser.GameObjects.Rectangle;
+  private syncBarH!:       number;
+
   // Misc UI
   private phaseLabel!:       Phaser.GameObjects.Text;
   private playerGuardLabel!: Phaser.GameObjects.Text;
@@ -123,6 +134,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const mob = IS_TOUCH_DEVICE;
 
     this.battleCtx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
+    const profile  = this.registry.get('player_profile') as PlayerProfile | null;
 
     // ── Layout ────────────────────────────────────────────────────────────────
     this.groundY  = Math.round(h * (mob ? 0.60 : 0.70));
@@ -131,16 +143,24 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hpBarW   = mob ? Math.round(w * 0.28) : 200;
     this.hpBarH   = mob ? 18 : 14;
     this.auraBarH = mob ? 8  : 6;
+    this.syncBarH = mob ? 6  : 5;
     this.hudH     = mob ? 92 : 100;
     this.hudY     = h - this.hudH - (mob ? SAFE_AREA_BOTTOM : 0);
 
     this.drawBackground(w, h);
 
     // ── Combatants ────────────────────────────────────────────────────────────
-    const playerMinId = this.battleCtx?.playerMinariId ?? 'flarepaw';
-    const enemyMinId  = this.battleCtx?.enemyMinariId  ?? 'droplet';
-    const playerData  = MINARI_ROSTER[playerMinId]  ?? MINARI_ROSTER['flarepaw'];
-    const enemyData   = MINARI_ROSTER[enemyMinId]   ?? MINARI_ROSTER['droplet'];
+    const playerMinId  = this.battleCtx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId   = this.battleCtx?.enemyMinariId  ?? 'droplet';
+    const playerData   = MINARI_ROSTER[playerMinId]  ?? MINARI_ROSTER['flarepaw'];
+    const enemyData    = MINARI_ROSTER[enemyMinId]   ?? MINARI_ROSTER['droplet'];
+
+    const playerBond   = profile?.bonds[playerMinId];
+    const playerBondLv = playerBond?.bondLevel ?? 1;
+
+    // Soul Sync — enemy always starts at bond level 1 (wild / rival default)
+    this.playerSyncSys = new SoulSyncSystem(playerMinId, playerBondLv);
+    this.enemySyncSys  = new SoulSyncSystem(enemyMinId,  1);
 
     this.playerActor = new ClassicActor(
       this, this.pAnchorX, this.groundY - playerData.bodyHeight / 2, playerData, true,
@@ -279,6 +299,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.add.rectangle(px, pauraY, this.hpBarW, this.auraBarH, 0x111133).setOrigin(0, 0).setDepth(d);
     this.playerAuraFill = this.add.rectangle(px, pauraY, this.hpBarW, this.auraBarH, 0x3388ff).setOrigin(0, 0).setDepth(d + 1);
 
+    // Player sync bar (below aura bar)
+    const psyncY = pauraY + this.auraBarH + 2;
+    this.add.rectangle(px, psyncY, this.hpBarW, this.syncBarH, 0x0a0a1a).setOrigin(0, 0).setDepth(d);
+    this.playerSyncFill = this.add.rectangle(px, psyncY, this.hpBarW, this.syncBarH, 0xaa44ff).setOrigin(0, 0).setDepth(d + 1);
+
     // ── Enemy side ─────────────────────────────────────────────────────────
     const ex = w - (mob ? 14 : 20) - this.hpBarW;
     this.add.text(ex, py + nOff, enemyName.toUpperCase(), {
@@ -295,6 +320,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const eauraY = py + this.hpBarH + 3;
     this.add.rectangle(ex, eauraY, this.hpBarW, this.auraBarH, 0x111133).setOrigin(0, 0).setDepth(d);
     this.enemyAuraFill = this.add.rectangle(ex, eauraY, this.hpBarW, this.auraBarH, 0x3388ff).setOrigin(0, 0).setDepth(d + 1);
+
+    // Enemy sync bar (below aura bar)
+    const esyncY = eauraY + this.auraBarH + 2;
+    this.add.rectangle(ex, esyncY, this.hpBarW, this.syncBarH, 0x0a0a1a).setOrigin(0, 0).setDepth(d);
+    this.enemySyncFill = this.add.rectangle(ex, esyncY, this.hpBarW, this.syncBarH, 0xaa44ff).setOrigin(0, 0).setDepth(d + 1);
   }
 
   private refreshHpBars(): void {
@@ -312,6 +342,21 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const ear = Math.max(0, this.enemyActor.aura  / this.enemyActor.maxAura);
     this.playerAuraFill.width = this.hpBarW * par;
     this.enemyAuraFill.width  = this.hpBarW * ear;
+
+    // Sync bars
+    this.playerSyncFill.width = this.hpBarW * (this.playerSyncSys.getSyncValue() / 100);
+    this.enemySyncFill.width  = this.hpBarW * (this.enemySyncSys.getSyncValue()  / 100);
+    this.playerSyncFill.setFillStyle(this.syncColor(this.playerSyncSys.getTier()));
+    this.enemySyncFill.setFillStyle(this.syncColor(this.enemySyncSys.getTier()));
+  }
+
+  private syncColor(tier: SoulSyncTier): number {
+    switch (tier) {
+      case 'locked_in': return 0xcc44ff;
+      case 'stable':    return 0x7744cc;
+      case 'shaken':    return 0xaa4488;
+      case 'broken':    return 0x662244;
+    }
   }
 
   private hpColor(r: number): number {
@@ -728,16 +773,59 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private onDamageDealt(
     target: ClassicActorRole, amount: number, blocked: boolean, wx: number, wy: number,
   ): void {
-    const actor = target === 'player' ? this.playerActor : this.enemyActor;
+    const actor       = target === 'player' ? this.playerActor : this.enemyActor;
+    const attackerSys = target === 'player' ? this.enemySyncSys  : this.playerSyncSys;
+    const defenderSys = target === 'player' ? this.playerSyncSys : this.enemySyncSys;
+
     if (blocked) {
+      defenderSys.onGuardSuccess();
       this.spawnBlockedDisplay(wx, wy, amount);
       this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
     } else {
+      attackerSys.onLandAttack();
+      const isCrit = amount > 30; // rough threshold for crit-level hit
+      if (isCrit) defenderSys.onTakeCrit();
+      else        defenderSys.onTakeHeavyHit();
       this.spawnDamageNumber(wx, wy, amount);
       this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
       this.audio.playSfx(AUDIO_KEYS.sfx.hurtImpact, 0.6);
       this.audio.playCreatureHurt(actor.actorId);
     }
+  }
+
+  /** Returns a snapshot of all data the battle HUD needs to display. */
+  getHUDData(): BattleHUDData {
+    const profile       = this.registry.get('player_profile') as PlayerProfile | null;
+    const playerMinId   = this.battleCtx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId    = this.battleCtx?.enemyMinariId  ?? 'droplet';
+    const playerData    = MINARI_ROSTER[playerMinId]  ?? MINARI_ROSTER['flarepaw'];
+    const enemyData     = MINARI_ROSTER[enemyMinId]   ?? MINARI_ROSTER['droplet'];
+    const playerBondLv  = profile?.bonds[playerMinId]?.bondLevel ?? 1;
+    const soulRank      = profile?.soulRank;
+    const playerSync    = this.playerSyncSys.getState();
+    const enemySync     = this.enemySyncSys.getState();
+
+    return {
+      playerMonariId:    playerMinId,
+      playerMonariName:  playerData.name,
+      playerHp:          this.playerActor.hp,
+      playerMaxHp:       this.playerActor.maxHp,
+      playerAura:        this.playerActor.aura,
+      playerMaxAura:     this.playerActor.maxAura,
+      playerSync:        playerSync.sync,
+      playerSyncTier:    playerSync.tier,
+      playerBondLevel:   playerBondLv,
+      bonderSoulRankLevel: soulRank?.level ?? 1,
+      bonderSoulRankTier:  (soulRank?.tier ?? 'novice') as SoulRankTier,
+      enemyMonariId:     enemyMinId,
+      enemyMonariName:   enemyData.name,
+      enemyHp:           this.enemyActor.hp,
+      enemyMaxHp:        this.enemyActor.maxHp,
+      enemyAura:         this.enemyActor.aura,
+      enemyMaxAura:      this.enemyActor.maxAura,
+      enemySync:         enemySync.sync,
+      enemySyncTier:     enemySync.tier,
+    };
   }
 
   private spawnDamageNumber(wx: number, wy: number, amount: number): void {
