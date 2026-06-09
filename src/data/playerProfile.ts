@@ -18,8 +18,9 @@ export const PLAYER_PROFILE = {
 export function renzoCounterPick(playerStarterId: string): string {
   switch (playerStarterId) {
     case 'flarepaw':  return 'droplet';     // water beats fire
-    case 'droplet':   return 'umbravine';   // grass/shadow beats water
-    case 'umbravine': return 'flarepaw';    // fire beats grass
+    case 'droplet':   return 'sproutodon';  // Terra beats Aqua
+    case 'sproutodon': return 'flarepaw';   // Ember beats Terra
+    case 'umbravine': return 'flarepaw';    // legacy fallback
     default:          return 'droplet';
   }
 }

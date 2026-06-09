@@ -4,6 +4,9 @@ import { VirtualDpad } from '../systems/VirtualDpad';
 import { AudioManager } from '../systems/AudioManager';
 import { OverworldMaskSystem } from '../systems/OverworldMaskSystem';
 import { AUDIO_KEYS } from '../config/audioConfig';
+import { UI_THEME, elementColor, elementLabel, rarityLabel } from '../config/uiTheme';
+import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
+import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
 import { OVERWORLD_MAPS } from '../data/overworldMaps';
 import { CHALLENGERS } from '../data/challengerData';
@@ -46,12 +49,15 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private dialogActive    = false;
   private dialogLines:    string[] = [];
   private dialogIndex     = 0;
-  private dialogPanel:    (Phaser.GameObjects.Graphics | Phaser.GameObjects.Text)[] = [];
+  private dialogPanel:    Phaser.GameObjects.GameObject[] = [];
   private dialogBodyText!: Phaser.GameObjects.Text;
+  private dialogNameText!: Phaser.GameObjects.Text;
   private dialogOnEnd:    (() => void) | null = null;
 
   // Starter confirm overlay
   private starterPanelActive = false;
+  private startMenuActive = false;
+  private startMenuObjects: Phaser.GameObjects.GameObject[] = [];
 
   // Cooldown: prevents the same input that closes dialogue from instantly re-opening it
   private interactLockUntil = 0;
@@ -62,6 +68,15 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private debugLabels: Phaser.GameObjects.Text[] = [];
 
   constructor() { super({ key: 'ClassicOverworldScene' }); }
+
+  preload(): void {
+    ['flarepaw', 'droplet', 'sproutodon', 'umbravine', 'umbrelette', 'uvee'].forEach(id => {
+      preloadVisualCandidates(this, 'monari', id, visualCandidates(getMonariVisualPaths(id)));
+    });
+    ['player', 'renzo', 'warren_ellis', 'amari', 'erix'].forEach(id => {
+      preloadVisualCandidates(this, 'character', id, visualCandidates(getCharacterVisualPaths(id)));
+    });
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -116,11 +131,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
       padding: { x: 6, y: 3 },
     }).setOrigin(0.5, 1).setDepth(22).setVisible(false);
 
-    this.add.text(w / 2, IS_TOUCH_DEVICE ? 12 : 10, this.mapDef.displayName, {
-      fontSize: IS_TOUCH_DEVICE ? '13px' : '11px',
-      color: '#ffaa44', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5, 0).setDepth(50);
+    this.buildOverworldHud(w);
 
     // ── Input ─────────────────────────────────────────────────────────────────
     this.inputSys = new InputSystem(this);
@@ -130,9 +141,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
 
-    // ESC → mode select
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-      .on('down', () => this.returnToModeSelect());
+    // ESC / TAB / M → modern Start Menu overlay
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.openStartMenu());
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB).on('down', () => this.openStartMenu());
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.M).on('down', () => this.openStartMenu());
 
     // R → safety reset to Starter Village
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.R)
@@ -162,18 +174,18 @@ export class ClassicOverworldScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.dialogActive || this.starterPanelActive) {
+    if (this.dialogActive || this.starterPanelActive || this.startMenuActive) {
       this.drawPlayer();
       this.updateNameLabel();
       return;
     }
 
     const dt = delta / 1000;
-    const mv = this.inputSys.getOverworldMove();
+    const mv = this.inputSys.getOverworldVector();
     const { width: w, height: h } = this.scale;
 
-    const dx  = (mv.right ? 1 : 0) - (mv.left ? 1 : 0);
-    const dy  = (mv.down  ? 1 : 0) - (mv.up   ? 1 : 0);
+    const dx  = mv.x;
+    const dy  = mv.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
     this.prevX = this.playerX;
@@ -426,6 +438,166 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
   // ── NPC interaction ───────────────────────────────────────────────────────────
 
+
+  // ── Modern HUD / Start Menu ────────────────────────────────────────────────
+
+  private buildOverworldHud(w: number): void {
+    const starterId = (this.registry.get('classic_player_starter') as string | null) ?? 'No starter';
+    const starterName = starterId === 'No starter' ? 'Choose a starter' : (MINARI_ROSTER[starterId]?.name ?? starterId);
+    const playerKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
+    const g = this.add.graphics().setDepth(50);
+    drawGlassPanel(g, 12, 10, 236, 56, { radius: 16, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.72 });
+    this.add.image(39, 38, playerKey).setDisplaySize(38, 38).setDepth(51);
+    this.add.text(66, 19, this.getPlayerName(), { fontSize: '13px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(51);
+    this.add.text(66, 38, `Soul Rank 1  •  ${starterName}`, { fontSize: '10px', color: '#ffdf91', fontFamily: UI_THEME.fonts.family }).setDepth(51);
+
+    const loc = this.add.graphics().setDepth(50);
+    drawGlassPanel(loc, w / 2 - 112, 12, 224, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.66 });
+    this.add.text(w / 2, 29, this.mapDef.displayName, { fontSize: IS_TOUCH_DEVICE ? '13px' : '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+
+    const menu = this.add.graphics().setDepth(50);
+    drawGlassPanel(menu, w - 82, 12, 70, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.68 });
+    menu.setInteractive(new Phaser.Geom.Rectangle(w - 82, 12, 70, 34), Phaser.Geom.Rectangle.Contains);
+    menu.on('pointerdown', () => this.openStartMenu());
+    this.add.text(w - 47, 29, 'MENU', { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+  }
+
+  public openStartMenu(): void {
+    if (this.dialogActive || this.starterPanelActive || this.startMenuActive) return;
+    this.startMenuActive = true;
+    this.dpad?.setVisible(false);
+    this.showStartRoot();
+  }
+
+  private clearStartMenu(): void {
+    this.startMenuObjects.forEach(o => o.destroy());
+    this.startMenuObjects = [];
+  }
+
+  private closeStartMenu(): void {
+    this.clearStartMenu();
+    this.startMenuActive = false;
+    this.dpad?.setVisible(IS_TOUCH_DEVICE);
+    this.interactLockUntil = this.time.now + 250;
+  }
+
+  private startObj<T extends Phaser.GameObjects.GameObject>(o: T): T { this.startMenuObjects.push(o); return o; }
+
+  private showStartRoot(): void {
+    this.clearStartMenu();
+    const { width: w, height: h } = this.scale;
+    this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.58).setDepth(110));
+    const panel = this.startObj(this.add.graphics().setDepth(111));
+    drawGlassPanel(panel, w - 292, 56, 260, h - 112, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
+    this.startObj(this.add.text(w - 162, 82, 'Bonder Menu', { fontSize: '20px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(112));
+    const opts = ['Monari', 'Bag', 'Codex', 'Player', 'Settings', 'Save', 'Mode Select', 'Back / Close'];
+    opts.forEach((label, i) => {
+      const y = 126 + i * 44;
+      const bg = this.startObj(this.add.graphics().setDepth(112));
+      drawGlassPanel(bg, w - 264, y, 204, 34, { radius: 13, fill: i === 0 ? 0x241936 : UI_THEME.colors.glass, stroke: i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.strokeDim, glow: i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.purple, alpha: 0.74 });
+      bg.setInteractive(new Phaser.Geom.Rectangle(w - 264, y, 204, 34), Phaser.Geom.Rectangle.Contains);
+      bg.on('pointerdown', () => {
+        if (label === 'Back / Close') this.closeStartMenu();
+        else if (label === 'Mode Select') { this.closeStartMenu(); this.returnToModeSelect(); }
+        else if (label === 'Monari') this.showTeamScreen();
+        else this.showMenuPlaceholder(label);
+      });
+      this.startObj(this.add.text(w - 162, y + 17, label, { fontSize: '14px', color: label === 'Monari' ? '#fff4c8' : '#d8d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(113));
+    });
+  }
+
+  private showMenuPlaceholder(label: string): void {
+    this.showStartRoot();
+    const { width: w, height: h } = this.scale;
+    const g = this.startObj(this.add.graphics().setDepth(114));
+    drawGlassPanel(g, 54, h / 2 - 54, 390, 108, { radius: 20, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.88 });
+    this.startObj(this.add.text(249, h / 2 - 18, `${label} coming soon`, { fontSize: '18px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(115));
+    this.startObj(this.add.text(249, h / 2 + 16, 'Prototype menu panel is reserved for a future UI pass.', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setOrigin(0.5).setDepth(115));
+  }
+
+  private getTeamIds(): string[] {
+    const starter = this.registry.get('classic_player_starter') as string | null;
+    const party = (this.registry.get('classic_party') as string[] | null) ?? [];
+    return [...new Set([starter, ...party].filter(Boolean) as string[])].slice(0, 4);
+  }
+
+  private showTeamScreen(): void {
+    this.clearStartMenu();
+    const { width: w, height: h } = this.scale;
+    this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.62).setDepth(110));
+    const bg = this.startObj(this.add.graphics().setDepth(111));
+    drawGlassPanel(bg, 36, 36, w - 72, h - 72, { radius: 24, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
+    this.startObj(this.add.text(62, 58, 'Monari Team', { fontSize: '23px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+    this.makeStartButton(w - 150, 54, 92, 32, 'Back', () => this.showStartRoot());
+    this.makeStartButton(w - 252, 54, 92, 32, 'Close', () => this.closeStartMenu());
+    const team = this.getTeamIds();
+    const ids = team.length ? team : ['flarepaw'];
+    ids.forEach((id, i) => this.drawTeamCard(id, 64 + (i % 2) * ((w - 160) / 2), 108 + Math.floor(i / 2) * 126, (w - 190) / 2));
+  }
+
+  private drawTeamCard(id: string, x: number, y: number, cw: number): void {
+    const data = MINARI_ROSTER[id] ?? MINARI_ROSTER.flarepaw;
+    const color = elementColor(data.element);
+    const g = this.startObj(this.add.graphics().setDepth(112));
+    drawGlassPanel(g, x, y, cw, 104, { radius: 18, fill: UI_THEME.colors.glass, stroke: color, glow: color, alpha: 0.76 });
+    g.setInteractive(new Phaser.Geom.Rectangle(x, y, cw, 104), Phaser.Geom.Rectangle.Contains);
+    g.on('pointerdown', () => this.showMonariDetail(id));
+    const key = bestLoadedVisualKey(this, 'monari', id, color);
+    this.startObj(this.add.image(x + 44, y + 52, key).setDisplaySize(70, 70).setDepth(113));
+    this.startObj(this.add.text(x + 86, y + 14, `${data.name}  Lv. 7`, { fontSize: '15px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(113));
+    this.startObj(this.add.text(x + 86, y + 35, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • Bond Lv. 1`, { fontSize: '10px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
+    const meters = [['HP', data.stats.maxHp, data.stats.maxHp, UI_THEME.bars.hp], ['Aura', data.stats.maxAura, data.stats.maxAura, UI_THEME.bars.aura], ['Soul Sync', 70, 100, UI_THEME.bars.soulSync]] as const;
+    meters.forEach((m, idx) => {
+      const yy = y + 56 + idx * 14;
+      this.startObj(this.add.text(x + 86, yy - 2, m[0], { fontSize: '8px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
+      const bar = this.startObj(this.add.rectangle(x + 142, yy, cw - 160, 7, UI_THEME.bars.track, 0.85).setOrigin(0, 0).setDepth(113));
+      void bar;
+      this.startObj(this.add.rectangle(x + 142, yy, (cw - 160) * (m[1] / m[2]), 7, m[3], 0.95).setOrigin(0, 0).setDepth(114));
+    });
+  }
+
+  private showMonariDetail(id: string): void {
+    this.clearStartMenu();
+    const { width: w, height: h } = this.scale;
+    const data = MINARI_ROSTER[id] ?? MINARI_ROSTER.flarepaw;
+    const color = elementColor(data.element);
+    this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.66).setDepth(110));
+    const g = this.startObj(this.add.graphics().setDepth(111));
+    drawGlassPanel(g, 46, 34, w - 92, h - 68, { radius: 26, fill: UI_THEME.colors.panelDeep, stroke: color, glow: color, alpha: 0.92 });
+    const key = bestLoadedVisualKey(this, 'monari', id, color);
+    this.startObj(this.add.image(168, h / 2, key).setDisplaySize(190, 190).setDepth(112));
+    this.startObj(this.add.text(292, 62, `${data.name}  Lv. 7`, { fontSize: '25px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+    this.startObj(this.add.text(292, 96, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • ${this.starterRole(id)}`, { fontSize: '13px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.startObj(this.add.text(292, 126, 'HP     Aura     Soul Sync     Bond Level', { fontSize: '11px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.startObj(this.add.text(292, 144, `${data.stats.maxHp}     ${data.stats.maxAura}       70%           1`, { fontSize: '16px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+    const stats = [['HP', data.stats.maxHp], ['Attack', data.stats.power], ['Special Attack', Math.round(data.stats.power * 0.92)], ['Defense', data.stats.defense], ['Special Defense', Math.round(data.stats.defense * 0.95)], ['Speed', data.stats.speed], ['Aura', data.stats.maxAura]];
+    stats.forEach((st, i) => {
+      const x = 292 + (i % 2) * 220;
+      const y = 188 + Math.floor(i / 2) * 28;
+      this.startObj(this.add.text(x, y, `${st[0]}  ${st[1]}`, { fontSize: '12px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.startObj(this.add.rectangle(x + 112, y + 5, 82, 7, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(112));
+      this.startObj(this.add.rectangle(x + 112, y + 5, Math.min(82, Number(st[1]) / 3.5), 7, color, 0.95).setOrigin(0, 0).setDepth(113));
+    });
+    this.startObj(this.add.text(292, h - 124, 'Moves: basic technique, signature art, guard stance', { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.startObj(this.add.text(292, h - 96, 'Ability: Prototype slot  •  Evolution/Ascension: coming soon', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.makeStartButton(w - 158, h - 76, 96, 34, 'Back', () => this.showTeamScreen());
+  }
+
+  private makeStartButton(x: number, y: number, bw: number, bh: number, label: string, cb: () => void): void {
+    const g = this.startObj(this.add.graphics().setDepth(116));
+    drawGlassPanel(g, x, y, bw, bh, { radius: 12, fill: UI_THEME.colors.glass, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.8 });
+    g.setInteractive(new Phaser.Geom.Rectangle(x, y, bw, bh), Phaser.Geom.Rectangle.Contains);
+    g.on('pointerdown', cb);
+    this.startObj(this.add.text(x + bw / 2, y + bh / 2, label, { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(117));
+  }
+
+  private starterRole(id: string): string {
+    if (id === 'flarepaw') return 'Hybrid striker';
+    if (id === 'droplet') return 'Physical bruiser';
+    if (id === 'sproutodon') return 'Bulky guardian';
+    return 'Bonded companion';
+  }
+
   private triggerInteract(npc: NpcDef): void {
     this.audio.playUi(AUDIO_KEYS.ui.confirm);
 
@@ -511,7 +683,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     }
     const id = npc.role === 'starter_pedestal_1' ? 'flarepaw'
              : npc.role === 'starter_pedestal_2' ? 'droplet'
-             : 'umbravine';
+             : 'sproutodon';
     this.showStarterConfirm(id);
   }
 
@@ -521,32 +693,48 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     this.starterPanelActive = true;
     const { width: w, height: h } = this.scale;
-    const bx = w / 2 - 200, by = h / 2 - 80;
+    const panelW = Math.min(620, w - 70);
+    const panelH = Math.min(300, h - 70);
+    const bx = w / 2 - panelW / 2, by = h / 2 - panelH / 2;
+    const color = elementColor(minari.element);
 
     const panel = this.add.graphics().setDepth(90);
-    panel.fillStyle(0x070714, 0.97);
-    panel.fillRoundedRect(bx, by, 400, 160, 12);
-    panel.lineStyle(2, 0xff6600, 0.6);
-    panel.strokeRoundedRect(bx, by, 400, 160, 12);
+    drawGlassPanel(panel, bx, by, panelW, panelH, { radius: 24, fill: UI_THEME.colors.panelDeep, stroke: color, glow: color, alpha: 0.92 });
 
-    const t1 = this.add.text(w / 2, by + 28, `Bond with ${minari.name}?`, {
-      fontSize: '20px', color: '#ffcc44', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(91);
+    const key = bestLoadedVisualKey(this, 'monari', starterId, color);
+    const image = this.add.image(bx + 118, by + panelH / 2, key).setDisplaySize(160, 160).setDepth(91);
+    const title = this.add.text(bx + 225, by + 30, `Bond with ${minari.name}?`, {
+      fontSize: '24px', color: UI_THEME.colors.text, fontStyle: 'bold', fontFamily: UI_THEME.fonts.family,
+    }).setDepth(91);
+    const meta = this.add.text(bx + 225, by + 68, `Lv. 7 • ${elementLabel(minari.element)} • ${rarityLabel('rare')} • ${this.starterRole(starterId)}`, {
+      fontSize: '13px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family,
+    }).setDepth(91);
+    const flavor = this.add.text(bx + 225, by + 94, this.starterFlavor(starterId), {
+      fontSize: '12px', color: '#c9c3e8', fontFamily: UI_THEME.fonts.family, wordWrap: { width: panelW - 255 },
+    }).setDepth(91);
+    const triangle = this.add.text(bx + 225, by + panelH - 96, 'Starter triangle: Aqua beats Ember • Ember beats Terra • Terra beats Aqua', {
+      fontSize: '11px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family,
+    }).setDepth(91);
+    const statLabels = [['HP', minari.stats.maxHp], ['ATK', minari.stats.power], ['DEF', minari.stats.defense], ['SPD', minari.stats.speed]];
+    const bars: Phaser.GameObjects.GameObject[] = [];
+    statLabels.forEach((st, i) => {
+      const x = bx + 225 + (i % 2) * 145;
+      const y = by + 138 + Math.floor(i / 2) * 30;
+      bars.push(this.add.text(x, y, `${st[0]} ${st[1]}`, { fontSize: '10px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family }).setDepth(91));
+      bars.push(this.add.rectangle(x + 54, y + 4, 76, 7, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(91));
+      bars.push(this.add.rectangle(x + 54, y + 4, Math.min(76, Number(st[1]) / 4), 7, color, 0.95).setOrigin(0, 0).setDepth(92));
+    });
 
-    const el = minari.element.charAt(0).toUpperCase() + minari.element.slice(1);
-    const t2 = this.add.text(w / 2, by + 60, `${el} type  ·  HP ${minari.stats.maxHp}`, {
-      fontSize: '13px', color: '#aaaacc', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(91);
+    const yesG = this.add.graphics().setDepth(91);
+    drawGlassPanel(yesG, bx + panelW - 242, by + panelH - 54, 98, 34, { radius: 13, fill: 0x14281f, stroke: 0x42e69b, glow: 0x42e69b, alpha: 0.82 });
+    yesG.setInteractive(new Phaser.Geom.Rectangle(bx + panelW - 242, by + panelH - 54, 98, 34), Phaser.Geom.Rectangle.Contains);
+    const yesBtn = this.add.text(bx + panelW - 193, by + panelH - 37, 'Confirm', { fontSize: '13px', color: '#bfffd9', fontStyle: 'bold', fontFamily: UI_THEME.fonts.family }).setOrigin(0.5).setDepth(92);
+    const noG = this.add.graphics().setDepth(91);
+    drawGlassPanel(noG, bx + panelW - 132, by + panelH - 54, 78, 34, { radius: 13, fill: 0x241724, stroke: 0xff6d8d, glow: 0xff6d8d, alpha: 0.75 });
+    noG.setInteractive(new Phaser.Geom.Rectangle(bx + panelW - 132, by + panelH - 54, 78, 34), Phaser.Geom.Rectangle.Contains);
+    const noBtn = this.add.text(bx + panelW - 93, by + panelH - 37, 'Cancel', { fontSize: '13px', color: '#ffd5de', fontStyle: 'bold', fontFamily: UI_THEME.fonts.family }).setOrigin(0.5).setDepth(92);
 
-    const yesBtn = this.add.text(w / 2 - 70, by + 115, '[ YES ]', {
-      fontSize: '16px', color: '#44dd88', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(91).setInteractive();
-
-    const noBtn = this.add.text(w / 2 + 70, by + 115, '[ NO ]', {
-      fontSize: '16px', color: '#dd4444', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(91).setInteractive();
-
-    const all = [panel, t1, t2, yesBtn, noBtn];
+    const all: Phaser.GameObjects.GameObject[] = [panel, image, title, meta, flavor, triangle, yesG, yesBtn, noG, noBtn, ...bars];
 
     const confirm = (): void => {
       all.forEach(o => o.destroy());
@@ -564,10 +752,16 @@ export class ClassicOverworldScene extends Phaser.Scene {
       this.input.keyboard!.off('keydown-ESC', cancel);
     };
 
-    yesBtn.on('pointerdown', confirm);
-    noBtn.on('pointerdown', cancel);
+    yesG.on('pointerdown', confirm);
+    noG.on('pointerdown', cancel);
     this.input.keyboard!.once('keydown-ENTER', confirm);
-    this.input.keyboard!.once('keydown-ESC',   cancel);
+    this.input.keyboard!.once('keydown-ESC', cancel);
+  }
+
+  private starterFlavor(id: string): string {
+    if (id === 'flarepaw') return 'A brave Ember partner with fast pressure, bright instincts, and flexible strike timing.';
+    if (id === 'droplet') return 'A steady Aqua partner that wins trades with bruiser pressure and crisp Aura control.';
+    return 'A Terra guardian with sturdy defenses, loyal rhythm, and patient Bond Level growth.';
   }
 
   private confirmStarterChoice(starterId: string): void {
@@ -601,29 +795,40 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private buildDialogPanel(): void {
     const { width: w, height: h } = this.scale;
     const mob  = IS_TOUCH_DEVICE;
-    const panH = mob ? 80 : 72;
-    const panY = h - panH - (mob ? SAFE_AREA_BOTTOM : 0);
+    const panH = mob ? 108 : 104;
+    const panY = h - panH - (mob ? SAFE_AREA_BOTTOM : 0) - 8;
+    const panX = 18;
+    const panW = w - 36;
 
     const bg = this.add.graphics().setDepth(80);
-    bg.fillStyle(0x07070f, 0.96);
-    bg.fillRect(0, panY, w, panH + (mob ? SAFE_AREA_BOTTOM : 0));
-    bg.lineStyle(2, 0xff6600, 0.5);
-    bg.lineBetween(0, panY, w, panY);
+    drawGlassPanel(bg, panX, panY, panW, panH, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
 
-    this.dialogBodyText = this.add.text(w / 2, panY + panH / 2, '', {
-      fontSize: mob ? '13px' : '12px',
-      color: '#ddddee', fontFamily: 'monospace',
-      wordWrap: { width: w - 40 }, align: 'center',
-    }).setOrigin(0.5).setDepth(81);
+    const portraitBg = this.add.graphics().setDepth(81);
+    portraitBg.fillStyle(UI_THEME.colors.gold, 0.14).fillRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
+    portraitBg.lineStyle(1.5, UI_THEME.colors.gold, 0.5).strokeRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
 
-    const hint = this.add.text(w - 12, panY + panH - 8, mob ? 'tap • ENTER' : 'ENTER / tap', {
-      fontSize: '9px', color: '#444466', fontFamily: 'monospace',
-    }).setOrigin(1, 1).setDepth(81);
+    const portrait = this.add.image(panX + 56, panY + 36, bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold)).setDisplaySize(72, 72).setDepth(82);
+    portrait.setName('dialogPortrait');
 
-    this.dialogPanel.push(bg, this.dialogBodyText, hint);
+    const nameplate = this.add.graphics().setDepth(82);
+    nameplate.fillStyle(UI_THEME.colors.gold, 0.2).fillRoundedRect(panX + 112, panY + 12, 160, 24, 12);
+    nameplate.lineStyle(1, UI_THEME.colors.gold, 0.42).strokeRoundedRect(panX + 112, panY + 12, 160, 24, 12);
+    this.dialogNameText = this.add.text(panX + 126, panY + 24, 'Amari', {
+      fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(83);
 
-    // Delay listener registration by 180 ms so the tap/key that opened
-    // the dialogue box doesn't immediately advance the first line.
+    this.dialogBodyText = this.add.text(panX + 118, panY + 48, '', {
+      fontSize: mob ? '14px' : '13px',
+      color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family,
+      wordWrap: { width: panW - 148 }, align: 'left',
+    }).setOrigin(0, 0).setDepth(83);
+
+    const hint = this.add.text(panX + panW - 16, panY + panH - 12, mob ? 'tap • A / ENTER' : 'ENTER / SPACE / tap', {
+      fontSize: '10px', color: '#9f98c6', fontFamily: UI_THEME.fonts.family,
+    }).setOrigin(1, 1).setDepth(83);
+
+    this.dialogPanel.push(bg, portraitBg, portrait, nameplate, this.dialogNameText, this.dialogBodyText, hint);
+
     this.time.delayedCall(180, () => {
       if (!this.dialogActive) return;
       this.input.on('pointerdown', this.onDialogAdvance, this);
@@ -636,11 +841,27 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
   private renderDialogLine(): void {
     if (this.dialogIndex < this.dialogLines.length) {
-      this.dialogBodyText.setText(this.dialogLines[this.dialogIndex]);
+      const parsed = this.parseDialogLine(this.dialogLines[this.dialogIndex]);
+      this.dialogNameText.setText(parsed.speaker);
+      this.dialogBodyText.setText(parsed.text);
+      const portrait = this.dialogPanel.find(o => o.name === 'dialogPortrait') as Phaser.GameObjects.Image | undefined;
+      portrait?.setTexture(bestLoadedVisualKey(this, 'character', parsed.characterId, parsed.characterId === 'renzo' ? UI_THEME.colors.purple : UI_THEME.colors.gold));
       this.dialogIndex++;
     } else {
       this.closeDialog();
     }
+  }
+
+  private parseDialogLine(line: string): { speaker: string; text: string; characterId: string } {
+    const split = line.match(/^([^:]{1,28}):\s*(.*)$/);
+    const speaker = split?.[1] ?? this.getPlayerName();
+    const text = split?.[2] ?? line;
+    const low = speaker.toLowerCase();
+    const characterId = low.includes('renzo') ? 'renzo'
+      : low.includes('warren') || low.includes('ellis') || low.includes('dr.') ? 'warren_ellis'
+      : 'player';
+    const display = characterId === 'warren_ellis' ? 'Dr. Warren Ellis' : speaker;
+    return { speaker: display, text, characterId };
   }
 
   private advanceDialog(): void {
