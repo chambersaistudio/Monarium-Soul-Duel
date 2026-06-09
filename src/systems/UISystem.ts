@@ -80,6 +80,13 @@ export class UISystem {
       fontSize: '9px', color: '#dfd7ff', fontFamily: UI_FONT, align: 'center'
     }).setOrigin(0.5, 0);
 
+
+    for (let i = 0; i < 4; i++) {
+      this.addText(`command_tab_${i}`, '', w / 2, h - 126, {
+        fontSize: '9px', color: '#f7f0ff', fontFamily: UI_FONT_BOLD, align: 'center'
+      }).setOrigin(0.5, 0);
+    }
+
     for (let i = 0; i < 6; i++) {
       this.addText(`action_icon_${i}`, '', w / 2, h - 88, {
         fontSize: '18px', color: '#ffffff', fontFamily: UI_FONT_BOLD, align: 'center'
@@ -289,18 +296,21 @@ export class UISystem {
     const w = this.width;
     const h = this.height;
     const compact = w < 760;
-    const cardW = compact ? 86 : 104;
-    const cardH = 62;
-    const gap = compact ? 7 : 10;
+    const cardW = compact ? 82 : 98;
+    const cardH = 56;
+    const gap = compact ? 6 : 8;
     const totalW = actions.length * cardW + (actions.length - 1) * gap;
     const startX = w / 2 - totalW / 2;
-    const y = h - 101;
+    const y = h - 88;
+    const tabY = h - 124;
 
     // A subtle action shelf grounds the controls without covering the battlefield.
     this.graphics.fillStyle(0x080712, 0.34);
-    this.graphics.fillRoundedRect(startX - 14, y - 8, totalW + 28, cardH + 18, 18);
+    this.graphics.fillRoundedRect(startX - 14, tabY - 8, totalW + 28, cardH + 54, 18);
     this.graphics.lineStyle(1, 0x8f5cff, 0.2);
-    this.graphics.strokeRoundedRect(startX - 14, y - 8, totalW + 28, cardH + 18, 18);
+    this.graphics.strokeRoundedRect(startX - 14, tabY - 8, totalW + 28, cardH + 54, 18);
+
+    this.drawCommandTabs(startX, tabY, totalW);
 
     actions.forEach((action, i) => {
       const x = startX + i * (cardW + gap);
@@ -325,16 +335,16 @@ export class UISystem {
       }
 
       if (icon) {
-        icon.setText(action.icon).setPosition(x + 18, y + 8).setAlpha(alpha);
+        icon.setText(action.icon).setPosition(x + 17, y + 7).setAlpha(alpha);
         icon.setStyle({ fontSize: '18px', color: action.active ? '#fff8ea' : '#a99fc0', fontFamily: UI_FONT_BOLD, align: 'center' });
       }
       if (title) {
         const displayTitle = action.title.length > 11 ? `${action.title.slice(0, 10)}…` : action.title;
-        title.setText(displayTitle).setPosition(x + cardW / 2 + 8, y + 15).setAlpha(alpha);
+        title.setText(displayTitle).setPosition(x + cardW / 2 + 8, y + 13).setAlpha(alpha);
         title.setStyle({ fontSize: compact ? '9px' : '10px', color: action.active ? '#ffffff' : '#b7adca', fontFamily: UI_FONT_BOLD, align: 'center' });
       }
       if (meta) {
-        meta.setText(action.meta).setPosition(x + cardW / 2, y + 41).setAlpha(alpha);
+        meta.setText(action.meta).setPosition(x + cardW / 2, y + 37).setAlpha(alpha);
         meta.setStyle({ fontSize: '8px', color: action.active ? '#ffdca8' : '#9185a8', fontFamily: UI_FONT, align: 'center' });
       }
     });
@@ -344,6 +354,31 @@ export class UISystem {
       hint.setText('ARROWS MOVE / JUMP  •  NUMBER KEYS SELECT SPECIALS').setAlpha(0.65);
       hint.setPosition(w / 2, h - 17);
     }
+  }
+
+  private drawCommandTabs(startX: number, y: number, totalW: number): void {
+    const commands = [
+      { label: 'FIGHT', active: true, enabled: true },
+      { label: 'BAG', active: false, enabled: true },
+      { label: 'CAPTURE', active: false, enabled: false },
+      { label: 'RUN', active: false, enabled: true }
+    ];
+    const tabW = Math.min(132, (totalW - 24) / 4);
+    const gap = 8;
+    const x0 = startX + (totalW - (tabW * 4 + gap * 3)) / 2;
+    commands.forEach((cmd, i) => {
+      const x = x0 + i * (tabW + gap);
+      const text = this.texts.get(`command_tab_${i}`);
+      const accent = cmd.active ? 0xffd37a : 0xb996ff;
+      this.graphics.fillStyle(accent, cmd.active ? 0.18 : 0.07);
+      this.graphics.fillRoundedRect(x, y, tabW, 22, 11);
+      this.graphics.lineStyle(1, accent, cmd.active ? 0.78 : 0.32);
+      this.graphics.strokeRoundedRect(x, y, tabW, 22, 11);
+      if (text) {
+        text.setText(cmd.enabled ? cmd.label : `${cmd.label}  ✕`).setPosition(x + tabW / 2, y + 5).setAlpha(cmd.enabled ? 1 : 0.45);
+        text.setStyle({ fontSize: '9px', color: cmd.active ? '#fff8ea' : '#d8d0eb', fontFamily: UI_FONT_BOLD, align: 'center' });
+      }
+    });
   }
 
   private drawBar(

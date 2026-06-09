@@ -28,6 +28,7 @@ export interface OverworldInput {
 export class InputSystem {
   private keys: Record<string, Phaser.Input.Keyboard.Key> = {};
   private scene: Phaser.Scene;
+  private touchVector = { x: 0, y: 0 };
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -80,14 +81,31 @@ export class InputSystem {
     };
   }
 
+  setTouchMovement(x: number, y: number): void {
+    this.touchVector.x = Phaser.Math.Clamp(x, -1, 1);
+    this.touchVector.y = Phaser.Math.Clamp(y, -1, 1);
+  }
+
+  getOverworldVector(): { x: number; y: number } {
+    const k = this.keys;
+    let x = this.touchVector.x;
+    let y = this.touchVector.y;
+    if (k.left.isDown) x = -1;
+    else if (k.right.isDown) x = 1;
+    if (k.up.isDown) y = -1;
+    else if (k.down.isDown) y = 1;
+    const len = Math.sqrt(x * x + y * y);
+    return len > 1 ? { x: x / len, y: y / len } : { x, y };
+  }
+
   // Overworld movement — does NOT consume JustDown for interact keys
   getOverworldMove(): { left: boolean; right: boolean; up: boolean; down: boolean } {
     const k = this.keys;
     return {
-      left:  k.left.isDown,
-      right: k.right.isDown,
-      up:    k.up.isDown,
-      down:  k.down.isDown,
+      left:  k.left.isDown || this.touchVector.x < -0.25,
+      right: k.right.isDown || this.touchVector.x > 0.25,
+      up:    k.up.isDown || this.touchVector.y < -0.25,
+      down:  k.down.isDown || this.touchVector.y > 0.25,
     };
   }
 

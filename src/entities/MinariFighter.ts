@@ -41,6 +41,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   private body_gfx: Phaser.GameObjects.Graphics;
   private shadow: Phaser.GameObjects.Ellipse;
+  private auraGlow: Phaser.GameObjects.Graphics;
   private sprite: Phaser.GameObjects.Sprite | null = null;
   private useSprite = false;
   private lastAnim = '';
@@ -92,9 +93,12 @@ export class MinariFighter extends Phaser.GameObjects.Container {
     this.facing          = isPlayer ? 1 : -1;
     this.projectileGroup = projectileGroup;
 
-    // Shadow — kept in world-space, not parented to container
+    // Shadow and subtle type aura — kept in world-space, not parented to container
     this.shadow = scene.add.ellipse(0, 0, data.bodyWidth * 1.5, 14, 0x000000, 0.3);
     scene.add.existing(this.shadow);
+    this.auraGlow = scene.add.graphics();
+    this.auraGlow.setDepth(3);
+    this.drawTypeAura();
 
     // Attempt to use a real sprite for Flarepaw
     const animMode  = scene.registry.get('flarepaw_anim_mode') as string | undefined;
@@ -151,6 +155,25 @@ export class MinariFighter extends Phaser.GameObjects.Container {
   }
 
   // ── Placeholder body drawing ───────────────────────────────────────────────
+
+  private drawTypeAura(): void {
+    const color = this.getAuraColor();
+    this.auraGlow.clear();
+    this.auraGlow.fillStyle(color, 0.1);
+    this.auraGlow.fillEllipse(0, 0, this.minariData.bodyWidth * 2.25, 20);
+    this.auraGlow.lineStyle(1, color, 0.32);
+    this.auraGlow.strokeEllipse(0, 0, this.minariData.bodyWidth * 2.45, 24);
+  }
+
+  private getAuraColor(): number {
+    switch (this.minariData.element) {
+      case 'fire': return 0xff7a35;
+      case 'water': return 0x42cfff;
+      case 'earth': return 0x58d878;
+      case 'shadow': return 0x8f5cff;
+      default: return this.minariData.colorPrimary;
+    }
+  }
 
   private drawBody(inForm: boolean): void {
     const g  = this.body_gfx;
@@ -561,8 +584,9 @@ export class MinariFighter extends Phaser.GameObjects.Container {
       this.stats.soulbond = Math.min(this.stats.maxSoulbond, this.stats.soulbond + 1 * delta / 1000);
     }
 
-    // Shadow — world-space tracking
+    // Shadow and subtle type aura — world-space tracking
     this.shadow.setPosition(this.x, this.y + this.minariData.bodyHeight / 2 + 5);
+    this.auraGlow.setPosition(this.x, this.y + this.minariData.bodyHeight / 2 + 5);
 
     // Container scaleX stays 1 — facing is handled by sprite.setFlipX only
     // (Prevents container-level mirror which would flip UI gfx and flame guard ring)
@@ -605,6 +629,7 @@ export class MinariFighter extends Phaser.GameObjects.Container {
 
   override destroy(): void {
     this.shadow.destroy();
+    this.auraGlow.destroy();
     super.destroy();
   }
 }

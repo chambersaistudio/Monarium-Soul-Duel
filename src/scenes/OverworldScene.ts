@@ -3,6 +3,12 @@ import { OverworldPlayer } from '../entities/OverworldPlayer';
 import { RivalNPC } from '../entities/RivalNPC';
 import { SoulSpriteOrb } from '../entities/SoulSpriteOrb';
 import { InputSystem } from '../systems/InputSystem';
+import { DialogueBox } from '../systems/DialogueBox';
+import { VirtualJoystick } from '../systems/VirtualJoystick';
+import { StarterSelectionOverlay } from '../systems/StarterSelectionOverlay';
+import { UI_THEME } from '../config/uiTheme';
+import { getStarter, getRenzoStarter } from '../data/monariDex';
+import { CHARACTERS } from '../data/characterData';
 
 type DialogueState = 'none' | 'showing' | 'transitioning';
 
@@ -12,8 +18,11 @@ export class OverworldScene extends Phaser.Scene {
   private orbs: SoulSpriteOrb[] = [];
   private inputSys!: InputSystem;
   private dialogueState: DialogueState = 'none';
-  private dialogueBox!: Phaser.GameObjects.Container;
+  private dialogueBox!: DialogueBox;
   private bgGfx!: Phaser.GameObjects.Graphics;
+  private joystick!: VirtualJoystick;
+  private starterOverlay!: StarterSelectionOverlay;
+  private hudTexts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super({ key: 'OverworldScene' });
@@ -41,19 +50,30 @@ export class OverworldScene extends Phaser.Scene {
     });
 
     this.inputSys = new InputSystem(this);
-    this.dialogueBox = this.createDialogueBox(w, h);
-    this.dialogueBox.setVisible(false);
-
-    this.add.text(w / 2, 20, 'TRAINING FIELD', {
-      fontSize: '14px', color: '#88ff88', fontFamily: 'monospace',
-      stroke: '#000000', strokeThickness: 2, letterSpacing: 6
-    }).setOrigin(0.5).setDepth(50);
-
-    this.add.text(20, 20, '← Arrow Keys to move  |  E / Enter = Interact', {
-      fontSize: '11px', color: '#666666', fontFamily: 'monospace'
-    }).setDepth(50);
+    this.dialogueBox = new DialogueBox(this);
+    const forceTouch = new URLSearchParams(window.location.search).get('touch') === '1';
+    this.joystick = new VirtualJoystick(this, forceTouch);
+    this.starterOverlay = new StarterSelectionOverlay(this);
+    this.createOverworldHud(w);
 
     this.cameras.main.fadeIn(400);
+
+    if (!this.registry.get('starter_selected')) {
+      this.dialogueState = 'transitioning';
+      this.starterOverlay.show((playerStarter, renzoStarter) => {
+        this.registry.set('starter_selected', true);
+        this.registry.set('player_starter', playerStarter.id);
+        this.registry.set('renzo_starter', renzoStarter.id);
+        this.dialogueState = 'none';
+        this.refreshOverworldHud();
+      }, () => {
+        this.registry.set('starter_selected', true);
+        this.registry.set('player_starter', 'flarepaw');
+        this.registry.set('renzo_starter', 'droplet');
+        this.dialogueState = 'none';
+        this.refreshOverworldHud();
+      });
+    }
   }
 
   private drawTrainingField(w: number, h: number): void {
@@ -112,55 +132,67 @@ export class OverworldScene extends Phaser.Scene {
     g.fillEllipse(x + 10, y - 30, 50, 60);
   }
 
-  private createDialogueBox(w: number, h: number): Phaser.GameObjects.Container {
-    const container = this.add.container(0, 0).setDepth(200);
+  private createOverworldHud(w: number): void {
+    const g = this.add.graphics().setDepth(60);
+    g.fillStyle(UI_THEME.colors.aether, 0.1);
+    g.fillRoundedRect(16, 14, 244, 78, 18);
+    g.fillGradientStyle(0x241633, 0x171224, 0x080712, 0x1c1230, 0.82, 0.72, 0.62, 0.7);
+    g.fillRoundedRect(20, 18, 236, 70, 16);
+    g.lineStyle(1, UI_THEME.colors.gold, 0.42);
+    g.strokeRoundedRect(20, 18, 236, 70, 16);
 
-    const bg = this.add.graphics();
-    const boxW = w - 80;
-    const boxH = 120;
-    const boxX = 40;
-    const boxY = h - 160;
+    g.fillStyle(UI_THEME.colors.aether, 0.12);
+    g.fillRoundedRect(w / 2 - 110, 18, 220, 38, 19);
+    g.lineStyle(1, UI_THEME.colors.aetherBright, 0.4);
+    g.strokeRoundedRect(w / 2 - 110, 18, 220, 38, 19);
 
-    bg.fillStyle(0x0a0a1a, 0.92);
-    bg.fillRoundedRect(boxX, boxY, boxW, boxH, 8);
-    bg.lineStyle(2, 0x4488ff, 0.8);
-    bg.strokeRoundedRect(boxX, boxY, boxW, boxH, 8);
+    this.hudTexts.push(
+      this.add.text(36, 26, '', { fontSize: '13px', color: '#fff8ea', fontFamily: UI_THEME.fonts.bold }).setDepth(61),
+      this.add.text(36, 46, '', { fontSize: '11px', color: '#d8d0eb', fontFamily: UI_THEME.fonts.body }).setDepth(61),
+      this.add.text(36, 64, '', { fontSize: '10px', color: '#ffd37a', fontFamily: UI_THEME.fonts.bold }).setDepth(61),
+      this.add.text(w / 2, 28, 'Aureon Training Field', { fontSize: '13px', color: '#f7f0ff', fontFamily: UI_THEME.fonts.bold }).setOrigin(0.5, 0).setDepth(61),
+      this.add.text(w / 2, 43, 'Starter Grove • Bonder Trial', { fontSize: '9px', color: '#bfb4dc', fontFamily: UI_THEME.fonts.body }).setOrigin(0.5, 0).setDepth(61),
+      this.add.text(20, 98, this.joystick?.isEnabled ? 'Virtual joystick • E / Enter to interact' : 'Arrow Keys to move • E / Enter to interact', { fontSize: '10px', color: '#b8adc8', fontFamily: UI_THEME.fonts.body }).setDepth(61)
+    );
+    this.refreshOverworldHud();
+  }
 
-    const nameTag = this.add.text(boxX + 16, boxY - 16, ' Rival ', {
-      fontSize: '13px', color: '#88aaff', fontFamily: 'monospace',
-      fontStyle: 'bold', backgroundColor: '#0a0a1a',
-      padding: { x: 4, y: 2 }
-    }).setDepth(201);
+  private refreshOverworldHud(): void {
+    const starter = getStarter((this.registry.get('player_starter') as string | undefined) ?? 'flarepaw');
+    this.hudTexts[0]?.setText('Amari');
+    this.hudTexts[1]?.setText(`${starter.name} • ${starter.element} Monari`);
+    this.hudTexts[2]?.setText(`Lv. ${starter.level}  Bond/Aura ▰▰▱▱▱`);
+  }
 
-    const dialogueText = this.add.text(boxX + 20, boxY + 18,
-      '"You ready for a Soul Duel?"\n\nStep into the arena — prove your Monari is the strongest!',
+  private openRivalDialogue(): void {
+    const starter = getStarter((this.registry.get('player_starter') as string | undefined) ?? 'flarepaw');
+    const renzoStarter = getRenzoStarter(starter.id);
+    this.dialogueState = 'showing';
+    this.dialogueBox.show([
       {
-        fontSize: '15px', color: '#e0e8ff', fontFamily: 'monospace',
-        wordWrap: { width: boxW - 40 }, lineSpacing: 4
+        speaker: CHARACTERS.renzo.displayName,
+        characterId: 'renzo',
+        expression: 'serious',
+        text: `You and ${starter.name} look ready. I bonded with ${renzoStarter.name}, so this should be a real Soul Duel.`
+      },
+      {
+        speaker: CHARACTERS.renzo.displayName,
+        characterId: 'renzo',
+        expression: 'happy',
+        text: 'Step into the arena. Let our Monari show what their bond can do!'
       }
-    ).setDepth(201);
-
-    const promptText = this.add.text(boxX + boxW - 20, boxY + boxH - 18, '[E / ENTER] Battle!', {
-      fontSize: '12px', color: '#ffff88', fontFamily: 'monospace'
-    }).setOrigin(1, 1).setDepth(201);
-
-    this.tweens.add({ targets: promptText, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
-
-    container.add([bg, nameTag, dialogueText, promptText]);
-    return container;
+    ], () => {
+      this.dialogueState = 'transitioning';
+      this.cameras.main.fade(500, 0, 0, 0, false, (_cam: unknown, progress: number) => {
+        if (progress === 1) this.scene.start('BattleScene');
+      });
+    });
   }
 
   update(_time: number, delta: number): void {
     // ── Dialogue showing: only check for dismiss key, do NOT move player ──
     if (this.dialogueState === 'showing') {
-      // Use isJustDown directly — getOverworldMove() never consumes these
-      if (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e')) {
-        this.dialogueState = 'transitioning';
-        this.cameras.main.fade(500, 0, 0, 0, false, (_cam: unknown, progress: number) => {
-          if (progress === 1) this.scene.start('BattleScene');
-        });
-      }
-      // Still update cosmetics even while dialogue is up
+      if (this.inputSys.isJustDown('enter') || this.inputSys.isJustDown('e')) this.dialogueBox.advance();
       this.rival.update();
       this.orbs.forEach(o => o.update(delta));
       return;
@@ -169,14 +201,12 @@ export class OverworldScene extends Phaser.Scene {
     if (this.dialogueState === 'transitioning') return;
 
     // ── Normal overworld movement ──
-    const mv = this.inputSys.getOverworldMove();
-    let dx = 0, dy = 0;
-    if (mv.left)  dx = -1;
-    else if (mv.right) dx = 1;
-    if (mv.up)   dy = -1;
-    else if (mv.down) dy = 1;
-
-    if (dx !== 0 || dy !== 0) this.player.move(dx, dy);
+    if (this.joystick?.isEnabled) {
+      const touch = this.joystick.movement;
+      this.inputSys.setTouchMovement(touch.x, touch.y);
+    }
+    const mv = this.inputSys.getOverworldVector();
+    if (mv.x !== 0 || mv.y !== 0) this.player.move(mv.x, mv.y);
     else this.player.stopMove();
 
     const near = this.rival.isNear(this.player.x, this.player.y);
@@ -186,8 +216,7 @@ export class OverworldScene extends Phaser.Scene {
     // open AND immediately dismiss (Enter is now handled in 'showing' branch only)
     if (near && (this.inputSys.isJustDown('e') || this.inputSys.isJustDown('enter'))) {
       this.player.stopMove();
-      this.dialogueState = 'showing';
-      this.dialogueBox.setVisible(true);
+      this.openRivalDialogue();
       this.cameras.main.shake(200, 0.003);
     }
 
@@ -198,5 +227,8 @@ export class OverworldScene extends Phaser.Scene {
 
   shutdown(): void {
     this.inputSys?.destroy();
+    this.dialogueBox?.destroy();
+    this.joystick?.destroy();
+    this.starterOverlay?.destroy();
   }
 }
