@@ -331,4 +331,113 @@ The following data must be exposed for every active battle:
 
 ---
 
+---
+
+## Element Effectiveness System
+
+### Terminology
+
+| Term | Meaning |
+|------|---------|
+| **Effective** | The attacking element is **strong against** the defender → ×1.25 |
+| **Resisted** | The defending element **resists** the attacking element → ×0.75 |
+| **Neutral** | No special relationship → ×1.0 |
+
+> Precise distinction: **"Resisted" is about the defender**, not the attacker.
+> A Fire attack being resisted by Water does NOT mean Water is strong against Fire.
+> Conversely, Water being strong against Fire is a separate (symmetric) fact: Fire is weak to Water.
+> Both derive from the same table entry but are stated from opposite perspectives.
+>
+> Never display "weak against" when the correct term is "resisted."
+> Never say "super effective" — the game uses "effective."
+
+### Why ×1.25 / ×0.75 and not ×2?
+
+MONARIUM has many compounding mechanics: Aura costs, Soul Sync tiers (×0.85–×1.10),
+Bond Level, guard (×0.30), crits (×1.5), and future Soul Burst / Ascension.
+With all of these stacking, ×2.0 type advantage would be too swingy for the MVP.
+**×1.25 / ×0.75 is the locked MVP range.**
+
+### Official MVP Element List
+
+| Element | ID |
+|---------|----|
+| Fire | `fire` |
+| Water | `water` |
+| Flora | `flora` |
+| Wind | `wind` |
+| Thunder | `thunder` |
+| Stone | `stone` |
+| Steel | `steel` |
+| Light | `light` |
+| Dark | `dark` |
+| Aether | `aether` |
+| Ice | `ice` |
+| Neutral | `neutral` |
+
+### Starter Triangle
+
+```
+Water → Fire  : Water effective vs Fire   / Fire resisted by Water
+Fire  → Flora : Fire effective vs Flora   / Flora resisted by Fire
+Flora → Water : Flora effective vs Water  / Water resisted by Flora
+```
+
+### MVP Locked Type Chart
+
+Keyed by the **attacking** element (`src/config/elementEffectivenessConfig.ts`).
+Edit `ELEMENT_CHART` in that file only — all helpers derive from it.
+
+```
+fire:    strongAgainst: [flora, steel, ice]         resistedBy: [water, stone]
+water:   strongAgainst: [fire, stone]               resistedBy: [flora, thunder]
+flora:   strongAgainst: [water, stone]              resistedBy: [fire, wind, ice]
+wind:    strongAgainst: [flora]                     resistedBy: [thunder, ice]
+thunder: strongAgainst: [water, wind]               resistedBy: [stone]
+stone:   strongAgainst: [fire, thunder, wind, ice]  resistedBy: [water, flora, steel]
+steel:   strongAgainst: [stone, ice]                resistedBy: [fire]
+light:   strongAgainst: [dark]                      resistedBy: [aether]
+dark:    strongAgainst: [aether]                    resistedBy: [light]
+aether:  strongAgainst: [light]                     resistedBy: [dark, steel]
+ice:     strongAgainst: [flora, wind, aether]       resistedBy: [fire, stone, steel]
+neutral: strongAgainst: []                          resistedBy: []
+```
+
+### Expected Starter Matchup Results (Lv 7, Stable Sync, no guard)
+
+| Attack vs Defender | Modifier | Battle callout |
+|--------------------|----------|----------------|
+| Fire vs Water | ×0.75 | "It was resisted!" |
+| Water vs Fire | ×1.25 | "It was effective!" |
+| Fire vs Flora | ×1.25 | "It was effective!" |
+| Flora vs Fire | ×0.75 | "It was resisted!" |
+| Flora vs Water | ×1.25 | "It was effective!" |
+| Water vs Flora | ×0.75 | "It was resisted!" |
+| Neutral vs anything | ×1.0 | (no message) |
+
+### Battle Callouts
+
+```
+Flarepaw used Flame Paw Barrage!
+It was resisted!
+
+Droplet used Aqua Ripple!
+It was effective!
+
+Sproutodon used Bark Guard!
+
+Flarepaw used Blinding Flare!
+Soul Sync was disrupted!
+```
+
+### Implementation
+
+- `src/config/elementEffectivenessConfig.ts` — single source of truth
+- `getElementModifier(attacking, defending)` — returns ×1.25, ×0.75, or ×1.0
+- `getEffectivenessLabel(modifier)` — returns `'effective'`, `'resisted'`, or `'neutral'`
+- `getEffectivenessMessage(modifier)` — returns `"It was effective!"`, `"It was resisted!"`, or `null`
+- `getEffectivenessBattleLabLabel(modifier)` — returns `"1.25× Effective"` etc. for Battle Lab
+
+---
+
 *Last updated: 2026-06-09. All mechanic values are tunable via `src/config/progressionConfig.ts`.*

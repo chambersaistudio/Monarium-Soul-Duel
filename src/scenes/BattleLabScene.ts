@@ -19,7 +19,7 @@ import { BattleCalculator } from '../systems/BattleCalculator';
 import { MONARI_DEX } from '../data/monariDex';
 import { MINARI_ROSTER } from '../data/minariData';
 import { CLASSIC_MOVES } from '../data/classicMoveData';
-import { getElementModifier, getEffectivenessMessage } from '../config/elementEffectivenessConfig';
+import { getElementModifier, getEffectivenessMessage, getEffectivenessBattleLabLabel } from '../config/elementEffectivenessConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
 import { IS_TOUCH_DEVICE } from '../config/mobileConfig';
 import { drawGlassPanel } from '../ui/phaserUi';
@@ -36,9 +36,15 @@ const MOVE_IDS = [
   'flame_paw_barrage',
   'ember_shot',
   'heat_guard',
+  'blinding_flare',
   'aqua_ripple',
   'crystal_knuckle',
   'shell_guard',
+  'tidal_feint',
+  'vine_snap',
+  'root_pulse',
+  'bark_guard',
+  'pollen_haze',
   'shadow_coil',
   'guard',
 ] as const;
@@ -53,7 +59,7 @@ const SYNC_TIER_LABELS: Record<SoulSyncTier, string> = {
   broken:    'Broken',
 };
 
-/** Fallback move data for move IDs not yet in CLASSIC_MOVES. */
+/** Fallback move data — only used if a move ID isn't in CLASSIC_MOVES. */
 const FALLBACK_MOVES: Record<string, {
   displayName: string;
   power: number;
@@ -62,44 +68,7 @@ const FALLBACK_MOVES: Record<string, {
   canCrit: boolean;
   auraCost?: number;
   accuracy?: number;
-}> = {
-  ember_shot: {
-    displayName: 'Ember Shot',
-    power: 40,
-    damageType: 'fire',
-    category: 'special',
-    canCrit: true,
-    auraCost: 15,
-    accuracy: 95,
-  },
-  heat_guard: {
-    displayName: 'Heat Guard',
-    power: 0,
-    damageType: 'fire',
-    category: 'status',
-    canCrit: false,
-    auraCost: 10,
-    accuracy: 100,
-  },
-  crystal_knuckle: {
-    displayName: 'Crystal Knuckle',
-    power: 55,
-    damageType: 'physical',
-    category: 'physical',
-    canCrit: true,
-    auraCost: 22,
-    accuracy: 90,
-  },
-  shell_guard: {
-    displayName: 'Shell Guard',
-    power: 0,
-    damageType: 'none',
-    category: 'status',
-    canCrit: false,
-    auraCost: 0,
-    accuracy: 100,
-  },
-};
+}> = {}; // All moves now live in CLASSIC_MOVES
 
 type FocusPanel = 'attacker' | 'defender' | 'move';
 
@@ -472,8 +441,8 @@ export class BattleLabScene extends Phaser.Scene {
     const atkRoster  = MINARI_ROSTER[atkId];
     const defRoster  = MINARI_ROSTER[defId];
 
-    const atkElement = atkRoster?.element ?? 'physical';
-    const defElement = defRoster?.element ?? 'physical';
+    const atkElement = atkRoster?.element ?? 'neutral';
+    const defElement = defRoster?.element ?? 'neutral';
 
     const atkStats = CombatFormulaSystem.calcBattleStats(atkDex?.baseStats, this.attackerLevel);
     const defStats = CombatFormulaSystem.calcBattleStats(defDex?.baseStats, this.defenderLevel);
@@ -482,6 +451,7 @@ export class BattleLabScene extends Phaser.Scene {
     const syncModifier = SYNC_DAMAGE_MODIFIERS[syncTier] ?? 1.0;
     const typeModifier = getElementModifier(move.damageType, defElement);
     const effectMsg    = getEffectivenessMessage(typeModifier);
+    const effLabel     = getEffectivenessBattleLabLabel(typeModifier);
 
     // ── Focus indicators ──────────────────────────────────────────────────────
     this.atkFocusTxt.setText(this.focus === 'attacker' ? '[ FOCUSED ]' : '').setColor('#ff8c00');
@@ -530,7 +500,8 @@ export class BattleLabScene extends Phaser.Scene {
     // ── Output panel ──────────────────────────────────────────────────────────
     if (move.category === 'status' || move.power <= 0) {
       // Status move — no damage
-      this.effectTxt.setText(`${move.damageType.toUpperCase()} → ${defElement.toUpperCase()}: ${typeModifier.toFixed(2)}  (${effectMsg})`);
+      const statusEffColor = typeModifier > 1 ? '#3be071' : typeModifier < 1 ? '#ff4e5f' : '#ffd76a';
+      this.effectTxt.setText(`${move.damageType.toUpperCase()} → ${defElement.toUpperCase()}:  ${effLabel}`).setColor(statusEffColor);
       this.rangeTxt.setText('— (Status move, no damage)').setColor(UI_THEME.colors.textMuted);
       this.guardModTxt.setText('N/A').setColor(UI_THEME.colors.textMuted);
       this.syncModTxt.setText(`×${syncModifier.toFixed(2)}  (${SYNC_TIER_LABELS[syncTier]})`);
@@ -555,7 +526,7 @@ export class BattleLabScene extends Phaser.Scene {
       // Type effectiveness color
       const typeHex = typeModifier > 1 ? '#3be071' : typeModifier < 1 ? '#ff4e5f' : '#ffd76a';
       this.effectTxt
-        .setText(`${move.damageType.toUpperCase()} → ${defElement.toUpperCase()}: ×${typeModifier.toFixed(2)}  (${effectMsg})`)
+        .setText(`${move.damageType.toUpperCase()} → ${defElement.toUpperCase()}:  ${effLabel}`)
         .setColor(typeHex);
 
       // Damage range
@@ -605,7 +576,7 @@ export class BattleLabScene extends Phaser.Scene {
     const atkRoster = MINARI_ROSTER[atkId];
     const defRoster = MINARI_ROSTER[defId];
 
-    const defElement = defRoster?.element ?? 'physical';
+    const defElement = defRoster?.element ?? 'neutral';
     const atkStats   = CombatFormulaSystem.calcBattleStats(atkDex?.baseStats, this.attackerLevel);
     const defStats   = CombatFormulaSystem.calcBattleStats(defDex?.baseStats, this.defenderLevel);
     const move       = this.resolveMove(moveId);
@@ -774,7 +745,7 @@ export class BattleLabScene extends Phaser.Scene {
         category:    classic.category,
         canCrit:     classic.canCrit,
         auraCost:    classic.auraCost,
-        accuracy:    100, // ClassicMoveConfig has no accuracy field — default 100
+        accuracy:    classic.accuracy ?? 100,
       };
     }
     const fallback = FALLBACK_MOVES[moveId];

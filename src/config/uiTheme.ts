@@ -41,19 +41,29 @@ export const UI_THEME = {
     mythic: 0xf3f0ff,
   },
   element: {
-    ember: 0xff6b35,
-    fire: 0xff6b35,
-    aqua: 0x38c8ff,
-    water: 0x38c8ff,
-    terra: 0x66c86d,
-    earth: 0x66c86d,
-    shadow: 0x8b5cff,
-    light: 0xfff0b8,
-    aether: 0xd7c6ff,
-    bolt: 0xffe65c,
-    gale: 0x66e7de,
+    // Official MVP element palette
+    fire:    0xff6b35,
+    water:   0x38c8ff,
+    flora:   0x66c86d,
+    wind:    0x66e7de,
+    thunder: 0xffe65c,
+    stone:   0xa08a6a,
+    steel:   0x8899bb,
+    light:   0xfff0b8,
+    dark:    0x8b5cff,
+    aether:  0xd7c6ff,
+    ice:     0x88ddff,
+    neutral: 0x9da3c7,
+    // Legacy aliases (kept so old references don't break at runtime)
+    ember:    0xff6b35,
+    aqua:     0x38c8ff,
+    terra:    0x66c86d,
+    earth:    0x66c86d,
+    shadow:   0x8b5cff,
+    bolt:     0xffe65c,
+    gale:     0x66e7de,
     physical: 0xd09055,
-    none: 0x9da3c7,
+    none:     0x9da3c7,
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 18, xl: 28 },
   fonts: {
@@ -102,8 +112,11 @@ export function rarityLabel(rarity?: string): string {
 }
 
 export function elementLabel(element?: string): string {
-  const normalized = (element ?? 'Neutral').toLowerCase();
-  if (normalized === 'fire') return 'Ember';
-  if (normalized === 'water') return 'Aqua';
-  return normalized.replace(/\b\w/g, c => c.toUpperCase());
+  const normalized = (element ?? 'neutral').toLowerCase();
+  const labels: Record<string, string> = {
+    fire: 'Fire', water: 'Water', flora: 'Flora', wind: 'Wind',
+    thunder: 'Thunder', stone: 'Stone', steel: 'Steel', light: 'Light',
+    dark: 'Dark', aether: 'Aether', ice: 'Ice', neutral: 'Neutral',
+  };
+  return labels[normalized] ?? normalized.replace(/\b\w/g, c => c.toUpperCase());
 }

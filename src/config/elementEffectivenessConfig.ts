@@ -1,22 +1,33 @@
 /**
- * Central element effectiveness chart for MONARIUM.
+ * Central element effectiveness chart for MONARIUM — MVP locked chart.
  * All in-battle type matchups flow through getElementModifier().
  *
- * Official element list: Neutral, Ember, Aqua, Terra, Gale, Bolt, Ice, Shadow, Light, Aether.
- * Unspecified matchups default to 1.0 (neutral).
+ * Terminology (precise):
+ *   "Effective" — the attacking element is STRONG AGAINST the defender → ×1.25
+ *   "Resisted"  — the defending element RESISTS the attacking element  → ×0.75
+ *   "Neutral"   — no special relationship                              → ×1.0
  *
- * Starter triangle (MVP):
- *   Aqua → Ember 1.25 / Ember → Aqua 0.75
- *   Ember → Terra 1.25 / Terra → Ember 0.75
- *   Terra → Aqua  1.25 / Aqua  → Terra 0.75
+ * Important distinction: "resisted" describes the defender resisting, NOT the
+ * attacker being weak. These are not the same concept.
  *
- * To add matchups: edit ELEMENT_CHART below only — nothing else changes.
+ * Chart is keyed by the ATTACKING element.
+ *   strongAgainst — defenders this element hits for ×1.25
+ *   resistedBy    — defenders that reduce this element to ×0.75
+ *
+ * Starter triangle:
+ *   Water beats Fire  (Water strong against Fire / Fire resisted by Water)
+ *   Fire beats Flora  (Fire strong against Flora / Flora resisted by Fire)
+ *   Flora beats Water (Flora strong against Water / Water resisted by Flora)
+ *
+ * Do NOT use 2× damage in MVP — MONARIUM's multi-layer systems (Aura, Sync,
+ * Guard, Bond) make 2× too swingy. 1.25×/0.75× is the locked MVP range.
+ *
+ * To add matchups: edit ELEMENT_CHART only — all helpers derive from it.
  */
 
 export type ElementName =
-  | 'neutral' | 'ember' | 'aqua' | 'terra'
-  | 'gale'   | 'bolt'  | 'ice'  | 'shadow'
-  | 'light'  | 'aether';
+  | 'fire' | 'water' | 'flora' | 'wind' | 'thunder' | 'stone'
+  | 'steel' | 'light' | 'dark' | 'aether' | 'ice' | 'neutral';
 
 export const ELEMENT_MODIFIERS = {
   EFFECTIVE: 1.25,
@@ -24,50 +35,97 @@ export const ELEMENT_MODIFIERS = {
   NEUTRAL:   1.0,
 } as const;
 
-/** Display labels for the UI (Title-case). */
+interface ElementRelations {
+  /** Defending elements this attacking element deals ×1.25 against. */
+  strongAgainst: ElementName[];
+  /** Defending elements that reduce this element to ×0.75. */
+  resistedBy:    ElementName[];
+}
+
+/**
+ * MVP locked type chart.
+ * Each entry is keyed by the ATTACKING element.
+ */
+const ELEMENT_CHART: Record<ElementName, ElementRelations> = {
+  fire:    { strongAgainst: ['flora', 'steel', 'ice'],             resistedBy: ['water', 'stone'] },
+  water:   { strongAgainst: ['fire', 'stone'],                      resistedBy: ['flora', 'thunder'] },
+  flora:   { strongAgainst: ['water', 'stone'],                     resistedBy: ['fire', 'wind', 'ice'] },
+  wind:    { strongAgainst: ['flora'],                               resistedBy: ['thunder', 'ice'] },
+  thunder: { strongAgainst: ['water', 'wind'],                      resistedBy: ['stone'] },
+  stone:   { strongAgainst: ['fire', 'thunder', 'wind', 'ice'],    resistedBy: ['water', 'flora', 'steel'] },
+  steel:   { strongAgainst: ['stone', 'ice'],                       resistedBy: ['fire'] },
+  light:   { strongAgainst: ['dark'],                                resistedBy: ['aether'] },
+  dark:    { strongAgainst: ['aether'],                              resistedBy: ['light'] },
+  aether:  { strongAgainst: ['light'],                               resistedBy: ['dark', 'steel'] },
+  ice:     { strongAgainst: ['flora', 'wind', 'aether'],            resistedBy: ['fire', 'stone', 'steel'] },
+  neutral: { strongAgainst: [],                                       resistedBy: [] },
+};
+
+/** Official display labels (Title-case). */
 export const ELEMENT_LABELS: Record<ElementName, string> = {
-  neutral: 'Neutral',
-  ember:   'Ember',
-  aqua:    'Aqua',
-  terra:   'Terra',
-  gale:    'Gale',
-  bolt:    'Bolt',
-  ice:     'Ice',
-  shadow:  'Shadow',
+  fire:    'Fire',
+  water:   'Water',
+  flora:   'Flora',
+  wind:    'Wind',
+  thunder: 'Thunder',
+  stone:   'Stone',
+  steel:   'Steel',
   light:   'Light',
+  dark:    'Dark',
   aether:  'Aether',
+  ice:     'Ice',
+  neutral: 'Neutral',
 };
 
 /**
- * attackingElement → defendingElement → modifier.
- * Omit a pair to default to 1.0.
+ * Returns the damage multiplier for an attack of `attacking` element
+ * landing on a Monari whose element is `defending`.
+ *
+ * ×1.25 = attacking element is strong against the defender
+ * ×0.75 = defending element resists the attacking element
+ * ×1.0  = neutral (default for any unknown pairing)
  */
-const ELEMENT_CHART: Partial<Record<ElementName, Partial<Record<ElementName, number>>>> = {
-  // Starter triangle
-  aqua:   { ember: 1.25, terra: 0.75 },
-  ember:  { terra: 1.25, aqua:  0.75 },
-  terra:  { aqua:  1.25, ember: 0.75 },
-  // Shadow / Light
-  shadow: { light: 1.25, shadow: 0.75 },
-  light:  { shadow: 1.25, light:  0.75 },
-  // Neutral never hits for advantage or resistance in MVP pass
-};
-
 export function getElementModifier(attacking: string, defending: string): number {
-  return ELEMENT_CHART[attacking as ElementName]?.[defending as ElementName]
-    ?? ELEMENT_MODIFIERS.NEUTRAL;
+  const chart = ELEMENT_CHART[attacking as ElementName];
+  if (!chart) return ELEMENT_MODIFIERS.NEUTRAL;
+  if (chart.strongAgainst.includes(defending as ElementName)) return ELEMENT_MODIFIERS.EFFECTIVE;
+  if (chart.resistedBy.includes(defending as ElementName)) return ELEMENT_MODIFIERS.RESISTED;
+  return ELEMENT_MODIFIERS.NEUTRAL;
 }
 
-/** Player-facing effectiveness text, or null for neutral (no message shown). */
+/**
+ * Short semantic label used internally and in the Battle Lab.
+ *   ×1.25 → 'effective'
+ *   ×0.75 → 'resisted'
+ *   ×1.0  → 'neutral'
+ */
+export function getEffectivenessLabel(modifier: number): 'effective' | 'resisted' | 'neutral' {
+  if (modifier > 1.0) return 'effective';
+  if (modifier < 1.0) return 'resisted';
+  return 'neutral';
+}
+
+/**
+ * Battle callout message shown after a type-advantage/disadvantage hit.
+ * Returns null for neutral hits (no message shown in normal battle).
+ *   ×1.25 → "It was effective!"
+ *   ×0.75 → "It was resisted!"
+ *   ×1.0  → null
+ */
 export function getEffectivenessMessage(modifier: number): string | null {
   if (modifier > 1.0) return 'It was effective!';
   if (modifier < 1.0) return 'It was resisted!';
   return null;
 }
 
-/** Short label for the Battle Lab display: "1.25 (Effective)" etc. */
-export function getEffectivenessLabel(modifier: number): string {
-  if (modifier > 1.0) return `${modifier}× (Effective)`;
-  if (modifier < 1.0) return `${modifier}× (Resisted)`;
-  return `${modifier}× (Neutral)`;
+/**
+ * Long label for Battle Lab display.
+ *   ×1.25 → "1.25× Effective"
+ *   ×0.75 → "0.75× Resisted"
+ *   ×1.0  → "1.0× Neutral"
+ */
+export function getEffectivenessBattleLabLabel(modifier: number): string {
+  if (modifier > 1.0) return `${modifier}× Effective`;
+  if (modifier < 1.0) return `${modifier}× Resisted`;
+  return '1.0× Neutral';
 }

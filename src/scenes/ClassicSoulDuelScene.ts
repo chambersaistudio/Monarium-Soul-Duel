@@ -31,24 +31,37 @@ const MAIN_BTN_THEMES: Record<string, BtnTheme> = {
 
 function elementLabelForMove(type?: string): string {
   switch (type) {
-    case 'ember':  return 'Ember';
-    case 'aqua':   return 'Aqua';
-    case 'terra':  return 'Terra';
-    case 'shadow': return 'Shadow';
-    case 'none':   return 'Guard';
-    default:       return 'Neutral';
+    case 'fire':    return 'Fire';
+    case 'water':   return 'Water';
+    case 'flora':   return 'Flora';
+    case 'wind':    return 'Wind';
+    case 'thunder': return 'Thunder';
+    case 'stone':   return 'Stone';
+    case 'steel':   return 'Steel';
+    case 'light':   return 'Light';
+    case 'dark':    return 'Dark';
+    case 'aether':  return 'Aether';
+    case 'ice':     return 'Ice';
+    case 'none':    return 'Guard';
+    default:        return 'Neutral';
   }
 }
 
 function dmgTypeTheme(type: string): BtnTheme {
   switch (type) {
-    case 'physical': return { fill: 0x2d1500, selFill: 0x5a2a00, border: 0xcc6622, accent: 0xff7733 };
-    case 'ember':    return { fill: 0x2d0800, selFill: 0x5a1000, border: 0xee3300, accent: 0xff5522 };
-    case 'aqua':     return { fill: 0x001433, selFill: 0x002266, border: 0x2266ee, accent: 0x4488ff };
-    case 'terra':    return { fill: 0x0d1f00, selFill: 0x1a3d00, border: 0x44aa22, accent: 0x66cc33 };
-    case 'shadow':   return { fill: 0x11002a, selFill: 0x220055, border: 0x7733cc, accent: 0x9955ee };
-    case 'none':     return { fill: 0x0e1e2e, selFill: 0x1a3248, border: 0x5588aa, accent: 0x88aacc };
-    default:         return { fill: 0x111128, selFill: 0x1e1e44, border: 0x4455aa, accent: 0x6677bb };
+    case 'fire':    return { fill: 0x2d0800, selFill: 0x5a1000, border: 0xee3300, accent: 0xff5522 };
+    case 'water':   return { fill: 0x001433, selFill: 0x002266, border: 0x2266ee, accent: 0x4488ff };
+    case 'flora':   return { fill: 0x0d1f00, selFill: 0x1a3d00, border: 0x44aa22, accent: 0x66cc33 };
+    case 'wind':    return { fill: 0x002222, selFill: 0x004444, border: 0x44cccc, accent: 0x66eedd };
+    case 'thunder': return { fill: 0x1a1400, selFill: 0x332800, border: 0xddaa00, accent: 0xffcc00 };
+    case 'stone':   return { fill: 0x1a1510, selFill: 0x332a20, border: 0x887766, accent: 0xaa9977 };
+    case 'steel':   return { fill: 0x101820, selFill: 0x203040, border: 0x7799aa, accent: 0x99bbcc };
+    case 'light':   return { fill: 0x1e1a00, selFill: 0x3d3500, border: 0xeedd77, accent: 0xfff0aa };
+    case 'dark':    return { fill: 0x11002a, selFill: 0x220055, border: 0x7733cc, accent: 0x9955ee };
+    case 'aether':  return { fill: 0x00101e, selFill: 0x001e3c, border: 0x3366dd, accent: 0x5588ff };
+    case 'ice':     return { fill: 0x001422, selFill: 0x002244, border: 0x66ccff, accent: 0x88ddff };
+    case 'none':    return { fill: 0x0e1e2e, selFill: 0x1a3248, border: 0x5588aa, accent: 0x88aacc };
+    default:        return { fill: 0x111128, selFill: 0x1e1e44, border: 0x4455aa, accent: 0x6677bb };
   }
 }
 
