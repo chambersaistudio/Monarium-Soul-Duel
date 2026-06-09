@@ -26,7 +26,12 @@ export interface ClassicMoveConfig {
   /** 0-based frame index in the attack animation that triggers damage. */
   hitFrameIndex: number;
   power: number;
+  /** Element / damage flavour used for type-advantage lookup. */
   damageType: string;
+  /** 'physical' uses attack vs defense; 'special' uses specialAttack vs specialDefense. */
+  category: 'physical' | 'special' | 'status';
+  /** Whether this move can roll a critical hit. */
+  canCrit: boolean;
   returnToAnchor: boolean;
   auraCost?: number;
   /**
@@ -60,8 +65,8 @@ export interface EngineCallbacks {
     worldY:  number,
   ) => void;
   onBattleEnd: (winner: ClassicActorRole) => void;
-  /** Optional: return the attacker's current crit-chance bonus from Soul Sync. */
-  getCritBonus?: (attackerRole: ClassicActorRole) => number;
+  /** Optional: return the attacker's current Soul Sync tier for damage modifiers. */
+  getSyncTier?: (attackerRole: ClassicActorRole) => string;
   /** Optional: called immediately after onDamageDealt with hit metadata. */
-  onHitMeta?:   (target: ClassicActorRole, meta: CombatHitMeta) => void;
+  onHitMeta?:  (target: ClassicActorRole, meta: CombatHitMeta) => void;
 }

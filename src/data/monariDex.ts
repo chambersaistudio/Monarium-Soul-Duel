@@ -1,95 +1,180 @@
 /**
- * Monari progression metadata: level scaling, evolution info, encounter rarity weights.
- * Combat stats live in minariData.ts. This file covers growth/progression properties only.
+ * Monari progression metadata: base stats (for formula), level scaling,
+ * evolution info, and encounter rarity weights.
+ * Combat stats for the platform-fighter scene live in minariData.ts.
  * Read docs/gameplay/MONARIUM_GAME_MECHANICS.md before modifying.
+ *
+ * Base stats are RPG-style small numbers (30–90 range).
+ * CombatFormulaSystem converts them to actual battle stats per level.
+ *
+ * Balance targets at Level 7 (tools/balance_calculator.ts):
+ *   HP         90–120
+ *   ATK/DEF    40–55
+ *   Basic Atk  12–20 damage
+ *   Specials   25–40 damage
+ *   Turns/KO   5–9
  */
 
 import type { MonariRarity } from '../types/progression';
 
+// ── Base stats ────────────────────────────────────────────────────────────────
+
+/** RPG base stats fed into CombatFormulaSystem.calcBattleStats(). */
+export interface MonariBaseStats {
+  hp:             number;
+  aura:           number;
+  attack:         number;
+  specialAttack:  number;
+  defense:        number;
+  specialDefense: number;
+  speed:          number;
+}
+
+// ── Dex entry ─────────────────────────────────────────────────────────────────
+
 export interface MonariDexEntry {
   id:              string;
   rarity:          MonariRarity;
+  /** RPG-style base stats used by CombatFormulaSystem. */
+  baseStats:       MonariBaseStats;
   /** Base XP granted to the opposing Monari when defeated. */
   baseXPYield:     number;
-  /** HP/Aura/stat multiplier per level above 1. Applied as: baseStat * (1 + growthRate * (level - 1)). */
-  statGrowthRate:  number;
   /** Level required before first evolution is possible (0 = no evolution). */
   evo1MinLevel:    number;
   /** Level required before second evolution is possible (0 = no second evo). */
   evo2MinLevel:    number;
   /** Evolved form IDs (empty = no evolutions). */
   evolutions:      string[];
-  /** Wild encounter weight (relative to rarity tier base; normally 1.0). */
+  /** Wild encounter weight relative to rarity tier base (normally 1.0). */
   encounterWeight: number;
 }
 
+// ── Dex entries ───────────────────────────────────────────────────────────────
+
 export const MONARI_DEX: Record<string, MonariDexEntry> = {
+
+  // ── Flarepaw — fire, physical attacker ──────────────────────────────────────
   flarepaw: {
-    id:             'flarepaw',
-    rarity:         'rare',
+    id:    'flarepaw',
+    rarity: 'rare',
+    baseStats: {
+      hp:             45,
+      aura:           35,
+      attack:         65,
+      specialAttack:  48,
+      defense:        48,
+      specialDefense: 42,
+      speed:          70,
+    },
     baseXPYield:    60,
-    statGrowthRate: 0.018,
     evo1MinLevel:   20,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 
+  // ── Droplet — water, special attacker ───────────────────────────────────────
   droplet: {
-    id:             'droplet',
-    rarity:         'common',
+    id:    'droplet',
+    rarity: 'common',
+    baseStats: {
+      hp:             40,
+      aura:           40,
+      attack:         48,
+      specialAttack:  65,
+      defense:        40,
+      specialDefense: 52,
+      speed:          80,
+    },
     baseXPYield:    30,
-    statGrowthRate: 0.015,
     evo1MinLevel:   18,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 
+  // ── Umbravine — shadow, balanced attacker ────────────────────────────────────
   umbravine: {
-    id:             'umbravine',
-    rarity:         'uncommon',
+    id:    'umbravine',
+    rarity: 'uncommon',
+    baseStats: {
+      hp:             42,
+      aura:           38,
+      attack:         58,
+      specialAttack:  58,
+      defense:        52,
+      specialDefense: 55,
+      speed:          68,
+    },
     baseXPYield:    45,
-    statGrowthRate: 0.016,
     evo1MinLevel:   0,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 
+  // ── Sproutodon — earth, physical tank ───────────────────────────────────────
   sproutodon: {
-    id:             'sproutodon',
-    rarity:         'uncommon',
+    id:    'sproutodon',
+    rarity: 'uncommon',
+    baseStats: {
+      hp:             50,
+      aura:           32,
+      attack:         60,
+      specialAttack:  42,
+      defense:        65,
+      specialDefense: 58,
+      speed:          50,
+    },
     baseXPYield:    40,
-    statGrowthRate: 0.014,
     evo1MinLevel:   16,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 
+  // ── Umbrelette — shadow/light, support ──────────────────────────────────────
   umbrelette: {
-    id:             'umbrelette',
-    rarity:         'rare',
+    id:    'umbrelette',
+    rarity: 'rare',
+    baseStats: {
+      hp:             44,
+      aura:           45,
+      attack:         52,
+      specialAttack:  62,
+      defense:        55,
+      specialDefense: 60,
+      speed:          65,
+    },
     baseXPYield:    55,
-    statGrowthRate: 0.017,
     evo1MinLevel:   22,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 
+  // ── Uvee — void/light, rare attacker ────────────────────────────────────────
   uvee: {
-    id:             'uvee',
-    rarity:         'super_rare',
+    id:    'uvee',
+    rarity: 'super_rare',
+    baseStats: {
+      hp:             42,
+      aura:           50,
+      attack:         55,
+      specialAttack:  78,
+      defense:        45,
+      specialDefense: 55,
+      speed:          85,
+    },
     baseXPYield:    90,
-    statGrowthRate: 0.020,
     evo1MinLevel:   30,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
   },
 };
+
+// ── Rarity encounter weights ──────────────────────────────────────────────────
 
 /** Base encounter weights by rarity tier (before Soul Rank boost). */
 export const RARITY_BASE_WEIGHTS: Record<MonariRarity, number> = {

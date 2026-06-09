@@ -14,18 +14,16 @@ export interface MoveDexEntry {
   displayName:  string;
   category:     MoveCategory;
   element:      string;
-  /** Base power (0 for status moves). */
   power:        number;
   auraCost:     number;
-  /** Minimum Monari level to learn this move naturally. 0 = available from start. */
+  /** Hit accuracy (0–100). 100 = never misses. */
+  accuracy:     number;
+  /** Whether this move can roll a critical hit. */
+  canCrit:      boolean;
   learnLevel:   number;
-  /** Whether this move requires a True Soul Bond to use. */
   requiresTrueSoulBond: boolean;
-  /** Rarity of Monari that can learn this move (affects move pool diversity). */
   availableTo:  MonariRarity[];
-  /** Short battle description shown in move details screen. */
   description:  string;
-  /** If true, this move reduces the target's Soul Sync. */
   isSyncBreak:  boolean;
 }
 
@@ -35,8 +33,10 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     displayName:  'Basic Attack',
     category:     'physical',
     element:      'normal',
-    power:        20,
+    power:        30,
     auraCost:     0,
+    accuracy:     100,
+    canCrit:      true,
     learnLevel:   0,
     requiresTrueSoulBond: false,
     availableTo:  ['common', 'uncommon', 'rare', 'super_rare', 'ultra_rare', 'legendary', 'mythic'],
@@ -51,6 +51,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'fire',
     power:        24,
     auraCost:     0,
+    accuracy:     100,
+    canCrit:      true,
     learnLevel:   0,
     requiresTrueSoulBond: false,
     availableTo:  ['rare'],
@@ -65,6 +67,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'fire',
     power:        35,
     auraCost:     20,
+    accuracy:     95,
+    canCrit:      true,
     learnLevel:   5,
     requiresTrueSoulBond: false,
     availableTo:  ['rare'],
@@ -79,6 +83,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'fire',
     power:        40,
     auraCost:     25,
+    accuracy:     90,
+    canCrit:      true,
     learnLevel:   12,
     requiresTrueSoulBond: false,
     availableTo:  ['rare'],
@@ -93,6 +99,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'fire',
     power:        55,
     auraCost:     40,
+    accuracy:     85,
+    canCrit:      true,
     learnLevel:   20,
     requiresTrueSoulBond: false,
     availableTo:  ['rare'],
@@ -107,6 +115,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'fire',
     power:        0,
     auraCost:     15,
+    accuracy:     100,
+    canCrit:      false,
     learnLevel:   8,
     requiresTrueSoulBond: false,
     availableTo:  ['rare'],
@@ -119,8 +129,10 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     displayName:  'Aqua Ripple',
     category:     'special',
     element:      'water',
-    power:        22,
-    auraCost:     15,
+    power:        45,
+    auraCost:     18,
+    accuracy:     95,
+    canCrit:      true,
     learnLevel:   5,
     requiresTrueSoulBond: false,
     availableTo:  ['common', 'uncommon'],
@@ -135,6 +147,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'normal',
     power:        0,
     auraCost:     0,
+    accuracy:     100,
+    canCrit:      false,
     learnLevel:   0,
     requiresTrueSoulBond: false,
     availableTo:  ['common', 'uncommon', 'rare', 'super_rare', 'ultra_rare', 'legendary', 'mythic'],
@@ -149,6 +163,8 @@ export const MOVE_DEX: Record<string, MoveDexEntry> = {
     element:      'shadow',
     power:        15,
     auraCost:     30,
+    accuracy:     80,
+    canCrit:      false,
     learnLevel:   30,
     requiresTrueSoulBond: false,
     availableTo:  ['super_rare', 'ultra_rare', 'legendary', 'mythic'],

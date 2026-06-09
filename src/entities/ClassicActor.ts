@@ -2,7 +2,9 @@ import Phaser from 'phaser';
 import type { MinariData } from '../types/minari';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { NORM_SIZE, IS_TOUCH_DEVICE } from '../config/mobileConfig';
-import { COMBAT_FORMULA } from '../config/classicBattleConfig';
+import { CombatFormulaSystem } from '../systems/CombatFormulaSystem';
+import type { ComputedBattleStats } from '../systems/CombatFormulaSystem';
+import { MONARI_DEX } from '../data/monariDex';
 
 // On mobile the normalized texture is 256 px (vs 512 px desktop), so SPRITE_SCALE
 // must be computed from the actual NORM_SIZE to get the correct display height.
@@ -30,6 +32,8 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   maxAura: number;
   /** Combat level (1–100); scales HP, Aura, and stat effectiveness. */
   readonly combatLevel: number;
+  /** Computed battle stats derived from base stats + level. */
+  readonly computedStats: ComputedBattleStats;
   /** True while this actor is in a guard stance (set/cleared by ClassicBattleEngine). */
   isGuarding = false;
 
@@ -57,12 +61,13 @@ export class ClassicActor extends Phaser.GameObjects.Container {
     this.combatLevel = Math.max(1, combatLevel);
     this.facing      = isPlayer ? 1 : -1;
 
-    // Scale HP and Aura by combat level
-    const lvlMult  = 1 + COMBAT_FORMULA.LEVEL_GROWTH_RATE * (this.combatLevel - 1);
-    this.maxHp     = Math.round(data.stats.maxHp * lvlMult);
-    this.hp        = this.maxHp;
-    this.maxAura   = Math.round(data.stats.maxAura * lvlMult);
-    this.aura      = this.maxAura;
+    // Derive battle stats from monariDex base stats + level
+    const baseStats     = MONARI_DEX[data.id]?.baseStats;
+    this.computedStats  = CombatFormulaSystem.calcBattleStats(baseStats, this.combatLevel);
+    this.maxHp          = this.computedStats.maxHp;
+    this.hp             = this.maxHp;
+    this.maxAura        = this.computedStats.maxAura;
+    this.aura           = this.maxAura;
 
     const renderCfg = CHARACTER_RENDER_CONFIG[data.id] ?? DEFAULT_RENDER_CONFIG;
     this.spriteFacingRight = renderCfg.spriteFacingRight;

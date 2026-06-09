@@ -6,7 +6,8 @@ import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
 import { PLAYER_PROFILE } from '../data/playerProfile';
-import { CLASSIC_BATTLE_CONFIG, COMBAT_FORMULA } from '../config/classicBattleConfig';
+import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
+import { DAMAGE_FORMULA } from '../config/combatFormulaConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
 import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
@@ -180,8 +181,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     const playerBond   = profile?.bonds[playerMinId];
     const playerBondLv = playerBond?.bondLevel ?? 1;
-    const playerLevel  = profile?.monariLevels[playerMinId]?.level ?? COMBAT_FORMULA.DEFAULT_ENEMY_LEVEL;
-    const enemyLevel   = COMBAT_FORMULA.DEFAULT_ENEMY_LEVEL;
+    const playerLevel  = profile?.monariLevels[playerMinId]?.level ?? DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
+    const enemyLevel   = DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
 
     // Soul Sync — enemy always starts at bond level 1 (wild / rival default)
     this.playerSyncSys = new SoulSyncSystem(playerMinId, playerBondLv);
@@ -203,9 +204,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       onHideCommandMenu: ()              => this.hideMenu(),
       onDamageDealt:     (t, d, b, x, y) => this.onDamageDealt(t, d, b, x, y),
       onBattleEnd:       (winner)        => this.onBattleEnd(winner),
-      getCritBonus: (role) => {
+      getSyncTier: (role) => {
         const sys = role === 'player' ? this.playerSyncSys : this.enemySyncSys;
-        return sys.getBonuses().critBonus;
+        return sys.getTier();
       },
       onHitMeta: (target, meta) => {
         this.lastHitMeta = meta;
