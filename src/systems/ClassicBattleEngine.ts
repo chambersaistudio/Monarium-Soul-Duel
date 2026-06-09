@@ -1,7 +1,8 @@
 import type Phaser from 'phaser';
-import type { ClassicBattlePhase, PendingAction, ClassicActorRole, EngineCallbacks } from '../types/classic';
+import type { ClassicBattlePhase, PendingAction, ClassicActorRole, EngineCallbacks, ClassicMoveConfig } from '../types/classic';
 import { ClassicActor } from '../entities/ClassicActor';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS } from '../data/classicMoveData';
+import { COMBAT_FORMULA, TYPE_CHART } from '../config/classicBattleConfig';
 
 const PLAYER_ANCHOR_X = 200;
 const ENEMY_ANCHOR_X  = 760;
@@ -172,17 +173,15 @@ export class ClassicBattleEngine {
           this.setPhase('apply_hit');
 
           const isBlocked = defender.isGuarding && move.power > 0;
+          const targetRole: ClassicActorRole = action.role === 'player' ? 'enemy' : 'player';
 
           if (move.power > 0) {
-            const dmg = this.calcDamage(attacker, defender, move);
-            defender.hp = Math.max(0, defender.hp - dmg);
-            this.callbacks.onDamageDealt(
-              action.role === 'player' ? 'enemy' : 'player',
-              dmg,
-              isBlocked,
-              defender.x,
-              defender.y - 40,
+            const { damage: dmg, isCrit, typeAdvantage } = this.calcDamage(
+              attacker, defender, move, action.role,
             );
+            defender.hp = Math.max(0, defender.hp - dmg);
+            this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
+            this.callbacks.onHitMeta?.(targetRole, { isCrit, typeAdvantage });
             if (!isBlocked) defender.flashDamage();
           }
 
@@ -272,14 +271,43 @@ export class ClassicBattleEngine {
   }
 
   private calcDamage(
-    attacker: ClassicActor,
-    defender: ClassicActor,
-    move:     { power: number },
-  ): number {
-    const atkStat = attacker.minariData.stats.power;
-    const roll    = 0.85 + Math.random() * 0.15;
-    let dmg       = Math.round((move.power * (atkStat / 60)) * roll);
-    if (defender.isGuarding) dmg = Math.round(dmg * 0.3);
-    return Math.max(1, dmg);
+    attacker:    ClassicActor,
+    defender:    ClassicActor,
+    move:        ClassicMoveConfig,
+    attackerRole: ClassicActorRole,
+  ): { damage: number; isCrit: boolean; typeAdvantage: boolean } {
+    const {
+      LEVEL_GROWTH_RATE, POWER_SCALE_BASE, DEF_SCALE_BASE,
+      VARIANCE_MIN, VARIANCE_MAX, CRIT_BASE_CHANCE, CRIT_DAMAGE_MULT, GUARD_RETAIN,
+    } = COMBAT_FORMULA;
+
+    // Level scaling: each level adds LEVEL_GROWTH_RATE to the stat multiplier
+    const atkLvlMult = 1 + LEVEL_GROWTH_RATE * (attacker.combatLevel - 1);
+    const defLvlMult = 1 + LEVEL_GROWTH_RATE * (defender.combatLevel - 1);
+    const atkPow     = attacker.minariData.stats.power   * atkLvlMult;
+    const defStat    = defender.minariData.stats.defense * defLvlMult;
+
+    // Type advantage
+    const typeMult    = TYPE_CHART[move.damageType]?.[defender.minariData.element] ?? 1.0;
+    const typeAdvantage = typeMult > 1.0;
+
+    // Critical hit (base chance + Soul Sync bonus)
+    const critBonus = this.callbacks.getCritBonus?.(attackerRole) ?? 0;
+    const isCrit    = Math.random() < Math.max(0, CRIT_BASE_CHANCE + critBonus);
+    const critMult  = isCrit ? CRIT_DAMAGE_MULT : 1.0;
+
+    // Damage roll
+    const variance = VARIANCE_MIN + Math.random() * (VARIANCE_MAX - VARIANCE_MIN);
+    let dmg = Math.round(
+      move.power
+      * (atkPow  / POWER_SCALE_BASE)
+      * (DEF_SCALE_BASE / defStat)
+      * typeMult
+      * critMult
+      * variance,
+    );
+
+    if (defender.isGuarding) dmg = Math.round(dmg * GUARD_RETAIN);
+    return { damage: Math.max(1, dmg), isCrit, typeAdvantage };
   }
 }

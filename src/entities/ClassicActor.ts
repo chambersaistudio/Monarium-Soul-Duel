@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { MinariData } from '../types/minari';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { NORM_SIZE, IS_TOUCH_DEVICE } from '../config/mobileConfig';
+import { COMBAT_FORMULA } from '../config/classicBattleConfig';
 
 // On mobile the normalized texture is 256 px (vs 512 px desktop), so SPRITE_SCALE
 // must be computed from the actual NORM_SIZE to get the correct display height.
@@ -27,6 +28,8 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   maxHp: number;
   aura: number;
   maxAura: number;
+  /** Combat level (1–100); scales HP, Aura, and stat effectiveness. */
+  readonly combatLevel: number;
   /** True while this actor is in a guard stance (set/cleared by ClassicBattleEngine). */
   isGuarding = false;
 
@@ -40,21 +43,26 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   facing: 1 | -1;
 
   constructor(
-    scene:    Phaser.Scene,
-    x:        number,
-    y:        number,
-    data:     MinariData,
-    isPlayer: boolean,
+    scene:        Phaser.Scene,
+    x:            number,
+    y:            number,
+    data:         MinariData,
+    isPlayer:     boolean,
+    combatLevel = 1,
   ) {
     super(scene, x, y);
-    this.actorId    = data.id;
-    this.isPlayer   = isPlayer;
-    this.minariData = data;
-    this.hp         = data.stats.maxHp;
-    this.maxHp      = data.stats.maxHp;
-    this.aura       = data.stats.maxAura;
-    this.maxAura    = data.stats.maxAura;
-    this.facing     = isPlayer ? 1 : -1;
+    this.actorId     = data.id;
+    this.isPlayer    = isPlayer;
+    this.minariData  = data;
+    this.combatLevel = Math.max(1, combatLevel);
+    this.facing      = isPlayer ? 1 : -1;
+
+    // Scale HP and Aura by combat level
+    const lvlMult  = 1 + COMBAT_FORMULA.LEVEL_GROWTH_RATE * (this.combatLevel - 1);
+    this.maxHp     = Math.round(data.stats.maxHp * lvlMult);
+    this.hp        = this.maxHp;
+    this.maxAura   = Math.round(data.stats.maxAura * lvlMult);
+    this.aura      = this.maxAura;
 
     const renderCfg = CHARACTER_RENDER_CONFIG[data.id] ?? DEFAULT_RENDER_CONFIG;
     this.spriteFacingRight = renderCfg.spriteFacingRight;

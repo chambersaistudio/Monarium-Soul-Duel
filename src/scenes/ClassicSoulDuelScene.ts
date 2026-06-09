@@ -6,7 +6,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
 import { PLAYER_PROFILE } from '../data/playerProfile';
-import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
+import { CLASSIC_BATTLE_CONFIG, COMBAT_FORMULA } from '../config/classicBattleConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
 import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
@@ -111,6 +111,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private playerSyncSys!: SoulSyncSystem;
   private enemySyncSys!:  SoulSyncSystem;
 
+  // Last hit metadata from engine (set by onHitMeta, read by onDamageDealt)
+  private lastHitMeta = { isCrit: false, typeAdvantage: false };
+
   // Sync bar widgets
   private playerSyncFill!: Phaser.GameObjects.Rectangle;
   private enemySyncFill!:  Phaser.GameObjects.Rectangle;
@@ -177,6 +180,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     const playerBond   = profile?.bonds[playerMinId];
     const playerBondLv = playerBond?.bondLevel ?? 1;
+    const playerLevel  = profile?.monariLevels[playerMinId]?.level ?? COMBAT_FORMULA.DEFAULT_ENEMY_LEVEL;
+    const enemyLevel   = COMBAT_FORMULA.DEFAULT_ENEMY_LEVEL;
 
     // Soul Sync — enemy always starts at bond level 1 (wild / rival default)
     this.playerSyncSys = new SoulSyncSystem(playerMinId, playerBondLv);
@@ -184,9 +189,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.playerActor = new ClassicActor(
       this, this.pAnchorX, this.groundY - playerData.bodyHeight / 2, playerData, true,
+      playerLevel,
     );
     this.enemyActor = new ClassicActor(
       this, this.eAnchorX, this.groundY - enemyData.bodyHeight / 2, enemyData, false,
+      enemyLevel,
     );
 
     // ── Engine ────────────────────────────────────────────────────────────────
@@ -196,6 +203,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       onHideCommandMenu: ()              => this.hideMenu(),
       onDamageDealt:     (t, d, b, x, y) => this.onDamageDealt(t, d, b, x, y),
       onBattleEnd:       (winner)        => this.onBattleEnd(winner),
+      getCritBonus: (role) => {
+        const sys = role === 'player' ? this.playerSyncSys : this.enemySyncSys;
+        return sys.getBonuses().critBonus;
+      },
+      onHitMeta: (target, meta) => {
+        this.lastHitMeta = meta;
+        const attackerSys = target === 'player' ? this.enemySyncSys : this.playerSyncSys;
+        if (meta.typeAdvantage) attackerSys.onTypeAdvantage();
+      },
     });
 
     // ── Audio ─────────────────────────────────────────────────────────────────
@@ -203,7 +219,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.audio.playBgm(AUDIO_KEYS.bgm.battle);
 
     // ── UI ────────────────────────────────────────────────────────────────────
-    this.buildHpBars(w, playerData.name, enemyData.name);
+    this.buildHpBars(w, playerData.name, enemyData.name, playerLevel, enemyLevel, playerBondLv);
     this.buildBattleHud(w, h, playerData.id);
     this.buildLabels(w);
 
@@ -294,7 +310,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   // ── HP + Aura bars ─────────────────────────────────────────────────────────
 
-  private buildHpBars(w: number, playerName: string, enemyName: string): void {
+  private buildHpBars(
+    w: number, playerName: string, enemyName: string,
+    playerLevel: number, enemyLevel: number, bondLv: number,
+  ): void {
     const mob  = IS_TOUCH_DEVICE;
     const d    = 20;
     const cardW = mob ? Math.round(w * 0.43) : 300;
@@ -307,9 +326,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const profile = this.registry.get('player_profile') as PlayerProfile | null;
     const playerMinId = this.battleCtx?.playerMinariId ?? 'flarepaw';
     const enemyMinId = this.battleCtx?.enemyMinariId ?? 'droplet';
-    const playerLevel = profile?.monariLevels[playerMinId]?.level ?? 7;
-    const enemyLevel = 7;
-    const bondLv = profile?.bonds[playerMinId]?.bondLevel ?? 1;
 
     const drawCard = (x: number, y: number, side: 'player' | 'enemy', name: string, id: string, level: number, bond: number) => {
       const g = this.add.graphics().setDepth(d);
@@ -835,10 +851,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
     } else {
       attackerSys.onLandAttack();
-      const isCrit = amount > 30; // rough threshold for crit-level hit
+      // lastHitMeta is set by onHitMeta callback (fires just before onDamageDealt)
+      const { isCrit, typeAdvantage } = this.lastHitMeta;
       if (isCrit) defenderSys.onTakeCrit();
       else        defenderSys.onTakeHeavyHit();
-      this.spawnDamageNumber(wx, wy, amount);
+      this.spawnDamageNumber(wx, wy, amount, isCrit, typeAdvantage);
       this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
       this.audio.playSfx(AUDIO_KEYS.sfx.hurtImpact, 0.6);
       this.audio.playCreatureHurt(actor.actorId);
@@ -880,10 +897,16 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     };
   }
 
-  private spawnDamageNumber(wx: number, wy: number, amount: number): void {
-    const mob = IS_TOUCH_DEVICE;
-    const txt = this.add.text(wx, wy, `-${amount}`, {
-      fontSize: mob ? '30px' : '22px', color: '#ffdd44',
+  private spawnDamageNumber(
+    wx: number, wy: number, amount: number,
+    isCrit = false, typeAdvantage = false,
+  ): void {
+    const mob    = IS_TOUCH_DEVICE;
+    const color  = isCrit ? '#ff4466' : typeAdvantage ? '#ffaa22' : '#ffdd44';
+    const size   = isCrit ? (mob ? '36px' : '28px') : (mob ? '30px' : '22px');
+    const label  = isCrit ? `★ ${amount}!` : `-${amount}`;
+    const txt    = this.add.text(wx, wy, label, {
+      fontSize: size, color,
       fontStyle: 'bold', fontFamily: 'monospace', stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(50);
     this.tweens.add({ targets: txt, y: wy - 60, alpha: 0, duration: 900, ease: 'Cubic.Out', onComplete: () => txt.destroy() });

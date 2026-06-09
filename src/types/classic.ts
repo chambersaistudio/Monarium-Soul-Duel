@@ -42,6 +42,12 @@ export interface PendingAction {
   moveId: string;
 }
 
+/** Extra metadata about a single hit, provided alongside onDamageDealt. */
+export interface CombatHitMeta {
+  isCrit:        boolean;
+  typeAdvantage: boolean;  // attacker hit into a weakness (type multiplier > 1.0)
+}
+
 export interface EngineCallbacks {
   onPhaseChange: (phase: ClassicBattlePhase) => void;
   onShowCommandMenu: () => void;
@@ -54,4 +60,8 @@ export interface EngineCallbacks {
     worldY:  number,
   ) => void;
   onBattleEnd: (winner: ClassicActorRole) => void;
+  /** Optional: return the attacker's current crit-chance bonus from Soul Sync. */
+  getCritBonus?: (attackerRole: ClassicActorRole) => number;
+  /** Optional: called immediately after onDamageDealt with hit metadata. */
+  onHitMeta?:   (target: ClassicActorRole, meta: CombatHitMeta) => void;
 }
