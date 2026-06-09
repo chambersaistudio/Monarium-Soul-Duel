@@ -3,73 +3,132 @@
 const fs   = require('fs');
 const path = require('path');
 
-// Optional: node gen-manifest.js [characterName] to update only one character
-const filterChar  = process.argv[2] || null;
-const publicChars = path.join(__dirname, '..', 'public', 'assets', 'characters');
-const tsOutFile   = path.join(__dirname, '..', 'src', 'generated', 'characters-manifest.ts');
+// Optional: node gen-manifest.js [characterName] to update only one entry
+const filterEntry = process.argv[2] || null;
 
-// ── Helpers ─────────────���──────────────────────────────────────────────────────
+const PUBLIC       = path.join(__dirname, '..', 'public', 'assets');
+const CHARS_DIR    = path.join(PUBLIC, 'characters');
+const MONARI_DIR   = path.join(PUBLIC, 'monari');
+const TS_OUT_FILE  = path.join(__dirname, '..', 'src', 'generated', 'characters-manifest.ts');
+
+// Folders inside a character/monari root that are NOT animation frame folders.
+// gen-manifest will skip these when scanning for animation clips.
+const NON_ANIM_FOLDERS = new Set([
+  'reference', 'portraits', 'overworld', 'cutscenes',
+]);
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function numericStem(filename) {
   const m = path.basename(filename, '.png').match(/\d+/);
   return m ? parseInt(m[0], 10) : 0;
 }
 
-function scanCharacter(charDir) {
+function getFrames(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => /\.png$/i.test(f))
+    .sort((a, b) => numericStem(a) - numericStem(b))
+    .map(f => path.basename(f, '.png'));
+}
+
+/**
+ * Scan a character/monari root directory for animation folders.
+ *
+ * Two layouts are supported:
+ *   flat    — animation PNGs live directly inside charDir/{folder}/
+ *   wrapped — animation PNGs live inside charDir/battle/{folder}/
+ *
+ * Both layouts produce the same manifest output (folder name as key).
+ * Folders listed in NON_ANIM_FOLDERS are always skipped.
+ */
+function scanEntry(entryDir) {
   const animations = {};
-  for (const entry of fs.readdirSync(charDir, { withFileTypes: true })) {
+
+  for (const entry of fs.readdirSync(entryDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const folder     = entry.name;
-    const folderPath = path.join(charDir, folder);
-    const frames     = fs.readdirSync(folderPath)
-      .filter(f => /\.png$/i.test(f))
-      .sort((a, b) => numericStem(a) - numericStem(b))
-      .map(f => path.basename(f, '.png'));
-    if (frames.length > 0) animations[folder] = frames;
+    if (NON_ANIM_FOLDERS.has(entry.name)) continue;
+
+    const folderPath = path.join(entryDir, entry.name);
+
+    if (entry.name === 'battle') {
+      // battle/ is an organisational wrapper — scan its sub-directories
+      for (const sub of fs.readdirSync(folderPath, { withFileTypes: true })) {
+        if (!sub.isDirectory()) continue;
+        const frames = getFrames(path.join(folderPath, sub.name));
+        if (frames.length > 0) animations[sub.name] = frames;
+      }
+    } else {
+      // Flat animation folder at the character/monari root
+      const frames = getFrames(folderPath);
+      if (frames.length > 0) animations[entry.name] = frames;
+    }
   }
+
   return animations;
 }
 
-// ── Scan all character directories ���───────────────────────────────────────────
+// ── Scan directories ───────────────────────────────────────────────────────────
 
-const allChars = {};
-for (const entry of fs.readdirSync(publicChars, { withFileTypes: true })) {
-  if (!entry.isDirectory()) continue;
-  if (filterChar && entry.name !== filterChar) continue;
-  const charName = entry.name;
-  const charDir  = path.join(publicChars, charName);
-  const anims    = scanCharacter(charDir);
-  if (Object.keys(anims).length > 0) {
-    allChars[charName] = anims;
+function scanDir(dir, assetBase) {
+  const result = {};
+  if (!fs.existsSync(dir)) return result;
+
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (filterEntry && entry.name !== filterEntry) continue;
+
+    const entryDir  = path.join(dir, entry.name);
+    const anims     = scanEntry(entryDir);
+    if (Object.keys(anims).length > 0) {
+      result[entry.name] = { base: `${assetBase}/${entry.name}`, animations: anims };
+    }
   }
+
+  return result;
 }
 
-if (Object.keys(allChars).length === 0) {
-  console.error('[gen-manifest] No characters with animation folders found.');
+const allChars   = scanDir(CHARS_DIR, 'assets/characters');
+const allMonari  = scanDir(MONARI_DIR, 'assets/monari');
+const allEntries = { ...allChars, ...allMonari };
+
+if (Object.keys(allEntries).length === 0) {
+  console.error('[gen-manifest] No entries with animation folders found.');
   process.exit(1);
 }
 
-// ── Write per-character JSON manifests (runtime use) ─────────────────────────
+// ── Write per-entry JSON manifests (runtime use) ───────────────────────────────
 
-for (const [charName, animations] of Object.entries(allChars)) {
-  const jsonOut  = path.join(publicChars, charName, 'sprite-manifest.json');
-  const jsonData = { character: charName, generated: new Date().toISOString().slice(0, 10), animations };
+function writeRuntimeJson(dir, entryName, animations) {
+  const jsonOut  = path.join(dir, entryName, 'sprite-manifest.json');
+  const jsonData = {
+    character: entryName,
+    generated: new Date().toISOString().slice(0, 10),
+    animations,
+  };
   fs.writeFileSync(jsonOut, JSON.stringify(jsonData, null, 2) + '\n');
   console.log(`[gen-manifest] → ${jsonOut}`);
 }
 
+for (const [name, { animations }] of Object.entries(allChars)) {
+  writeRuntimeJson(CHARS_DIR, name, animations);
+}
+for (const [name, { animations }] of Object.entries(allMonari)) {
+  writeRuntimeJson(MONARI_DIR, name, animations);
+}
+
 // ── Write unified TypeScript manifest (compile-time import) ───────────────────
 
-const tsDir = path.dirname(tsOutFile);
+const tsDir = path.dirname(TS_OUT_FILE);
 if (!fs.existsSync(tsDir)) fs.mkdirSync(tsDir, { recursive: true });
 
-const charBlocks = Object.entries(allChars).map(([charName, animations]) => {
+const charBlocks = Object.entries(allEntries).map(([name, { base, animations }]) => {
   const animLines = Object.entries(animations).map(
     ([folder, stems]) => `      ${folder}: [${stems.map(s => `'${s}'`).join(', ')}],`,
   );
   return [
-    `  ${charName}: {`,
-    `    base: 'assets/characters/${charName}',`,
+    `  ${name}: {`,
+    `    base: '${base}',`,
     `    animations: {`,
     ...animLines,
     `    },`,
@@ -92,15 +151,15 @@ const tsContent = [
   '',
 ].join('\n');
 
-fs.writeFileSync(tsOutFile, tsContent);
-console.log(`[gen-manifest] → ${tsOutFile}`);
+fs.writeFileSync(TS_OUT_FILE, tsContent);
+console.log(`[gen-manifest] → ${TS_OUT_FILE}`);
 console.log('');
 
-// ── Console summary ─��─────────────────────────────────────────────────────────
+// ── Console summary ────────────────────────────────────────────────────────────
 
-for (const [charName, animations] of Object.entries(allChars)) {
+for (const [name, { base, animations }] of Object.entries(allEntries)) {
   const total = Object.values(animations).reduce((n, f) => n + f.length, 0);
-  console.log(`${charName}  (${total} frames total)`);
+  console.log(`${name}  (${total} frames)  base: ${base}`);
   for (const [folder, stems] of Object.entries(animations)) {
     console.log(`  ${folder}: ${stems.length}f  [${stems.join(', ')}]`);
   }

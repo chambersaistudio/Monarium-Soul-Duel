@@ -1,0 +1,33 @@
+{
+  "character": "droplet",
+  "generated": "2026-06-09",
+  "animations": {
+    "attack": [
+      "frame_031"
+    ],
+    "guard": [
+      "frame_046",
+      "frame_048",
+      "frame_050"
+    ],
+    "hurt": [
+      "frame_040",
+      "frame_042"
+    ],
+    "idle": [
+      "frame_002",
+      "frame_004",
+      "frame_006",
+      "frame_007",
+      "frame_008",
+      "frame_010",
+      "frame_012",
+      "frame_013",
+      "frame_014"
+    ],
+    "run": [
+      "frame_017",
+      "frame_018"
+    ]
+  }
+}
