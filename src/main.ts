@@ -7,6 +7,7 @@ import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
+import { BattleLabScene } from './scenes/BattleLabScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -28,6 +29,7 @@ const config: Phaser.Types.Core.GameConfig = {
     ModeSelectScene,
     ClassicOverworldScene,
     ClassicSoulDuelScene,
+    BattleLabScene,
     OverworldScene,
     BattleScene,
   ],

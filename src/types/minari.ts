@@ -1,4 +1,4 @@
-export type Element = 'fire' | 'water' | 'wind' | 'earth' | 'lightning' | 'shadow' | 'light' | 'void';
+export type Element = 'neutral' | 'ember' | 'aqua' | 'terra' | 'gale' | 'bolt' | 'ice' | 'shadow' | 'light' | 'aether';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
 
 export interface FighterStats {

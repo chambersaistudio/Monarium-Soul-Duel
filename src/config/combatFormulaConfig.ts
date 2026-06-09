@@ -2,6 +2,8 @@
  * All tunable constants for the MONARIUM combat formula system.
  * Read docs/gameplay/MONARIUM_GAME_MECHANICS.md before modifying.
  * See tools/balance_calculator.ts to verify balance targets.
+ *
+ * Type effectiveness lives in elementEffectivenessConfig.ts.
  */
 
 // ── Stat calculation ──────────────────────────────────────────────────────────
@@ -40,19 +42,3 @@ export const SYNC_DAMAGE_MODIFIERS: Record<string, number> = {
   broken:    0.90,
 } as const;
 
-// ── Type effectiveness chart ──────────────────────────────────────────────────
-// Key: attacker move element → defender Monari element → damage multiplier.
-// Missing combinations default to 1.0 (neutral).
-
-export const TYPE_CHART: Readonly<Record<string, Record<string, number>>> = {
-  ember:    { earth: 1.25, water: 0.80, aqua: 0.80 },
-  fire:     { earth: 1.25, water: 0.80, aqua: 0.80 },
-  water:    { fire:  1.25, earth: 0.80 },
-  aqua:     { fire:  1.25, earth: 0.80 },
-  earth:    { fire:  0.80, lightning: 1.25, bolt: 1.25 },
-  shadow:   { light: 1.25, shadow: 0.80 },
-  light:    { shadow: 1.25 },
-  physical: {},
-  none:     {},
-  normal:   {},
-} as const;

@@ -36,6 +36,8 @@ export class SoulSyncSystem {
   onSwap():          void { this.adjust(SYNC_EVENTS.SWAP_OUT); }
   onLowHpPressure(): void { this.adjust(SYNC_EVENTS.LOW_HP_PRESSURE); }
 
+  applyDelta(delta: number): void { this.adjust(delta); }
+
   /** Call once at end of each turn for passive recovery. */
   onTurnEnd(bondLevel: number): void {
     const clamped = Math.max(1, Math.min(10, bondLevel));

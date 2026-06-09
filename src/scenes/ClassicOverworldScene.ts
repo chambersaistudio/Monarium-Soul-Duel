@@ -83,6 +83,16 @@ export class ClassicOverworldScene extends Phaser.Scene {
   create(): void {
     const { width: w, height: h } = this.scale;
 
+    // Reset flags that persist across scene restarts (Phaser reuses scene instances)
+    this.dialogActive       = false;
+    this.starterPanelActive = false;
+    this.startMenuActive    = false;
+    this.dialogPanel        = [];
+    this.dialogOnEnd        = null;
+    this.promptTarget       = null;
+    this.promptExit         = null;
+    this.startMenuObjects   = [];
+
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
 

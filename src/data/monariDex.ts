@@ -15,7 +15,7 @@
  *   Turns/KO   5–9
  */
 
-import type { MonariRarity } from '../types/progression';
+import type { MonariRarity, BattleArchetype } from '../types/progression';
 
 // ── Base stats ────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,8 @@ export interface MonariDexEntry {
   evolutions:      string[];
   /** Wild encounter weight relative to rarity tier base (normally 1.0). */
   encounterWeight: number;
+  /** Combat role archetype label used in Battle Lab and codex UI. */
+  battleArchetype?: BattleArchetype;
 }
 
 // ── Dex entries ───────────────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Physical Striker',
   },
 
   // ── Droplet — water, special attacker ───────────────────────────────────────
@@ -91,6 +94,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Arcane Caster',
   },
 
   // ── Umbravine — shadow, balanced attacker ────────────────────────────────────
@@ -111,6 +115,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Shadow Assassin',
   },
 
   // ── Sproutodon — earth, physical tank ───────────────────────────────────────
@@ -131,6 +136,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Bulky Guardian',
   },
 
   // ── Umbrelette — shadow/light, support ──────────────────────────────────────
@@ -151,6 +157,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Support Controller',
   },
 
   // ── Uvee — void/light, rare attacker ────────────────────────────────────────
@@ -171,6 +178,7 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
+    battleArchetype: 'Speedster',
   },
 };
 

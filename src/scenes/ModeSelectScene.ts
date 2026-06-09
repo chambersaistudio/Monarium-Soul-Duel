@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
 
-const MODES = [
+const BASE_MODES = [
   {
     key:  'ClassicOverworldScene',
     name: 'Classic Soul Duel',
@@ -14,6 +14,17 @@ const MODES = [
     desc: 'Real-time action prototype (original battle mode).',
   },
 ];
+
+const DEBUG_MODES = [
+  {
+    key:  'BattleLabScene',
+    name: 'Battle Lab',
+    desc: 'Formula debugger — damage calc sandbox. [DEBUG]',
+  },
+];
+
+const isDebugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+const MODES = isDebugMode ? [...BASE_MODES, ...DEBUG_MODES] : BASE_MODES;
 
 export class ModeSelectScene extends Phaser.Scene {
   private cursor    = 0;
@@ -51,7 +62,12 @@ export class ModeSelectScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // Card positions — proportional so they fit any viewport height
-    this.cardYArr = [Math.round(h * 0.46), Math.round(h * 0.74)];
+    const n = MODES.length;
+    if (n <= 2) {
+      this.cardYArr = [Math.round(h * 0.46), Math.round(h * 0.74)];
+    } else {
+      this.cardYArr = MODES.map((_, i) => Math.round(h * (0.37 + i * 0.20)));
+    }
     MODES.forEach((mode, i) => {
       const cy = this.cardYArr[i];
 
@@ -81,13 +97,12 @@ export class ModeSelectScene extends Phaser.Scene {
       card.on('pointerover', () => { this.cursor = i; this.updateCursor(); });
     });
 
-    // Cursor arrow
-    this.add.text(w / 2 - 260, this.cardYArr[0], '▶', {
-      fontSize: '18px', color: '#ff6600', fontFamily: 'monospace',
-    }).setOrigin(0.5).setName('cursor_arrow_0');
-    this.add.text(w / 2 - 260, this.cardYArr[1], '▶', {
-      fontSize: '18px', color: '#ff6600', fontFamily: 'monospace',
-    }).setOrigin(0.5).setName('cursor_arrow_1');
+    // Cursor arrows — one per mode
+    MODES.forEach((_, i) => {
+      this.add.text(w / 2 - 260, this.cardYArr[i], '▶', {
+        fontSize: '18px', color: '#ff6600', fontFamily: 'monospace',
+      }).setOrigin(0.5).setName(`cursor_arrow_${i}`);
+    });
 
     this.add.text(w / 2, h - 20, '← Back to Title: ESC', {
       fontSize: '10px', color: '#444444', fontFamily: 'monospace',
@@ -113,10 +128,10 @@ export class ModeSelectScene extends Phaser.Scene {
       lbl.setColor(i === this.cursor ? '#ff9944' : '#ffffff');
     });
     const arrows = this.children.list.filter(
-      c => c.name === 'cursor_arrow_0' || c.name === 'cursor_arrow_1',
+      c => typeof c.name === 'string' && c.name.startsWith('cursor_arrow_'),
     ) as Phaser.GameObjects.Text[];
     arrows.forEach(a => {
-      const idx = a.name === 'cursor_arrow_0' ? 0 : 1;
+      const idx = parseInt(a.name.replace('cursor_arrow_', ''), 10);
       a.setAlpha(idx === this.cursor ? 1 : 0.15);
       a.setY(this.cardYArr[idx]);
     });

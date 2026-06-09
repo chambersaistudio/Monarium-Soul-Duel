@@ -13,6 +13,7 @@ import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from 
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
+import { getEffectivenessMessage } from '../config/elementEffectivenessConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
 import type { ClassicBattleContext } from '../types/overworld';
 import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '../types/progression';
@@ -30,11 +31,12 @@ const MAIN_BTN_THEMES: Record<string, BtnTheme> = {
 
 function elementLabelForMove(type?: string): string {
   switch (type) {
-    case 'ember': return 'Ember';
-    case 'water': return 'Aqua';
-    case 'physical': return 'Physical';
-    case 'none': return 'Guard';
-    default: return 'Neutral';
+    case 'ember':  return 'Ember';
+    case 'aqua':   return 'Aqua';
+    case 'terra':  return 'Terra';
+    case 'shadow': return 'Shadow';
+    case 'none':   return 'Guard';
+    default:       return 'Neutral';
   }
 }
 
@@ -42,7 +44,9 @@ function dmgTypeTheme(type: string): BtnTheme {
   switch (type) {
     case 'physical': return { fill: 0x2d1500, selFill: 0x5a2a00, border: 0xcc6622, accent: 0xff7733 };
     case 'ember':    return { fill: 0x2d0800, selFill: 0x5a1000, border: 0xee3300, accent: 0xff5522 };
-    case 'water':    return { fill: 0x001433, selFill: 0x002266, border: 0x2266ee, accent: 0x4488ff };
+    case 'aqua':     return { fill: 0x001433, selFill: 0x002266, border: 0x2266ee, accent: 0x4488ff };
+    case 'terra':    return { fill: 0x0d1f00, selFill: 0x1a3d00, border: 0x44aa22, accent: 0x66cc33 };
+    case 'shadow':   return { fill: 0x11002a, selFill: 0x220055, border: 0x7733cc, accent: 0x9955ee };
     case 'none':     return { fill: 0x0e1e2e, selFill: 0x1a3248, border: 0x5588aa, accent: 0x88aacc };
     default:         return { fill: 0x111128, selFill: 0x1e1e44, border: 0x4455aa, accent: 0x6677bb };
   }
@@ -113,7 +117,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private enemySyncSys!:  SoulSyncSystem;
 
   // Last hit metadata from engine (set by onHitMeta, read by onDamageDealt)
-  private lastHitMeta = { isCrit: false, typeAdvantage: false };
+  private lastHitMeta = { isCrit: false, typeAdvantage: false, typeModifier: 1, typeResisted: false };
 
   // Sync bar widgets
   private playerSyncFill!: Phaser.GameObjects.Rectangle;
@@ -124,6 +128,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private phaseLabel!:       Phaser.GameObjects.Text;
   private playerGuardLabel!: Phaser.GameObjects.Text;
   private enemyGuardLabel!:  Phaser.GameObjects.Text;
+  private battleCallout!:    Phaser.GameObjects.Text;
 
   // Input
   private upKey!:    Phaser.Input.Keyboard.Key;
@@ -207,6 +212,22 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       getSyncTier: (role) => {
         const sys = role === 'player' ? this.playerSyncSys : this.enemySyncSys;
         return sys.getTier();
+      },
+      onMoveAnnounce: (role, _moveId, moveName) => {
+        const actor = role === 'player' ? this.playerActor : this.enemyActor;
+        const name  = MINARI_ROSTER[actor.actorId]?.name ?? actor.actorId;
+        this.showBattleCallout(`${name} used ${moveName}!`);
+      },
+      onMoveMiss: (role, moveName) => {
+        const actor = role === 'player' ? this.playerActor : this.enemyActor;
+        const name  = MINARI_ROSTER[actor.actorId]?.name ?? actor.actorId;
+        this.showBattleCallout(`${name}'s ${moveName} missed!`, '#888899');
+        const sys = role === 'player' ? this.playerSyncSys : this.enemySyncSys;
+        sys.onMissAttack();
+      },
+      onSyncDamage: (target, delta) => {
+        const sys = target === 'player' ? this.playerSyncSys : this.enemySyncSys;
+        sys.applyDelta(delta);
       },
       onHitMeta: (target, meta) => {
         this.lastHitMeta = meta;
@@ -448,6 +469,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(25).setVisible(false);
     this.enemyGuardLabel  = this.add.text(this.eAnchorX, 0, '[ GUARD ]', guardStyle)
       .setOrigin(0.5).setDepth(25).setVisible(false);
+
+    this.battleCallout = this.add.text(w / 2, this.groundY - 50, '', {
+      fontSize: mob ? '18px' : '16px', color: '#ffffff',
+      fontStyle: 'bold', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(22).setAlpha(0);
   }
 
   private updateGuardLabel(): void {
@@ -851,11 +878,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.spawnBlockedDisplay(wx, wy, amount);
       this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
     } else {
-      attackerSys.onLandAttack();
       // lastHitMeta is set by onHitMeta callback (fires just before onDamageDealt)
-      const { isCrit, typeAdvantage } = this.lastHitMeta;
+      const { isCrit, typeAdvantage, typeModifier } = this.lastHitMeta;
       if (isCrit) defenderSys.onTakeCrit();
-      else        defenderSys.onTakeHeavyHit();
+      const effectMsg = getEffectivenessMessage(typeModifier);
+      if (effectMsg) this.showBattleCallout(effectMsg, typeAdvantage ? '#ffaa22' : '#88aaff');
       this.spawnDamageNumber(wx, wy, amount, isCrit, typeAdvantage);
       this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
       this.audio.playSfx(AUDIO_KEYS.sfx.hurtImpact, 0.6);
@@ -926,6 +953,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     for (const o of [h1, h2]) {
       this.tweens.add({ targets: o, y: o.y - 50, alpha: 0, duration: 1100, ease: 'Cubic.Out', onComplete: () => o.destroy() });
     }
+  }
+
+  private showBattleCallout(msg: string, color = '#ffffff'): void {
+    if (!this.battleCallout) return;
+    this.tweens.killTweensOf(this.battleCallout);
+    this.battleCallout.setText(msg).setColor(color).setAlpha(1).setVisible(true);
+    this.tweens.add({ targets: this.battleCallout, alpha: 0, duration: 1600, delay: 1000, ease: 'Quad.In' });
   }
 
   // ── Battle end ─────────────────────────────────────────────────────────────

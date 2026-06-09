@@ -4,7 +4,8 @@
  * Read docs/gameplay/MONARIUM_GAME_MECHANICS.md before modifying.
  */
 
-import { DAMAGE_FORMULA, SYNC_DAMAGE_MODIFIERS, TYPE_CHART } from '../config/combatFormulaConfig';
+import { DAMAGE_FORMULA, SYNC_DAMAGE_MODIFIERS } from '../config/combatFormulaConfig';
+import { getElementModifier } from '../config/elementEffectivenessConfig';
 import type { ComputedBattleStats } from './CombatFormulaSystem';
 import type { SoulSyncTier } from '../types/progression';
 
@@ -63,7 +64,7 @@ export class BattleCalculator {
     const levelFactor  = LEVEL_BASE + atk.level / 100;
 
     // ── Type modifier ─────────────────────────────────────────────────────────
-    const typeModifier = TYPE_CHART[input.moveElement]?.[input.defenderElement] ?? 1.0;
+    const typeModifier = getElementModifier(input.moveElement, input.defenderElement);
     const typeAdvantage = typeModifier > 1.0;
     const typeResisted  = typeModifier < 1.0;
 

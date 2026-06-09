@@ -10,9 +10,8 @@ const ENEMY_ANCHOR_X  = 760;
 const CONTACT_OFFSET  = 100;  // px from the target's centre where the attacker stops
 const APPROACH_SPEED  = 380;  // px/s
 
-// Aura gains per action type
 const AURA_GAIN_ATTACK = 10;
-const AURA_GAIN_OTHER  = 5;
+const AURA_GAIN_GUARD  = 0;   // guard-specific aura comes from move.auraGain
 
 export class ClassicBattleEngine {
   private phase: ClassicBattlePhase = 'battle_intro';
@@ -38,14 +37,12 @@ export class ClassicBattleEngine {
 
   get currentPhase(): ClassicBattlePhase { return this.phase; }
 
-  /** Call once (after any intro animation) to begin the first turn. */
   startBattle(): void {
     this.player.playAnim('idle');
     this.enemy.playAnim('idle');
     this.openCommandMenu();
   }
 
-  /** Call when the player picks a command from the move menu. */
   submitPlayerMove(moveId: string): void {
     if (this.phase !== 'player_command') return;
     this.callbacks.onHideCommandMenu();
@@ -57,24 +54,14 @@ export class ClassicBattleEngine {
     this.executeNextAction();
   }
 
-  /**
-   * Call when the player attempts a capture but the ball escapes.
-   * The enemy still gets to act this turn; the player's turn is wasted.
-   */
   submitCaptureFailed(): void {
     if (this.phase !== 'player_command') return;
     this.callbacks.onHideCommandMenu();
-    this.actionQueue = [
-      { role: 'enemy', moveId: this.selectEnemyMove() },
-    ];
+    this.actionQueue = [{ role: 'enemy', moveId: this.selectEnemyMove() }];
     this.setPhase('action_queue');
     this.executeNextAction();
   }
 
-  /**
-   * Called on a successful capture — enemy concedes immediately.
-   * The battle ends as a player victory without further combat.
-   */
   forfeit(): void {
     this.releaseGuardStances();
     this.setPhase('victory');
@@ -104,7 +91,7 @@ export class ClassicBattleEngine {
 
     const action   = this.actionQueue.shift()!;
     const attacker = action.role === 'player' ? this.player : this.enemy;
-    const defender  = action.role === 'player' ? this.enemy  : this.player;
+    const defender = action.role === 'player' ? this.enemy  : this.player;
     const move     = CLASSIC_MOVES[action.moveId];
 
     if (!move) {
@@ -113,42 +100,68 @@ export class ClassicBattleEngine {
       return;
     }
 
-    // Deduct aura cost (clamp at 0 — engine allows executing even if broke)
+    // Announce move before anything else
+    this.callbacks.onMoveAnnounce?.(action.role, move.id, move.displayName);
+
+    // Deduct aura cost
     const auraCost = move.auraCost ?? 0;
-    if (auraCost > 0) {
-      attacker.aura = Math.max(0, attacker.aura - auraCost);
-    }
+    if (auraCost > 0) attacker.aura = Math.max(0, attacker.aura - auraCost);
 
     const anchorX  = action.role === 'player' ? PLAYER_ANCHOR_X : ENEMY_ANCHOR_X;
     const contactX = action.role === 'player'
       ? defender.x - CONTACT_OFFSET
       : defender.x + CONTACT_OFFSET;
 
-    // ── Guard / stance-hold moves ───────────────────────────────────────────
+    // ── Guard / stance-hold moves ─────────────────────────────────────────
     if (move.holdsStance) {
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       attacker.isGuarding = true;
-      this.gainAura(attacker, AURA_GAIN_OTHER);
+      this.gainAura(attacker, move.auraGain ?? AURA_GAIN_GUARD);
       this.busy = false;
       this.afterAction();
       return;
     }
 
-    // ── Non-stance stay moves (buffs, etc.) ────────────────────────────────
+    // ── Accuracy check (skip for 100% accurate moves) ─────────────────────
+    const accuracy = move.accuracy ?? 100;
+    if (accuracy < 100 && Math.random() * 100 >= accuracy) {
+      this.callbacks.onMoveMiss?.(action.role, move.displayName);
+      attacker.playAnim('idle');
+      this.busy = false;
+      this.afterAction();
+      return;
+    }
+
+    // ── Non-stance stay moves (status / ranged attacks) ───────────────────
     if (move.movementType === 'stay') {
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       this.scene.time.delayedCall(700, () => {
+        // Apply sync damage if this is a status move with syncDamage
+        if (move.syncDamage) {
+          const targetRole: ClassicActorRole = action.role === 'player' ? 'enemy' : 'player';
+          this.callbacks.onSyncDamage?.(targetRole, move.syncDamage);
+        }
+        // If move has damage (ranged / stay attack), apply it
+        if (move.power > 0) {
+          const targetRole: ClassicActorRole = action.role === 'player' ? 'enemy' : 'player';
+          const isBlocked = defender.isGuarding;
+          const { damage: dmg, isCrit, typeModifier, typeAdvantage, typeResisted } = this.calcDamageFull(attacker, defender, move, action.role);
+          defender.hp = Math.max(0, defender.hp - dmg);
+          this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
+          this.callbacks.onHitMeta?.(targetRole, { isCrit, typeModifier, typeAdvantage, typeResisted });
+          if (!isBlocked) defender.flashDamage();
+          this.gainAura(attacker, AURA_GAIN_ATTACK);
+        }
         attacker.playAnim('idle');
-        this.gainAura(attacker, AURA_GAIN_OTHER);
         this.busy = false;
         this.afterAction();
       });
       return;
     }
 
-    // ── Dash-to-target moves ───────────────────────────────────────────────
+    // ── Dash-to-target moves ──────────────────────────────────────────────
     this.setPhase('approach_target');
     attacker.setFacing(action.role === 'player' ? 1 : -1);
     attacker.playAnim(move.approachAnim);
@@ -159,7 +172,6 @@ export class ClassicBattleEngine {
       duration: this.travelMs(attacker.x, contactX),
       ease:     'Linear',
       onComplete: () => {
-        // ── Perform action ───────────────────────────────────────────────
         this.setPhase('perform_action');
         attacker.playAnim(move.animFolder, true);
 
@@ -170,26 +182,23 @@ export class ClassicBattleEngine {
           : 200;
 
         this.scene.time.delayedCall(hitMs, () => {
-          // ── Apply hit ───────────────────────────────────────────────
           this.setPhase('apply_hit');
 
-          const isBlocked = defender.isGuarding && move.power > 0;
+          const isBlocked  = defender.isGuarding && move.power > 0;
           const targetRole: ClassicActorRole = action.role === 'player' ? 'enemy' : 'player';
 
           if (move.power > 0) {
-            const { damage: dmg, isCrit, typeAdvantage } = this.calcDamage(
+            const { damage: dmg, isCrit, typeModifier, typeAdvantage, typeResisted } = this.calcDamageFull(
               attacker, defender, move, action.role,
             );
             defender.hp = Math.max(0, defender.hp - dmg);
             this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
-            this.callbacks.onHitMeta?.(targetRole, { isCrit, typeAdvantage });
+            this.callbacks.onHitMeta?.(targetRole, { isCrit, typeModifier, typeAdvantage, typeResisted });
             if (!isBlocked) defender.flashDamage();
           }
 
-          // Aura gain for attacker after landing an attack
           this.gainAura(attacker, AURA_GAIN_ATTACK);
 
-          // ── Target reaction ─────────────────────────────────────────
           this.setPhase('target_reaction');
           if (move.targetReaction === 'hurt' && !isBlocked) {
             defender.playAnim('hurt', true);
@@ -198,13 +207,11 @@ export class ClassicBattleEngine {
             });
           }
 
-          // ── Return to anchor ────────────────────────────────────────
           this.scene.time.delayedCall(500, () => {
             if (move.returnToAnchor) {
               this.setPhase('return_to_anchor');
               attacker.setFacing(action.role === 'player' ? -1 : 1);
               attacker.playAnim(move.returnAnim);
-
               this.scene.tweens.add({
                 targets:  attacker,
                 x:        anchorX,
@@ -271,14 +278,14 @@ export class ClassicBattleEngine {
     return Math.max(150, (Math.abs(toX - fromX) / APPROACH_SPEED) * 1000);
   }
 
-  private calcDamage(
+  private calcDamageFull(
     attacker:     ClassicActor,
     defender:     ClassicActor,
     move:         ClassicMoveConfig,
     attackerRole: ClassicActorRole,
-  ): { damage: number; isCrit: boolean; typeAdvantage: boolean } {
+  ): { damage: number; isCrit: boolean; typeModifier: number; typeAdvantage: boolean; typeResisted: boolean } {
     const syncTier = (this.callbacks.getSyncTier?.(attackerRole) ?? 'stable') as import('../types/progression').SoulSyncTier;
-    const defenderElement = MINARI_ROSTER[defender.actorId]?.element ?? 'normal';
+    const defenderElement = MINARI_ROSTER[defender.actorId]?.element ?? 'neutral';
 
     const result = BattleCalculator.calculate({
       attackerStats:    attacker.computedStats,
@@ -292,6 +299,12 @@ export class ClassicBattleEngine {
       defenderGuarding: defender.isGuarding,
     });
 
-    return { damage: result.damage, isCrit: result.isCrit, typeAdvantage: result.typeAdvantage };
+    return {
+      damage:       result.damage,
+      isCrit:       result.isCrit,
+      typeModifier: result.typeModifier,
+      typeAdvantage: result.typeAdvantage,
+      typeResisted:  result.typeResisted,
+    };
   }
 }

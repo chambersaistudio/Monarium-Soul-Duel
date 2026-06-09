@@ -14,6 +14,16 @@ export type MonariRarity =
   | 'legendary'   // ~0.2% — story / event unlock
   | 'mythic';     // near-unobtainable
 
+// ── Battle Archetype ──────────────────────────────────────────────────────────
+
+export type BattleArchetype =
+  | 'Physical Striker'
+  | 'Arcane Caster'
+  | 'Shadow Assassin'
+  | 'Bulky Guardian'
+  | 'Support Controller'
+  | 'Speedster';
+
 // ── Soul Sync ─────────────────────────────────────────────────────────────────
 
 /** Four tiers corresponding to sync value ranges 0–24 / 25–49 / 50–79 / 80–100. */
