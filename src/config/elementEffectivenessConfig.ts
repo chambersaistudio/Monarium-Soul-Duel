@@ -129,3 +129,36 @@ export function getEffectivenessBattleLabLabel(modifier: number): string {
   if (modifier < 1.0) return `${modifier}× Resisted`;
   return '1.0× Neutral';
 }
+
+// ── Starter triangle assertion tests ─────────────────────────────────────────
+
+const STARTER_TRIANGLE_CASES = [
+  { atk: 'water',   def: 'fire',   expected: 1.25, label: 'Water → Fire (effective)'  },
+  { atk: 'fire',    def: 'flora',  expected: 1.25, label: 'Fire → Flora (effective)'  },
+  { atk: 'flora',   def: 'water',  expected: 1.25, label: 'Flora → Water (effective)' },
+  { atk: 'fire',    def: 'water',  expected: 0.75, label: 'Fire → Water (resisted)'   },
+  { atk: 'water',   def: 'flora',  expected: 0.75, label: 'Water → Flora (resisted)'  },
+  { atk: 'flora',   def: 'fire',   expected: 0.75, label: 'Flora → Fire (resisted)'   },
+  { atk: 'neutral', def: 'fire',   expected: 1.0,  label: 'Neutral → Fire (neutral)'  },
+] as const;
+
+/**
+ * Runs the 7 starter-triangle assertion cases.
+ * Logs failures to console.error. Returns pass/total count and per-case log.
+ */
+export function runStarterTriangleAssertions(): { pass: number; total: number; log: string[] } {
+  let pass = 0;
+  const log: string[] = [];
+  for (const c of STARTER_TRIANGLE_CASES) {
+    const got = getElementModifier(c.atk, c.def);
+    const ok  = Math.abs(got - c.expected) < 0.001;
+    if (ok) {
+      pass++;
+      log.push(`✓ ${c.label}: ${got}`);
+    } else {
+      log.push(`✗ ${c.label}: expected ${c.expected}, got ${got}`);
+      console.error(`[ElementChart FAIL] ${c.label}: expected ${c.expected}, got ${got}`);
+    }
+  }
+  return { pass, total: STARTER_TRIANGLE_CASES.length, log };
+}

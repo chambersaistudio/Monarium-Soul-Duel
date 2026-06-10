@@ -19,7 +19,7 @@ import { BattleCalculator } from '../systems/BattleCalculator';
 import { MONARI_DEX } from '../data/monariDex';
 import { MINARI_ROSTER } from '../data/minariData';
 import { CLASSIC_MOVES } from '../data/classicMoveData';
-import { getElementModifier, getEffectivenessMessage, getEffectivenessBattleLabLabel } from '../config/elementEffectivenessConfig';
+import { getElementModifier, getEffectivenessMessage, getEffectivenessBattleLabLabel, getEffectivenessLabel, runStarterTriangleAssertions } from '../config/elementEffectivenessConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
 import { IS_TOUCH_DEVICE } from '../config/mobileConfig';
 import { drawGlassPanel } from '../ui/phaserUi';
@@ -148,13 +148,15 @@ export class BattleLabScene extends Phaser.Scene {
   private moveFocusTxt!:  Phaser.GameObjects.Text;
 
   // Output panel
-  private effectTxt!:     Phaser.GameObjects.Text;
-  private rangeTxt!:      Phaser.GameObjects.Text;
-  private guardModTxt!:   Phaser.GameObjects.Text;
-  private syncModTxt!:    Phaser.GameObjects.Text;
-  private turnsTxt!:      Phaser.GameObjects.Text;
-  private trialOutputTxt!: Phaser.GameObjects.Text;
-  private outputHeaderTxt!: Phaser.GameObjects.Text;
+  private effectTxt!:         Phaser.GameObjects.Text;
+  private rangeTxt!:          Phaser.GameObjects.Text;
+  private guardModTxt!:       Phaser.GameObjects.Text;
+  private syncModTxt!:        Phaser.GameObjects.Text;
+  private turnsTxt!:          Phaser.GameObjects.Text;
+  private summaryTxt!:        Phaser.GameObjects.Text;
+  private trialOutputTxt!:    Phaser.GameObjects.Text;
+  private assertionResultTxt!: Phaser.GameObjects.Text;
+  private outputHeaderTxt!:   Phaser.GameObjects.Text;
 
   // Bottom bar
   private statusTxt!:     Phaser.GameObjects.Text;
@@ -306,12 +308,24 @@ export class BattleLabScene extends Phaser.Scene {
     this.add.text(OL, OY + OLS * 9 + 2, 'Turns to KO (avg damage):', { ...FONT_TINY }).setDepth(5);
     this.turnsTxt   = this.add.text(OL, OY + OLS * 10, '', { ...FONT_LG }).setDepth(5);
 
+    this.add.text(OL, OY + OLS * 12 + 6, 'Matchup Summary:', { ...FONT_TINY }).setDepth(5);
+    this.summaryTxt = this.add.text(OL, OY + OLS * 13 + 4, '', { ...FONT_SM }).setDepth(5);
+
     // ── Trial output panel ────────────────────────────────────────────────────
     const TL = COL_OUT_X + PAD + 4;
     const TY = TRIAL_Y + PAD + 4;
 
     this.add.text(TL, TY, 'TRIALS  ( R = run 10 trials )', { ...FONT_ORANGE }).setDepth(5);
     this.trialOutputTxt = this.add.text(TL, TY + LS + 4, 'No trials run yet.', { ...FONT_TINY, color: UI_THEME.colors.textMuted }).setDepth(5);
+
+    // ── Starter triangle assertions (run once at init) ────────────────────────
+    const assertResult = runStarterTriangleAssertions();
+    const assertColor  = assertResult.pass === assertResult.total ? '#3be071' : '#ff4e5f';
+    const assertSummary = `${assertResult.pass}/${assertResult.total} starter-triangle checks passed\n` +
+      assertResult.log.join('\n');
+    this.add.text(TL, TY + LS * 3 + 8, 'ELEMENT ASSERTIONS:', { ...FONT_TINY, color: '#cc6600' }).setDepth(5);
+    this.assertionResultTxt = this.add.text(TL, TY + LS * 4 + 6, assertSummary,
+      { ...FONT_TINY, color: assertColor }).setDepth(5);
 
     // ── Bottom bar ────────────────────────────────────────────────────────────
     this.statusTxt = this.add.text(W / 2, H - 10,
@@ -447,11 +461,23 @@ export class BattleLabScene extends Phaser.Scene {
     const atkStats = CombatFormulaSystem.calcBattleStats(atkDex?.baseStats, this.attackerLevel);
     const defStats = CombatFormulaSystem.calcBattleStats(defDex?.baseStats, this.defenderLevel);
 
+    const atkName = atkRoster?.name ?? atkId;
+    const defName = defRoster?.name ?? defId;
+
     const move = this.resolveMove(moveId);
     const syncModifier = SYNC_DAMAGE_MODIFIERS[syncTier] ?? 1.0;
     const typeModifier = getElementModifier(move.damageType, defElement);
     const effectMsg    = getEffectivenessMessage(typeModifier);
     const effLabel     = getEffectivenessBattleLabLabel(typeModifier);
+    const effLabel2    = getEffectivenessLabel(typeModifier);
+
+    // ── Matchup summary line ──────────────────────────────────────────────────
+    const summaryColor = typeModifier > 1 ? '#3be071' : typeModifier < 1 ? '#ff4e5f' : '#9da3c7';
+    const summaryLine  =
+      `${atkName} (${atkElement}) used ${move.displayName}` +
+      `  |  ${move.damageType} → ${defElement}` +
+      `  |  modifier ${typeModifier}  |  ${effLabel2}`;
+    this.summaryTxt.setText(summaryLine).setColor(summaryColor);
 
     // ── Focus indicators ──────────────────────────────────────────────────────
     this.atkFocusTxt.setText(this.focus === 'attacker' ? '[ FOCUSED ]' : '').setColor('#ff8c00');
@@ -764,7 +790,7 @@ export class BattleLabScene extends Phaser.Scene {
     return {
       displayName: moveId,
       power:       0,
-      damageType:  'physical',
+      damageType:  'neutral',
       category:    'status',
       canCrit:     false,
       auraCost:    undefined,
