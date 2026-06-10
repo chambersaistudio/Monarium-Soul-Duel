@@ -108,6 +108,16 @@ function dmgTypeTheme(type: string): BtnTheme {
   }
 }
 
+function clampPx(min: number, preferred: number, max: number): number {
+  return Math.round(Phaser.Math.Clamp(preferred, min, max));
+}
+
+function fitImageContain(img: Phaser.GameObjects.Image, maxW: number, maxH: number, bump = 1): void {
+  const frame = img.scene.textures.getFrame(img.texture.key);
+  const ratio = frame ? Math.min(maxW / frame.realWidth, maxH / frame.realHeight) * bump : 1;
+  img.setDisplaySize(Math.max(1, (frame?.realWidth ?? maxW) * ratio), Math.max(1, (frame?.realHeight ?? maxH) * ratio));
+}
+
 // ── Scene ─────────────────────────────────────────────────────────────────────
 
 export class ClassicSoulDuelScene extends Phaser.Scene {
@@ -163,6 +173,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private mainBtnTexts:   Phaser.GameObjects.Text[]     = [];
   private mainBtnW        = 0;
   private mainBtnH        = 0;
+  private readonly debugHudBounds = false;
   private readonly MAIN_BTNS = [
     { key: 'fight',   label: 'FIGHT',   icon: '⚔' },
     { key: 'bag',     label: 'BAG',     icon: '🎒' },
@@ -259,8 +270,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hpBarH   = mob ? 18 : 14;
     this.auraBarH = mob ? 8  : 6;
     this.syncBarH = mob ? 6  : 5;
-    this.hudH     = mob ? 82 : 94;
-    this.hudY     = h - this.hudH - (mob ? 54 + SAFE_AREA_BOTTOM : 72);
+    const commandBtnH = clampPx(mob ? 58 : 60, h * (mob ? 0.10 : 0.08), mob ? 88 : 96);
+    const soulStripH = clampPx(42, h * 0.06, 74);
+    this.hudH     = commandBtnH + (mob ? 14 : 18);
+    this.hudY     = h - this.hudH - soulStripH - (mob ? SAFE_AREA_BOTTOM + 6 : 14);
 
     this.drawBackground(w, h);
 
@@ -419,9 +432,40 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private imageKeyOrNull(key: string): string | null {
-    if (this.textures.exists(key)) return key;
+    if (this.textures.exists(key) && !this.hasLikelyWhiteBackdrop(key)) return key;
     const fallbackKey = UI_ASSET_FALLBACK_KEYS[key];
-    return fallbackKey && this.textures.exists(fallbackKey) ? fallbackKey : null;
+    return fallbackKey && this.textures.exists(fallbackKey) && !this.hasLikelyWhiteBackdrop(fallbackKey) ? fallbackKey : null;
+  }
+
+  private hasLikelyWhiteBackdrop(key: string): boolean {
+    try {
+      const texture = this.textures.get(key);
+      const source = texture.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+      const width = (source as HTMLImageElement).naturalWidth || (source as HTMLCanvasElement).width || 0;
+      const height = (source as HTMLImageElement).naturalHeight || (source as HTMLCanvasElement).height || 0;
+      if (!width || !height) return false;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return false;
+      ctx.drawImage(source as CanvasImageSource, 0, 0);
+      const samples: Array<[number, number]> = [[1, 1], [width - 2, 1], [1, height - 2], [width - 2, height - 2]];
+      let whiteOpaqueCorners = 0;
+      for (const [x, y] of samples) {
+        const [r, g, b, a] = ctx.getImageData(Math.max(0, x), Math.max(0, y), 1, 1).data;
+        if (a > 245 && r > 242 && g > 242 && b > 242) whiteOpaqueCorners += 1;
+      }
+      return whiteOpaqueCorners >= 3;
+    } catch {
+      return false;
+    }
+  }
+
+  private outlineHudBounds(x: number, y: number, w: number, h: number, color = 0x00ffcc, depth = 80): void {
+    if (!this.debugHudBounds) return;
+    const g = this.add.graphics().setDepth(depth);
+    g.lineStyle(1, color, 0.75).strokeRect(x, y, w, h);
   }
 
   private iconKey(prefix: 'element' | 'gender', value?: string): string {
@@ -438,9 +482,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     playerLevel: number, enemyLevel: number, bondLv: number,
   ): void {
     const mob  = IS_TOUCH_DEVICE;
+    const { height: h } = this.scale;
     const d    = 20;
-    const cardW = Math.min(mob ? Math.round(w * 0.45) : 330, w * 0.46);
-    const cardH = mob ? 84 : 90;
+    const cardW = clampPx(190, w * (mob ? 0.23 : 0.18), 300);
+    const cardH = clampPx(64, h * (mob ? 0.15 : 0.08), 105);
     this.hpBarW   = cardW - (mob ? 116 : 132);
     this.hpBarH   = mob ? 9 : 8;
     this.auraBarH = mob ? 7 : 6;
@@ -453,7 +498,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const data = MINARI_ROSTER[id];
       const panelKey = this.imageKeyOrNull(side === 'player' ? UI_ASSET_KEYS.panelPlayer : UI_ASSET_KEYS.panelEnemy);
       if (panelKey) {
-        this.add.image(x + cardW / 2, y + cardH / 2, panelKey).setDisplaySize(cardW, cardH).setDepth(d);
+        const panel = this.add.image(x + cardW / 2, y + cardH / 2, panelKey).setDepth(d);
+        fitImageContain(panel, cardW, cardH);
       } else {
         const g = this.add.graphics().setDepth(d);
         drawGlassPanel(g, x, y, cardW, cardH, {
@@ -471,10 +517,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const levelX = isPlayer ? x + cardW - 40 : x + 40;
       const textOriginX = isPlayer ? 0 : 1;
       const barX = isPlayer ? x + 56 : x + cardW - 56 - this.hpBarW;
-      const by = y + (mob ? 34 : 35);
+      const by = y + Math.round(cardH * 0.39);
 
-      this.add.image(iconX, y + 25, this.iconKey('element', data?.element)).setDisplaySize(20, 20).setDepth(d + 3);
-      this.add.image(isPlayer ? x + cardW - 15 : x + 15, y + 24, this.iconKey('gender', data?.gender)).setDisplaySize(16, 16).setDepth(d + 3);
+      this.add.image(iconX, y + 25, this.iconKey('element', data?.element)).setDisplaySize(18, 18).setDepth(d + 3);
+      this.add.image(isPlayer ? x + cardW - 15 : x + 15, y + 24, this.iconKey('gender', data?.gender)).setDisplaySize(14, 14).setDepth(d + 3);
+      this.outlineHudBounds(x, y, cardW, cardH, side === 'player' ? 0x33ff99 : 0xff66cc, d + 20);
 
       this.add.text(nameX, y + 12, name.toUpperCase(), {
         fontSize: mob ? '13px' : '15px', color: '#f8f6ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '800',
@@ -519,9 +566,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemySyncText = this.add.text(e.bx - 5, e.by + 28, '', { fontSize: '10px', color: '#ffd39a', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(1, 0).setDepth(d + 4);
 
     const badgeKey = this.imageKeyOrNull(UI_ASSET_KEYS.turnBadge);
-    if (badgeKey) this.add.image(w / 2, mob ? 45 : 56, badgeKey).setDisplaySize(mob ? 72 : 86, mob ? 66 : 80).setDepth(d + 1);
-    this.add.text(w / 2, mob ? 28 : 34, 'TURN', { fontSize: mob ? '10px' : '12px', color: '#d74dff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '700' }).setOrigin(0.5).setDepth(d + 3);
-    this.turnText = this.add.text(w / 2, mob ? 49 : 60, '01', { fontSize: mob ? '28px' : '34px', color: '#f8f2ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '900', stroke: '#2b0f4a', strokeThickness: 3 }).setOrigin(0.5).setDepth(d + 3);
+    if (badgeKey) {
+      const badge = this.add.image(w / 2, mob ? 42 : 52, badgeKey).setDepth(d + 1);
+      const badgeW = clampPx(52, w * 0.06, 86);
+      fitImageContain(badge, badgeW, badgeW);
+      this.outlineHudBounds(w / 2 - badgeW / 2, (mob ? 42 : 52) - badgeW / 2, badgeW, badgeW, 0xffff00, d + 20);
+    }
+    this.add.text(w / 2, mob ? 27 : 32, 'TURN', { fontSize: mob ? '10px' : '12px', color: '#d74dff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '700' }).setOrigin(0.5).setDepth(d + 3);
+    this.turnText = this.add.text(w / 2, mob ? 47 : 57, '01', { fontSize: mob ? '28px' : '34px', color: '#f8f2ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '900', stroke: '#2b0f4a', strokeThickness: 3 }).setOrigin(0.5).setDepth(d + 3);
   }
 
   private refreshHpBars(): void {
@@ -617,8 +669,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private buildBottomSoulMeters(w: number, h: number, playerId: string): void {
     const mob = IS_TOUCH_DEVICE;
     const d = 28;
-    const meterW = mob ? Math.round(w * 0.35) : Math.min(430, Math.round(w * 0.28));
-    const meterH = mob ? 46 : 58;
+    const meterW = clampPx(260, w * 0.32, 520);
+    const meterH = clampPx(42, h * 0.06, 74);
     const y = h - meterH - (mob ? SAFE_AREA_BOTTOM + 2 : 8);
     const leftX = mob ? 10 : 26;
     const rightX = w - meterW - (mob ? 10 : 26);
@@ -626,7 +678,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const drawFrame = (key: string, x: number, label: string, fillColor: number) => {
       const assetKey = this.imageKeyOrNull(key);
       if (assetKey) {
-        this.add.image(x + meterW / 2, y + meterH / 2, assetKey).setDisplaySize(meterW, meterH).setDepth(d);
+        const frame = this.add.image(x + meterW / 2, y + meterH / 2, assetKey).setDepth(d);
+        fitImageContain(frame, meterW, meterH);
       } else {
         const g = this.add.graphics().setDepth(d);
         drawGlassPanel(g, x, y, meterW, meterH, { radius: 18, fill: 0x050610, stroke: fillColor, glow: fillColor, alpha: 0.88 });
@@ -642,6 +695,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const text = this.add.text(x + meterW - 34, y + meterH - 20, '', {
         fontSize: mob ? '11px' : '13px', color: '#f8f6ff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600',
       }).setOrigin(0.5).setDepth(d + 3);
+      this.outlineHudBounds(x, y, meterW, meterH, fillColor, d + 20);
       return { fill, text, width: meterW - 120 };
     };
 
@@ -686,18 +740,18 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private buildBattleHud(w: number, _h: number, playerId: string): void {
     const mob  = IS_TOUCH_DEVICE;
-    const gap  = 8;
+    const gap  = mob ? 6 : 12;
     const safeBot = mob ? SAFE_AREA_BOTTOM : 0;
 
     const nMain      = this.MAIN_BTNS.length;
-    this.mainBtnW    = Math.floor((w - (nMain + 1) * gap) / nMain);
-    this.mainBtnH    = this.hudH - 20;
+    this.mainBtnW    = Math.min(clampPx(140, w * (mob ? 0.23 : 0.22), 260), Math.floor((w - (nMain + 1) * gap) / nMain));
+    this.mainBtnH    = clampPx(mob ? 58 : 60, this.hudH - (mob ? 12 : 16), mob ? 88 : 96);
 
     const moveset         = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
     this.menuCommandIds   = [...moveset, BACK_COMMAND];
     const nMoves          = this.menuCommandIds.length;
     const rows            = Math.ceil(nMoves / this.MOVE_COLS);
-    this.moveBtnW         = Math.floor((w - (this.MOVE_COLS + 1) * gap) / this.MOVE_COLS);
+    this.moveBtnW         = Math.min(clampPx(220, w * 0.36, 420), Math.floor((w - (this.MOVE_COLS + 1) * gap) / this.MOVE_COLS));
     this.moveBtnH         = Math.floor((this.hudH - 10 - (rows - 1) * 6) / rows);
 
     this.moveBtnThemes = this.menuCommandIds.map(id => {
@@ -709,7 +763,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hudGroup = this.add.container(0, this.hudY).setDepth(30).setVisible(false);
 
     const bgGfx = this.add.graphics();
-    bgGfx.fillStyle(0x07070f, 0.97);
+    bgGfx.fillStyle(0x07070f, 0.82);
     bgGfx.fillRect(0, 0, w, this.hudH + safeBot);
     bgGfx.lineStyle(2, 0xff6600, 0.6);
     bgGfx.lineBetween(0, 0, w, 0);
@@ -724,14 +778,17 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.mainBtnTexts  = [];
 
     this.MAIN_BTNS.forEach((cfg, i) => {
-      const bx = gap + i * (this.mainBtnW + gap);
+      const totalBtnW = nMain * this.mainBtnW + (nMain - 1) * gap;
+      const startX = (w - totalBtnW) / 2;
+      const bx = startX + i * (this.mainBtnW + gap);
       const by = 10;
       const theme = MAIN_BTN_THEMES[cfg.key];
 
       const assetKey = this.imageKeyOrNull(MAIN_BTN_ASSET_KEYS[cfg.key]);
       if (assetKey) {
         const img = this.add.image(bx + this.mainBtnW / 2, by + this.mainBtnH / 2, assetKey)
-          .setDisplaySize(this.mainBtnW, this.mainBtnH);
+          .setDepth(0);
+        fitImageContain(img, this.mainBtnW, this.mainBtnH);
         img.setInteractive(new Phaser.Geom.Rectangle(-this.mainBtnW / 2, -this.mainBtnH / 2, this.mainBtnW, this.mainBtnH), Phaser.Geom.Rectangle.Contains);
         img.input!.cursor = 'pointer';
         img.on('pointerover', () => { this.mainCursor = i; this.refreshMainCursor(); });
@@ -740,6 +797,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         this.mainBtnImages.push(img);
       }
 
+      this.outlineHudBounds(bx, this.hudY + by, this.mainBtnW, this.mainBtnH, theme.accent, 90);
       const gfx = this.add.graphics();
       gfx.setPosition(bx, by);
       this.mainPanel.add(gfx);
@@ -785,6 +843,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const by   = 5 + row * (this.moveBtnH + 6);
       const theme = this.moveBtnThemes[i];
 
+      this.outlineHudBounds(bx, this.hudY + by, this.moveBtnW, this.moveBtnH, theme.accent, 90);
       const gfx = this.add.graphics();
       gfx.setPosition(bx, by);
       this.movesPanel.add(gfx);
@@ -853,7 +912,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     });
     this.mainBtnImages.forEach((img, i) => {
       img.setAlpha(i === this.mainCursor ? 1 : 0.86);
-      img.setScale(i === this.mainCursor ? 1.02 : 1);
+      fitImageContain(img, this.mainBtnW, this.mainBtnH, i === this.mainCursor ? 1.02 : 1);
     });
     this.mainBtnTexts.forEach((t, i) => {
       const locked = this.MAIN_BTNS[i].key === 'capture' && (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild');
