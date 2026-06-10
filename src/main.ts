@@ -40,6 +40,11 @@ const config: Phaser.Types.Core.GameConfig = {
     // All scene positions are proportional to this.scale.width/height.
     mode: Phaser.Scale.RESIZE,
     parent: document.body,
+    // Match canvas buffer to physical pixels so HiDPI screens (3× iPhone etc.)
+    // render at native resolution rather than being scaled up by the browser.
+    // this.scale.width/height still return CSS-pixel dimensions; only the
+    // canvas drawing buffer is enlarged.
+    zoom: window.devicePixelRatio || 1,
   },
   render: {
     antialias:   true,

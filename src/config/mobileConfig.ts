@@ -26,12 +26,11 @@ export const SAFE_SKIP_FOLDERS = new Set([
 ]);
 
 // Max frames per animation folder in safe mode (evenly spaced from the full set).
-// 4 frames × 5 folders × 8.3 MB ≈ 166 MB for flarepaw — within iOS Safari limits.
-export const SAFE_MAX_FRAMES = 4;
+export const SAFE_MAX_FRAMES = 8;
 
 // Normalized canvas size used in PreloadScene and ClassicActor sprite-scale math.
-// Mobile uses 256 px (4× less GPU memory per frame); desktop uses 512 px.
-export const NORM_SIZE: number = IS_TOUCH_DEVICE ? 256 : 512;
+// Always 512 px so mobile gets the same texture quality as desktop.
+export const NORM_SIZE: number = 512;
 
 // Force the DOM HUD overlay into mobile-landscape layout on desktop (dev preview).
 // Activate with ?hud=mobile in the URL.

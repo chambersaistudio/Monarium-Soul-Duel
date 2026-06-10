@@ -46,7 +46,13 @@ function character(id: string, reference = 'full_body.png'): CharacterPaths {
 
 export const MONARI_PATHS: Record<string, MonariPaths> = {
   flarepaw: monari('flarepaw', 'neutral.png'),
-  droplet: monari('droplet', 'fullbody.png'),
+  droplet: {
+    id: 'droplet',
+    portrait:    `${M}/droplet/portraits/neutral.png`,
+    icon:        `${M}/droplet/portraits/icon.png`,
+    reference:   `${M}/droplet/idle/frame_002.png`,
+    fallbackKey: 'generated_monari_droplet',
+  },
   umbrelette: monari('umbrelette', 'fullbody.png'),
   uvee: monari('uvee', 'fullbody.png'),
   sproutodon: monari('sproutodon', 'fullbody.png'),

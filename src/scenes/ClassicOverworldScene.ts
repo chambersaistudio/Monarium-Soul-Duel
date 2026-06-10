@@ -60,6 +60,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private starterPanelActive = false;
   private startMenuActive = false;
   private startMenuObjects: Phaser.GameObjects.GameObject[] = [];
+  private menuBtnText: Phaser.GameObjects.Text | null = null;
 
   // Cooldown: prevents the same input that closes dialogue from instantly re-opening it
   private interactLockUntil = 0;
@@ -101,6 +102,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.promptTarget       = null;
     this.promptExit         = null;
     this.startMenuObjects   = [];
+    this.menuBtnText        = null;
 
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
@@ -522,13 +524,14 @@ export class ClassicOverworldScene extends Phaser.Scene {
     drawGlassPanel(menu, w - 82, 12, 70, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.68 });
     menu.setInteractive(new Phaser.Geom.Rectangle(w - 82, 12, 70, 34), Phaser.Geom.Rectangle.Contains);
     menu.on('pointerdown', () => this.openStartMenu());
-    this.add.text(w - 47, 29, 'MENU', { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+    this.menuBtnText = this.add.text(w - 47, 29, 'MENU', { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
   }
 
   public openStartMenu(): void {
     if (this.dialogActive || this.starterPanelActive || this.startMenuActive) return;
     this.startMenuActive = true;
     this.dpad?.setVisible(false);
+    this.menuBtnText?.setText('CLOSE');
     this.showStartRoot();
   }
 
@@ -541,6 +544,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.clearStartMenu();
     this.startMenuActive = false;
     this.dpad?.setVisible(IS_TOUCH_DEVICE);
+    this.menuBtnText?.setText('MENU');
     this.interactLockUntil = this.time.now + 250;
   }
 
@@ -549,23 +553,57 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private showStartRoot(): void {
     this.clearStartMenu();
     const { width: w, height: h } = this.scale;
+    const mob = IS_TOUCH_DEVICE;
+
     this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.58).setDepth(110));
+
+    // Mobile: centred panel fitted to viewport; Desktop: right-aligned panel
+    const panW = mob ? Math.min(280, w - 40) : 260;
+    const panH = mob ? h - 56 : h - 112;
+    const panX = mob ? (w - panW) / 2 : w - panW - 32;
+    const panY = mob ? 28 : 56;
+
     const panel = this.startObj(this.add.graphics().setDepth(111));
-    drawGlassPanel(panel, w - 292, 56, 260, h - 112, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
-    this.startObj(this.add.text(w - 162, 82, 'Bonder Menu', { fontSize: '20px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(112));
+    drawGlassPanel(panel, panX, panY, panW, panH, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
+
+    const titleFontSize = mob ? '17px' : '20px';
+    const titleH = mob ? 46 : 66;
+    this.startObj(this.add.text(panX + panW / 2, panY + (mob ? 20 : 24), 'Bonder Menu', {
+      fontSize: titleFontSize, color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(112));
+
     const opts = ['Monari', 'Bag', 'Codex', 'Player', 'Settings', 'Save', 'Mode Select', 'Back / Close'];
+    const n = opts.length;
+    const bottomPad = 10;
+    const availH = panH - titleH - bottomPad;
+    const itemGap = 4;
+    const itemH = Math.max(mob ? 26 : 30, Math.min(mob ? 36 : 40, Math.floor((availH - (n - 1) * itemGap) / n)));
+    const itemW = panW - 32;
+    const itemX = panX + 16;
+    const firstY = panY + titleH;
+
     opts.forEach((label, i) => {
-      const y = 126 + i * 44;
+      const y = firstY + i * (itemH + itemGap);
       const bg = this.startObj(this.add.graphics().setDepth(112));
-      drawGlassPanel(bg, w - 264, y, 204, 34, { radius: 13, fill: i === 0 ? 0x241936 : UI_THEME.colors.glass, stroke: i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.strokeDim, glow: i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.purple, alpha: 0.74 });
-      bg.setInteractive(new Phaser.Geom.Rectangle(w - 264, y, 204, 34), Phaser.Geom.Rectangle.Contains);
+      drawGlassPanel(bg, itemX, y, itemW, itemH, {
+        radius: 11,
+        fill:   i === 0 ? 0x241936 : UI_THEME.colors.glass,
+        stroke: i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.strokeDim,
+        glow:   i === 0 ? UI_THEME.colors.gold : UI_THEME.colors.purple,
+        alpha:  0.74,
+      });
+      bg.setInteractive(new Phaser.Geom.Rectangle(itemX, y, itemW, itemH), Phaser.Geom.Rectangle.Contains);
       bg.on('pointerdown', () => {
         if (label === 'Back / Close') this.closeStartMenu();
         else if (label === 'Mode Select') { this.closeStartMenu(); this.returnToModeSelect(); }
         else if (label === 'Monari') this.showTeamScreen();
         else this.showMenuPlaceholder(label);
       });
-      this.startObj(this.add.text(w - 162, y + 17, label, { fontSize: '14px', color: label === 'Monari' ? '#fff4c8' : '#d8d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(113));
+      this.startObj(this.add.text(panX + panW / 2, y + itemH / 2, label, {
+        fontSize: mob ? '12px' : '14px',
+        color: label === 'Monari' ? '#fff4c8' : '#d8d3ff',
+        fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(113));
     });
   }
 
@@ -633,16 +671,36 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.startObj(this.add.text(292, 96, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • ${this.starterRole(id)}`, { fontSize: '13px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
     this.startObj(this.add.text(292, 126, 'HP     Aura     Soul Sync     Bond Level', { fontSize: '11px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
     this.startObj(this.add.text(292, 144, `${data.stats.maxHp}     ${data.stats.maxAura}       70%           1`, { fontSize: '16px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
-    const stats = [['HP', data.stats.maxHp], ['Attack', data.stats.power], ['Special Attack', Math.round(data.stats.power * 0.92)], ['Defense', data.stats.defense], ['Special Defense', Math.round(data.stats.defense * 0.95)], ['Speed', data.stats.speed], ['Aura', data.stats.maxAura]];
+    const stats = [
+      ['HP', data.stats.maxHp],
+      ['Attack', data.stats.power],
+      ['Sp. Atk', Math.round(data.stats.power * 0.92)],
+      ['Defense', data.stats.defense],
+      ['Sp. Def', Math.round(data.stats.defense * 0.95)],
+      ['Speed', data.stats.speed],
+      ['Aura', data.stats.maxAura],
+    ];
+    const statStartY = 188;
+    const statRowH   = 34;
+    const statColW   = 200;
+    const barW       = 80;
     stats.forEach((st, i) => {
-      const x = 292 + (i % 2) * 220;
-      const y = 188 + Math.floor(i / 2) * 28;
-      this.startObj(this.add.text(x, y, `${st[0]}  ${st[1]}`, { fontSize: '12px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family }).setDepth(112));
-      this.startObj(this.add.rectangle(x + 112, y + 5, 82, 7, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(112));
-      this.startObj(this.add.rectangle(x + 112, y + 5, Math.min(82, Number(st[1]) / 3.5), 7, color, 0.95).setOrigin(0, 0).setDepth(113));
+      const sx = 292 + (i % 2) * statColW;
+      const sy = statStartY + Math.floor(i / 2) * statRowH;
+      // Label + value on the top line of each row
+      this.startObj(this.add.text(sx, sy, `${st[0]}`, { fontSize: '9px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.startObj(this.add.text(sx + barW + 4, sy, `${st[1]}`, { fontSize: '11px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0, 0).setDepth(112));
+      // Bar on second line — clear visual separation from label
+      const barY = sy + 14;
+      this.startObj(this.add.rectangle(sx, barY, barW, 6, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(112));
+      this.startObj(this.add.rectangle(sx, barY, Math.min(barW, Number(st[1]) / 3.5), 6, color, 0.95).setOrigin(0, 0).setDepth(113));
     });
-    this.startObj(this.add.text(292, h - 124, 'Moves: basic technique, signature art, guard stance', { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
-    this.startObj(this.add.text(292, h - 96, 'Ability: Prototype slot  •  Evolution/Ascension: coming soon', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    const lastRow    = Math.floor((stats.length - 1) / 2);
+    const statsEndY  = statStartY + (lastRow + 1) * statRowH + 4;
+    const movesY     = Math.max(statsEndY + 8, h - 124);
+    const abilityY   = movesY + 22;
+    this.startObj(this.add.text(292, movesY,  'Moves: basic technique, signature art, guard stance', { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.startObj(this.add.text(292, abilityY, 'Ability: Prototype slot  •  Evolution/Ascension: coming soon', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
     this.makeStartButton(w - 158, h - 76, 96, 34, 'Back', () => this.showTeamScreen());
   }
 
