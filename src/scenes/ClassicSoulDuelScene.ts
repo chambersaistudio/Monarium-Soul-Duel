@@ -9,7 +9,7 @@ import { PLAYER_PROFILE } from '../data/playerProfile';
 import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
 import {
-  BATTLE_UI_BUTTONS, BATTLE_UI_FRAMES, battleUiButtonKey, battleUiFrameKey, elementIconKey, genderIconKey,
+  BATTLE_UI_BUTTONS, BATTLE_UI_FRAMES, battleUiButtonKey, battleUiFrameKey, elementIconKey, genderIconKey, getElementIconPath, getGenderIconPath,
   getMonariVisualPaths, getCharacterVisualPaths, visualCandidates,
 } from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel, ensurePlaceholderTexture } from '../ui/phaserUi';
@@ -75,6 +75,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private enemyHpFill!:    Phaser.GameObjects.Rectangle;
   private playerHpText!:   Phaser.GameObjects.Text;
   private enemyHpText!:    Phaser.GameObjects.Text;
+  private playerAuraText!: Phaser.GameObjects.Text;
+  private enemyAuraText!:  Phaser.GameObjects.Text;
+  private playerSyncText!: Phaser.GameObjects.Text;
+  private enemySyncText!:  Phaser.GameObjects.Text;
   private turnBadgeText!:  Phaser.GameObjects.Text;
   private turnNumber = 1;
 
@@ -163,10 +167,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.load.image(battleUiButtonKey(key), BATTLE_UI_BUTTONS[key]);
     });
     ['fire', 'water', 'flora', 'wind', 'thunder', 'stone', 'steel', 'light', 'dark', 'aether', 'ice', 'neutral'].forEach(icon => {
-      this.load.image(`ui_element_${icon}`, `assets/ui/elements/${icon}.png`);
+      this.load.image(elementIconKey(icon), getElementIconPath(icon));
     });
     ['male', 'female', 'unknown'].forEach(gender => {
-      this.load.image(`ui_gender_${gender}`, `assets/ui/icons/gender_${gender}.png`);
+      this.load.image(genderIconKey(gender), getGenderIconPath(gender));
     });
   }
 
@@ -346,7 +350,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const playerData = MINARI_ROSTER[playerMinId] ?? MINARI_ROSTER['flarepaw'];
     const enemyData = MINARI_ROSTER[enemyMinId] ?? MINARI_ROSTER['droplet'];
     const playerLevel = profile?.monariLevels[playerMinId]?.level ?? 7;
-    const enemyLevel = 28;
+    const enemyLevel = profile?.monariLevels[enemyMinId]?.level ?? 7;
     const bondLv = profile?.bonds[playerMinId]?.bondLevel ?? 1;
 
     const drawCard = (x: number, y: number, side: 'player' | 'enemy', name: string, id: string, level: number, bond: number) => {
@@ -407,11 +411,23 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.playerHpText = this.add.text(p.bx + this.hpBarW + 5, p.by - 2, '', {
       fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
     }).setOrigin(0, 0).setDepth(d + 5);
+    this.playerAuraText = this.add.text(p.bx + this.hpBarW + 5, p.by + 12, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
+    }).setOrigin(0, 0).setDepth(d + 5);
+    this.playerSyncText = this.add.text(p.bx + this.hpBarW + 5, p.by + 26, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
+    }).setOrigin(0, 0).setDepth(d + 5);
 
     this.enemyHpFill = this.add.rectangle(e.bx, e.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 2);
     this.enemyAuraFill = this.add.rectangle(e.bx, e.by + 14, this.hpBarW, this.auraBarH, 0xd06aff).setOrigin(0, 0).setDepth(d + 2);
     this.enemySyncFill = this.add.rectangle(e.bx, e.by + 28, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 2);
     this.enemyHpText = this.add.text(e.bx - 5, e.by - 2, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
+    }).setOrigin(1, 0).setDepth(d + 5);
+    this.enemyAuraText = this.add.text(e.bx - 5, e.by + 12, '', {
+      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
+    }).setOrigin(1, 0).setDepth(d + 5);
+    this.enemySyncText = this.add.text(e.bx - 5, e.by + 26, '', {
       fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.secondary,
     }).setOrigin(1, 0).setDepth(d + 5);
 
@@ -442,14 +458,16 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemyHpFill.width  = this.hpBarW * er;
     this.playerHpFill.setFillStyle(this.hpColor(pr));
     this.enemyHpFill.setFillStyle(this.hpColor(er));
-    this.playerHpText.setText(`${Math.ceil(this.playerActor.hp)}/${this.playerActor.maxHp}`);
-    this.enemyHpText.setText(`${Math.ceil(this.enemyActor.hp)}/${this.enemyActor.maxHp}`);
+    this.playerHpText.setText(`${Math.ceil(this.playerActor.hp)} / ${this.playerActor.maxHp}`);
+    this.enemyHpText.setText(`${Math.ceil(this.enemyActor.hp)} / ${this.enemyActor.maxHp}`);
 
     // Aura bars
     const par = Math.max(0, this.playerActor.aura / this.playerActor.maxAura);
     const ear = Math.max(0, this.enemyActor.aura  / this.enemyActor.maxAura);
     this.playerAuraFill.width = this.hpBarW * par;
     this.enemyAuraFill.width  = this.hpBarW * ear;
+    this.playerAuraText.setText(`${Math.ceil(this.playerActor.aura)} / ${this.playerActor.maxAura}`);
+    this.enemyAuraText.setText(`${Math.ceil(this.enemyActor.aura)} / ${this.enemyActor.maxAura}`);
 
     // Sync bars
     const playerSyncValue = this.playerSyncSys.getSyncValue();
@@ -458,6 +476,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemySyncFill.width  = this.hpBarW * (enemySyncValue  / 100);
     this.playerSyncFill.setFillStyle(this.syncColor(this.playerSyncSys.getTier()));
     this.enemySyncFill.setFillStyle(this.syncColor(this.enemySyncSys.getTier()));
+    this.playerSyncText.setText(`${Math.round(playerSyncValue)} / 100`);
+    this.enemySyncText.setText(`${Math.round(enemySyncValue)} / 100`);
 
     if (this.bottomSyncFill && this.soulbondFill) {
       const profile = this.registry.get('player_profile') as PlayerProfile | null;

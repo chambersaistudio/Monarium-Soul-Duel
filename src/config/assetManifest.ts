@@ -7,13 +7,12 @@
  * `npm run gen:manifest` and is always up to date with the actual PNGs
  * on disk.
  *
- * Paths are relative to the public/ directory (no leading slash) so Phaser
- * resolves them from the Vite public root at runtime.
+ * Runtime paths are absolute from the Vite public root (/assets/...).
  */
 
-const M = 'assets/monari';
-const C = 'assets/characters';
-const UI = 'assets/ui';
+const M = '/assets/monari';
+const C = '/assets/characters';
+const UI = '/assets/ui';
 
 export type MonariGender = 'male' | 'female' | 'unknown';
 
@@ -164,7 +163,8 @@ export function genderIconKey(gender?: string): string {
 }
 
 export function getMonariBattleFramePath(monariId: string, base: string, folder: string, stem: string): string {
-  const battleRoot = monariId === 'flarepaw' ? `${base}/battle` : base;
+  const publicBase = base.startsWith('/') ? base : `/${base}`;
+  const battleRoot = monariId === 'flarepaw' ? `${publicBase}/battle` : publicBase;
   return `${battleRoot}/${folder}/${stem}.png`;
 }
 
