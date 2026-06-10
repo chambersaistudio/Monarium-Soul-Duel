@@ -1,5 +1,6 @@
 export type Element = 'fire' | 'water' | 'flora' | 'wind' | 'thunder' | 'stone' | 'steel' | 'light' | 'dark' | 'aether' | 'ice' | 'neutral';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
+export type MonariGender = 'male' | 'female' | 'unknown';
 
 export interface FighterStats {
   maxHp: number;
@@ -20,6 +21,7 @@ export interface MinariData {
   name: string;
   element: Element;
   rarity: Rarity;
+  gender?: MonariGender;
   stats: FighterStats;
   coreAttackId: string;
   specialSlots: string[];

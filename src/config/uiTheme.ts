@@ -67,12 +67,17 @@ export const UI_THEME = {
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 18, xl: 28 },
   fonts: {
-    family: 'Arial, Helvetica, sans-serif',
+    /** Primary UI font — used for names, labels, HUD text. Falls back to Arial. */
+    family:  '"Orbitron", "Arial", sans-serif',
+    /** Stat / value readout font — narrower, highly readable for numbers. */
+    stat:    '"Rajdhani", "Arial Narrow", sans-serif',
+    /** Legacy fallback — monospace for debug/BattleLab panels. */
+    mono:    'monospace',
     tiny: '10px',
-    sm: '12px',
-    md: '14px',
-    lg: '18px',
-    xl: '24px',
+    sm:   '12px',
+    md:   '14px',
+    lg:   '18px',
+    xl:   '24px',
   },
   buttons: {
     alpha: 0.78,
