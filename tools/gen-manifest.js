@@ -44,6 +44,7 @@ function getFrames(dir) {
  */
 function scanEntry(entryDir) {
   const animations = {};
+  const folderBases = {};
 
   for (const entry of fs.readdirSync(entryDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -56,16 +57,16 @@ function scanEntry(entryDir) {
       for (const sub of fs.readdirSync(folderPath, { withFileTypes: true })) {
         if (!sub.isDirectory()) continue;
         const frames = getFrames(path.join(folderPath, sub.name));
-        if (frames.length > 0) animations[sub.name] = frames;
+        if (frames.length > 0) { animations[sub.name] = frames; folderBases[sub.name] = `battle/${sub.name}`; }
       }
     } else {
       // Flat animation folder at the character/monari root
       const frames = getFrames(folderPath);
-      if (frames.length > 0) animations[entry.name] = frames;
+      if (frames.length > 0) { animations[entry.name] = frames; folderBases[entry.name] = entry.name; }
     }
   }
 
-  return animations;
+  return { animations, folderBases };
 }
 
 // ── Scan directories ───────────────────────────────────────────────────────────
@@ -79,9 +80,9 @@ function scanDir(dir, assetBase) {
     if (filterEntry && entry.name !== filterEntry) continue;
 
     const entryDir  = path.join(dir, entry.name);
-    const anims     = scanEntry(entryDir);
-    if (Object.keys(anims).length > 0) {
-      result[entry.name] = { base: `${assetBase}/${entry.name}`, animations: anims };
+    const { animations, folderBases } = scanEntry(entryDir);
+    if (Object.keys(animations).length > 0) {
+      result[entry.name] = { base: `${assetBase}/${entry.name}`, animations, folderBases };
     }
   }
 
@@ -99,22 +100,23 @@ if (Object.keys(allEntries).length === 0) {
 
 // ── Write per-entry JSON manifests (runtime use) ───────────────────────────────
 
-function writeRuntimeJson(dir, entryName, animations) {
+function writeRuntimeJson(dir, entryName, animations, folderBases) {
   const jsonOut  = path.join(dir, entryName, 'sprite-manifest.json');
   const jsonData = {
     character: entryName,
     generated: new Date().toISOString().slice(0, 10),
     animations,
+    folderBases,
   };
   fs.writeFileSync(jsonOut, JSON.stringify(jsonData, null, 2) + '\n');
   console.log(`[gen-manifest] → ${jsonOut}`);
 }
 
-for (const [name, { animations }] of Object.entries(allChars)) {
-  writeRuntimeJson(CHARS_DIR, name, animations);
+for (const [name, { animations, folderBases }] of Object.entries(allChars)) {
+  writeRuntimeJson(CHARS_DIR, name, animations, folderBases);
 }
-for (const [name, { animations }] of Object.entries(allMonari)) {
-  writeRuntimeJson(MONARI_DIR, name, animations);
+for (const [name, { animations, folderBases }] of Object.entries(allMonari)) {
+  writeRuntimeJson(MONARI_DIR, name, animations, folderBases);
 }
 
 // ── Write unified TypeScript manifest (compile-time import) ───────────────────
@@ -122,13 +124,19 @@ for (const [name, { animations }] of Object.entries(allMonari)) {
 const tsDir = path.dirname(TS_OUT_FILE);
 if (!fs.existsSync(tsDir)) fs.mkdirSync(tsDir, { recursive: true });
 
-const charBlocks = Object.entries(allEntries).map(([name, { base, animations }]) => {
+const charBlocks = Object.entries(allEntries).map(([name, { base, animations, folderBases }]) => {
   const animLines = Object.entries(animations).map(
     ([folder, stems]) => `      ${folder}: [${stems.map(s => `'${s}'`).join(', ')}],`,
+  );
+  const folderBaseLines = Object.entries(folderBases).map(
+    ([folder, folderBase]) => `      ${folder}: '${folderBase}',`,
   );
   return [
     `  ${name}: {`,
     `    base: '${base}',`,
+    `    folderBases: {`,
+    ...folderBaseLines,
+    `    },`,
     `    animations: {`,
     ...animLines,
     `    },`,
@@ -142,6 +150,7 @@ const tsContent = [
   '',
   'export interface CharacterManifest {',
   '  base: string;',
+  '  folderBases?: Record<string, string>;',
   '  animations: Record<string, readonly string[]>;',
   '}',
   '',
