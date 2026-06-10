@@ -5,6 +5,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     id: 'flarepaw',
     name: 'Flarepaw',
     element: 'fire',
+    gender: 'male',
     rarity: 'rare',
     stats: {
       maxHp: 320,
@@ -33,6 +34,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     id: 'umbravine',
     name: 'Umbravine',
     element: 'dark',
+    gender: 'unknown',
     rarity: 'uncommon',
     stats: {
       maxHp: 300,
@@ -62,6 +64,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     id: 'sproutodon',
     name: 'Sproutodon',
     element: 'flora',
+    gender: 'female',
     rarity: 'rare',
     stats: {
       maxHp: 340,
@@ -90,6 +93,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     id: 'droplet',
     name: 'Droplet',
     element: 'water',
+    gender: 'male',
     rarity: 'uncommon',
     stats: {
       maxHp: 280,

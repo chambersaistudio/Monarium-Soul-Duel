@@ -41,7 +41,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   render: {
     antialias: true,
+    antialiasGL: true,
     pixelArt: false,
+    roundPixels: false,
   },
   input: {
     activePointers: 3,  // support simultaneous touch points for D-pad

@@ -9,7 +9,16 @@ import { PLAYER_PROFILE } from '../data/playerProfile';
 import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
 import { DAMAGE_FORMULA } from '../config/combatFormulaConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
-import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
+import {
+  BATTLE_UI_BUTTONS,
+  BATTLE_UI_FRAME_FALLBACKS,
+  BATTLE_UI_FRAMES,
+  getElementIconPath,
+  getGenderIconPath,
+  getMonariVisualPaths,
+  getCharacterVisualPaths,
+  visualCandidates,
+} from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
@@ -21,6 +30,40 @@ import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '.
 // ── HUD button colour schemes ────────────────────────────────────────────────
 
 interface BtnTheme { fill: number; selFill: number; border: number; accent: number }
+
+const HUD_FONT_PRIMARY = '"Orbitron", Arial, sans-serif';
+const HUD_FONT_SECONDARY = '"Rajdhani", Arial, sans-serif';
+const UI_ASSET_KEYS = {
+  panelPlayer: 'ui_battle_panel_player',
+  panelEnemy: 'ui_battle_panel_enemy',
+  turnBadge: 'ui_battle_turn_badge',
+  soulbondBar: 'ui_battle_soulbond_bar',
+  soulsyncBar: 'ui_battle_soulsync_bar',
+  btnFight: 'ui_battle_btn_fight',
+  btnBag: 'ui_battle_btn_bag',
+  btnBond: 'ui_battle_btn_bond',
+  btnRun: 'ui_battle_btn_run',
+} as const;
+
+const UI_ASSET_FALLBACK_KEYS: Partial<Record<string, string>> = {
+  [UI_ASSET_KEYS.panelPlayer]: 'ui_battle_panel_player_legacy',
+  [UI_ASSET_KEYS.panelEnemy]: 'ui_battle_panel_enemy_legacy',
+  [UI_ASSET_KEYS.soulbondBar]: UI_ASSET_KEYS.soulsyncBar,
+};
+
+const MAIN_BTN_ASSET_KEYS: Record<string, string> = {
+  fight: UI_ASSET_KEYS.btnFight,
+  bag: UI_ASSET_KEYS.btnBag,
+  capture: UI_ASSET_KEYS.btnBond,
+  run: UI_ASSET_KEYS.btnRun,
+};
+
+const MAIN_BTN_COLORS: Record<string, string> = {
+  fight: '#ff8a3d',
+  bag: '#40a5ff',
+  capture: '#69e36e',
+  run: '#c58bff',
+};
 
 const MAIN_BTN_THEMES: Record<string, BtnTheme> = {
   fight:   { fill: 0x2a0800, selFill: 0x6a1800, border: 0xff6622, accent: 0xff4400 },
@@ -65,6 +108,16 @@ function dmgTypeTheme(type: string): BtnTheme {
   }
 }
 
+function clampPx(min: number, preferred: number, max: number): number {
+  return Math.round(Phaser.Math.Clamp(preferred, min, max));
+}
+
+function fitImageContain(img: Phaser.GameObjects.Image, maxW: number, maxH: number, bump = 1): void {
+  const frame = img.scene.textures.getFrame(img.texture.key);
+  const ratio = frame ? Math.min(maxW / frame.realWidth, maxH / frame.realHeight) * bump : 1;
+  img.setDisplaySize(Math.max(1, (frame?.realWidth ?? maxW) * ratio), Math.max(1, (frame?.realHeight ?? maxH) * ratio));
+}
+
 // ── Scene ─────────────────────────────────────────────────────────────────────
 
 export class ClassicSoulDuelScene extends Phaser.Scene {
@@ -89,6 +142,18 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private enemyHpFill!:    Phaser.GameObjects.Rectangle;
   private playerHpText!:   Phaser.GameObjects.Text;
   private enemyHpText!:    Phaser.GameObjects.Text;
+  private playerAuraText!: Phaser.GameObjects.Text;
+  private enemyAuraText!:  Phaser.GameObjects.Text;
+  private playerSyncText!: Phaser.GameObjects.Text;
+  private enemySyncText!:  Phaser.GameObjects.Text;
+  private turnText!:       Phaser.GameObjects.Text;
+  private turnNumber       = 1;
+  private soulbondFill!:   Phaser.GameObjects.Rectangle;
+  private soulsyncFill!:   Phaser.GameObjects.Rectangle;
+  private soulbondText!:   Phaser.GameObjects.Text;
+  private soulsyncText!:   Phaser.GameObjects.Text;
+  private soulbondFillMaxW = 0;
+  private soulsyncFillMaxW = 0;
 
   // Aura widgets
   private playerAuraFill!: Phaser.GameObjects.Rectangle;
@@ -104,9 +169,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // Main-panel state
   private mainCursor      = 0;
   private mainBtnGfxs:    Phaser.GameObjects.Graphics[] = [];
+  private mainBtnImages:  Phaser.GameObjects.Image[]    = [];
   private mainBtnTexts:   Phaser.GameObjects.Text[]     = [];
   private mainBtnW        = 0;
   private mainBtnH        = 0;
+  private readonly debugHudBounds = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debugHudBounds');
+  private readonly debugHudInfo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debugHudInfo');
+  private debugHudInfoText?: Phaser.GameObjects.Text;
   private readonly MAIN_BTNS = [
     { key: 'fight',   label: 'FIGHT',   icon: '⚔' },
     { key: 'bag',     label: 'BAG',     icon: '🎒' },
@@ -161,6 +230,23 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   preload(): void {
     const { background } = CLASSIC_BATTLE_CONFIG;
     this.load.image(`bg_${background}`, `assets/backgrounds/classic/${background}.png`);
+    this.load.image(UI_ASSET_KEYS.panelPlayer, BATTLE_UI_FRAMES.playerPanel);
+    this.load.image(UI_ASSET_FALLBACK_KEYS[UI_ASSET_KEYS.panelPlayer]!, BATTLE_UI_FRAME_FALLBACKS.playerPanel);
+    this.load.image(UI_ASSET_KEYS.panelEnemy, BATTLE_UI_FRAMES.enemyPanel);
+    this.load.image(UI_ASSET_FALLBACK_KEYS[UI_ASSET_KEYS.panelEnemy]!, BATTLE_UI_FRAME_FALLBACKS.enemyPanel);
+    this.load.image(UI_ASSET_KEYS.turnBadge, BATTLE_UI_FRAMES.turnBadge);
+    this.load.image(UI_ASSET_KEYS.soulbondBar, BATTLE_UI_FRAMES.soulbondBar);
+    this.load.image(UI_ASSET_KEYS.soulsyncBar, BATTLE_UI_FRAMES.soulsyncBar);
+    this.load.image(UI_ASSET_KEYS.btnFight, BATTLE_UI_BUTTONS.fight);
+    this.load.image(UI_ASSET_KEYS.btnBag, BATTLE_UI_BUTTONS.bag);
+    this.load.image(UI_ASSET_KEYS.btnBond, BATTLE_UI_BUTTONS.capture);
+    this.load.image(UI_ASSET_KEYS.btnRun, BATTLE_UI_BUTTONS.run);
+    ['fire', 'water', 'flora', 'wind', 'thunder', 'stone', 'steel', 'light', 'dark', 'aether', 'ice', 'neutral'].forEach(element => {
+      this.load.image(`ui_element_${element}`, getElementIconPath(element));
+    });
+    ['male', 'female', 'unknown'].forEach(gender => {
+      this.load.image(`ui_gender_${gender}`, getGenderIconPath(gender));
+    });
     ['flarepaw', 'droplet', 'sproutodon', 'umbravine', 'umbrelette', 'uvee'].forEach(id => {
       preloadVisualCandidates(this, 'monari', id, visualCandidates(getMonariVisualPaths(id)));
     });
@@ -186,8 +272,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hpBarH   = mob ? 18 : 14;
     this.auraBarH = mob ? 8  : 6;
     this.syncBarH = mob ? 6  : 5;
-    this.hudH     = mob ? 92 : 100;
-    this.hudY     = h - this.hudH - (mob ? SAFE_AREA_BOTTOM : 0);
+    const commandBtnH = clampPx(mob ? 58 : 60, h * (mob ? 0.10 : 0.08), mob ? 88 : 96);
+    const soulStripH = clampPx(42, h * 0.06, 74);
+    this.hudH     = commandBtnH + (mob ? 14 : 18);
+    this.hudY     = h - this.hudH - soulStripH - (mob ? SAFE_AREA_BOTTOM + 6 : 14);
 
     this.drawBackground(w, h);
 
@@ -256,7 +344,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     // ── UI ────────────────────────────────────────────────────────────────────
     this.buildHpBars(w, playerData.name, enemyData.name, playerLevel, enemyLevel, playerBondLv);
     this.buildBattleHud(w, h, playerData.id);
+    this.buildBottomSoulMeters(w, h, playerMinId);
     this.buildLabels(w);
+    this.buildDebugHudInfo();
 
     // ── Input ─────────────────────────────────────────────────────────────────
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -275,6 +365,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
     this.refreshHpBars();
+    this.refreshBottomSoulMeters();
     this.updateGuardLabel();
 
     if (!this.menuVisible) return;
@@ -343,6 +434,91 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     }
   }
 
+  private imageKeyOrNull(key: string): string | null {
+    if (this.textures.exists(key) && !this.hasLikelyWhiteBackdrop(key)) return key;
+    const fallbackKey = UI_ASSET_FALLBACK_KEYS[key];
+    return fallbackKey && this.textures.exists(fallbackKey) && !this.hasLikelyWhiteBackdrop(fallbackKey) ? fallbackKey : null;
+  }
+
+  private hasLikelyWhiteBackdrop(key: string): boolean {
+    try {
+      const texture = this.textures.get(key);
+      const source = texture.getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+      const width = (source as HTMLImageElement).naturalWidth || (source as HTMLCanvasElement).width || 0;
+      const height = (source as HTMLImageElement).naturalHeight || (source as HTMLCanvasElement).height || 0;
+      if (!width || !height) return false;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return false;
+      ctx.drawImage(source as CanvasImageSource, 0, 0);
+      const samples: Array<[number, number]> = [[1, 1], [width - 2, 1], [1, height - 2], [width - 2, height - 2]];
+      let whiteOpaqueCorners = 0;
+      for (const [x, y] of samples) {
+        const [r, g, b, a] = ctx.getImageData(Math.max(0, x), Math.max(0, y), 1, 1).data;
+        if (a > 245 && r > 242 && g > 242 && b > 242) whiteOpaqueCorners += 1;
+      }
+      return whiteOpaqueCorners >= 3;
+    } catch {
+      return false;
+    }
+  }
+
+  private outlineHudBounds(x: number, y: number, w: number, h: number, color = 0x00ffcc, depth = 80): void {
+    if (!this.debugHudBounds) return;
+    const g = this.add.graphics().setDepth(depth);
+    g.lineStyle(1, color, 0.75).strokeRect(x, y, w, h);
+  }
+
+  private buildDebugHudInfo(): void {
+    if (!this.debugHudInfo) return;
+    const canvas = this.sys.game.canvas;
+    const text = this.add.text(8, 8, this.renderInfoLines().join('\n'), {
+      fontFamily: HUD_FONT_SECONDARY,
+      fontSize: '11px',
+      color: '#c8f8ff',
+      backgroundColor: '#02040acc',
+      padding: { x: 6, y: 4 },
+    }).setDepth(1000).setScrollFactor(0);
+    this.debugHudInfoText = text;
+    console.table({
+      devicePixelRatio: window.devicePixelRatio || 1,
+      canvasInternal: `${canvas.width}x${canvas.height}`,
+      canvasCss: `${canvas.clientWidth}x${canvas.clientHeight}`,
+      scaleSize: `${this.scale.width}x${this.scale.height}`,
+    });
+  }
+
+  private renderInfoLines(): string[] {
+    const canvas = this.sys.game.canvas;
+    return [
+      `DPR ${window.devicePixelRatio || 1}`,
+      `canvas ${canvas.width}x${canvas.height}`,
+      `css ${canvas.clientWidth}x${canvas.clientHeight}`,
+      `scale ${this.scale.width}x${this.scale.height}`,
+    ];
+  }
+
+  private logAssetRender(key: string, display: { width: number; height: number }, label: string): void {
+    if (!this.debugHudInfo) return;
+    const frame = this.textures.getFrame(key);
+    const scale = frame ? `${(display.width / frame.realWidth).toFixed(3)}x${(display.height / frame.realHeight).toFixed(3)}` : 'n/a';
+    const line = `${label}: ${key} src ${frame?.realWidth ?? 0}x${frame?.realHeight ?? 0} -> ${Math.round(display.width)}x${Math.round(display.height)} scale ${scale}`;
+    console.log(`[HUD render] ${line}`);
+    if (this.debugHudInfoText) {
+      const existing = this.debugHudInfoText.text.split('\n').slice(0, 8);
+      this.debugHudInfoText.setText([...this.renderInfoLines(), line, ...existing.slice(4)].slice(0, 12).join('\n'));
+    }
+  }
+
+  private iconKey(prefix: 'element' | 'gender', value?: string): string {
+    const fallback = prefix === 'element' ? 'neutral' : 'unknown';
+    const normalized = (value ?? fallback).toLowerCase();
+    const key = `ui_${prefix}_${normalized}`;
+    return this.textures.exists(key) ? key : `ui_${prefix}_${fallback}`;
+  }
+
   // ── HP + Aura bars ─────────────────────────────────────────────────────────
 
   private buildHpBars(
@@ -350,82 +526,100 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     playerLevel: number, enemyLevel: number, bondLv: number,
   ): void {
     const mob  = IS_TOUCH_DEVICE;
+    const { height: h } = this.scale;
     const d    = 20;
-    const cardW = mob ? Math.round(w * 0.43) : 300;
-    const cardH = mob ? 82 : 88;
-    this.hpBarW   = cardW - (mob ? 96 : 108);
-    this.hpBarH   = mob ? 12 : 11;
-    this.auraBarH = mob ? 8 : 7;
-    this.syncBarH = 5;
+    const cardW = clampPx(210, w * (mob ? 0.26 : 0.22), 330);
+    const cardH = clampPx(72, h * 0.09, 118);
+    this.hpBarW   = cardW - (mob ? 116 : 132);
+    this.hpBarH   = mob ? 9 : 8;
+    this.auraBarH = mob ? 7 : 6;
+    this.syncBarH = mob ? 6 : 5;
 
-    const profile = this.registry.get('player_profile') as PlayerProfile | null;
     const playerMinId = this.battleCtx?.playerMinariId ?? 'flarepaw';
     const enemyMinId = this.battleCtx?.enemyMinariId ?? 'droplet';
 
     const drawCard = (x: number, y: number, side: 'player' | 'enemy', name: string, id: string, level: number, bond: number) => {
-      const g = this.add.graphics().setDepth(d);
-      drawGlassPanel(g, x, y, cardW, cardH, {
-        radius: 18,
-        fill: UI_THEME.colors.panelDeep,
-        stroke: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
-        glow: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
-        alpha: 0.86,
-      });
-      const portraitKey = bestLoadedVisualKey(this, 'monari', id, elementColor(MINARI_ROSTER[id]?.element));
-      const portraitX = side === 'player' ? x + 40 : x + cardW - 40;
-      const img = this.add.image(portraitX, y + 42, portraitKey).setDepth(d + 2);
-      const frame = this.textures.getFrame(portraitKey);
-      img.setScale(Math.min(0.62, 58 / Math.max(frame.realWidth, frame.realHeight))).setAlpha(0.96);
-      const nameX = side === 'player' ? x + 78 : x + 14;
-      const align = side === 'player' ? 'left' : 'right';
-      this.add.text(nameX, y + 11, name, {
-        fontSize: mob ? '13px' : '14px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
-      }).setOrigin(0, 0).setDepth(d + 2);
-      this.add.text(side === 'player' ? x + cardW - 14 : x + 14, y + 13, `Lv. ${level}`, {
-        fontSize: '11px', color: '#ffe39a', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
-      }).setOrigin(side === 'player' ? 1 : 0, 0).setDepth(d + 2);
-      const badgeW = 70;
-      const badgeX = side === 'player' ? x + cardW - badgeW - 12 : x + 12;
-      const badge = this.add.graphics().setDepth(d + 1);
-      badge.fillStyle(UI_THEME.colors.gold, 0.16).fillRoundedRect(badgeX, y + cardH - 22, badgeW, 16, 8);
-      badge.lineStyle(1, UI_THEME.colors.gold, 0.5).strokeRoundedRect(badgeX, y + cardH - 22, badgeW, 16, 8);
-      this.add.text(badgeX + badgeW / 2, y + cardH - 14, `Bond Lv. ${bond}`, {
-        fontSize: '9px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
-      }).setOrigin(0.5).setDepth(d + 2);
-      const bx = nameX;
-      const by = y + 33;
-      const labels = ['HP', 'Aura', 'Soul Sync'];
-      labels.forEach((label, i) => this.add.text(bx - 30, by + i * 14 - 1, label, {
-        fontSize: '8px', color: i === 2 ? '#ffe18c' : '#a9a5c9', fontFamily: UI_THEME.fonts.family,
-      }).setOrigin(0, 0).setDepth(d + 2));
-      const track = (yy: number, hh: number) => this.add.rectangle(bx, yy, this.hpBarW, hh, UI_THEME.bars.track, 0.9).setOrigin(0, 0).setDepth(d + 1);
-      track(by, this.hpBarH); track(by + 14, this.auraBarH); track(by + 28, this.syncBarH);
-      return { bx, by };
+      const data = MINARI_ROSTER[id];
+      const panelKey = this.imageKeyOrNull(side === 'player' ? UI_ASSET_KEYS.panelPlayer : UI_ASSET_KEYS.panelEnemy);
+      if (panelKey) {
+        const panel = this.add.image(x + cardW / 2, y + cardH / 2, panelKey).setDepth(d);
+        fitImageContain(panel, cardW, cardH);
+        this.logAssetRender(panelKey, { width: panel.displayWidth, height: panel.displayHeight }, `${side} status panel`);
+      } else {
+        const g = this.add.graphics().setDepth(d);
+        drawGlassPanel(g, x, y, cardW, cardH, {
+          radius: 18,
+          fill: UI_THEME.colors.panelDeep,
+          stroke: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
+          glow: side === 'player' ? UI_THEME.colors.gold : UI_THEME.colors.purple,
+          alpha: 0.86,
+        });
+      }
+
+      const isPlayer = side === 'player';
+      const iconX = isPlayer ? x + 25 : x + cardW - 25;
+      const nameX = isPlayer ? x + 56 : x + cardW - 56;
+      const levelX = isPlayer ? x + cardW - 40 : x + 40;
+      const textOriginX = isPlayer ? 0 : 1;
+      const barX = isPlayer ? x + 56 : x + cardW - 56 - this.hpBarW;
+      const by = y + Math.round(cardH * 0.39);
+
+      this.add.image(iconX, y + 25, this.iconKey('element', data?.element)).setDisplaySize(22, 22).setDepth(d + 3);
+      this.add.image(isPlayer ? x + cardW - 17 : x + 17, y + 24, this.iconKey('gender', data?.gender)).setDisplaySize(18, 18).setDepth(d + 3);
+      this.outlineHudBounds(x, y, cardW, cardH, side === 'player' ? 0x33ff99 : 0xff66cc, d + 20);
+
+      this.add.text(nameX, y + 12, name.toUpperCase(), {
+        fontSize: mob ? '13px' : '15px', color: '#f8f6ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '800',
+        stroke: '#05030b', strokeThickness: 2,
+      }).setOrigin(textOriginX, 0).setDepth(d + 3);
+      this.add.text(levelX, y + 14, `Lv. ${level}`, {
+        fontSize: mob ? '10px' : '11px', color: '#ffd05c', fontFamily: HUD_FONT_SECONDARY, fontStyle: '700',
+      }).setOrigin(isPlayer ? 1 : 0, 0).setDepth(d + 3);
+
+      const labels = ['HP', 'AURA', 'SOUL SYNC'];
+      labels.forEach((label, i) => this.add.text(barX - 31, by + i * 16 - 3, label, {
+        fontSize: mob ? '8px' : '9px', color: i === 0 ? '#5cff63' : i === 1 ? '#bd55ff' : '#ffad33',
+        fontFamily: HUD_FONT_SECONDARY, fontStyle: '700',
+      }).setOrigin(0, 0).setDepth(d + 3));
+      const track = (yy: number, hh: number) => this.add.rectangle(barX, yy, this.hpBarW, hh, 0x070914, 0.92)
+        .setOrigin(0, 0).setDepth(d + 1).setStrokeStyle(1, 0x24264a, 0.9);
+      track(by, this.hpBarH); track(by + 16, this.auraBarH); track(by + 32, this.syncBarH);
+
+      if (isPlayer) {
+        this.add.text(x + cardW - 74, y + cardH - 18, `BOND ${bond}`, {
+          fontSize: '9px', color: '#fff0b8', fontFamily: HUD_FONT_SECONDARY, fontStyle: '700',
+        }).setOrigin(0.5).setDepth(d + 3);
+      }
+      return { bx: barX, by };
     };
 
-    const p = drawCard(14, mob ? 16 : 18, 'player', playerName, playerMinId, playerLevel, bondLv);
-    const e = drawCard(w - cardW - 14, mob ? 16 : 18, 'enemy', enemyName, enemyMinId, enemyLevel, 1);
+    const p = drawCard(14, mob ? 14 : 18, 'player', playerName, playerMinId, playerLevel, bondLv);
+    const e = drawCard(w - cardW - 14, mob ? 14 : 18, 'enemy', enemyName, enemyMinId, enemyLevel, 1);
 
-    this.playerHpFill = this.add.rectangle(p.bx, p.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 3);
-    this.playerAuraFill = this.add.rectangle(p.bx, p.by + 14, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 3);
-    this.playerSyncFill = this.add.rectangle(p.bx, p.by + 28, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 3);
-    this.playerHpText = this.add.text(p.bx + this.hpBarW - 2, p.by - 1, '', {
-      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.family,
-    }).setOrigin(1, 0).setDepth(d + 4);
+    this.playerHpFill = this.add.rectangle(p.bx, p.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 2);
+    this.playerAuraFill = this.add.rectangle(p.bx, p.by + 16, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 2);
+    this.playerSyncFill = this.add.rectangle(p.bx, p.by + 32, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 2);
+    this.playerHpText = this.add.text(p.bx + this.hpBarW + 5, p.by - 3, '', { fontSize: '11px', color: '#ffffff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(0, 0).setDepth(d + 4);
+    this.playerAuraText = this.add.text(p.bx + this.hpBarW + 5, p.by + 13, '', { fontSize: '10px', color: '#d9c3ff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(0, 0).setDepth(d + 4);
+    this.playerSyncText = this.add.text(p.bx + this.hpBarW + 5, p.by + 28, '', { fontSize: '10px', color: '#ffd39a', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(0, 0).setDepth(d + 4);
 
-    this.enemyHpFill = this.add.rectangle(e.bx, e.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 3);
-    this.enemyAuraFill = this.add.rectangle(e.bx, e.by + 14, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 3);
-    this.enemySyncFill = this.add.rectangle(e.bx, e.by + 28, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 3);
-    this.enemyHpText = this.add.text(e.bx + this.hpBarW - 2, e.by - 1, '', {
-      fontSize: '9px', color: '#ffffff', fontFamily: UI_THEME.fonts.family,
-    }).setOrigin(1, 0).setDepth(d + 4);
+    this.enemyHpFill = this.add.rectangle(e.bx, e.by, this.hpBarW, this.hpBarH, UI_THEME.bars.hp).setOrigin(0, 0).setDepth(d + 2);
+    this.enemyAuraFill = this.add.rectangle(e.bx, e.by + 16, this.hpBarW, this.auraBarH, UI_THEME.bars.aura).setOrigin(0, 0).setDepth(d + 2);
+    this.enemySyncFill = this.add.rectangle(e.bx, e.by + 32, this.hpBarW, this.syncBarH, UI_THEME.bars.soulSync).setOrigin(0, 0).setDepth(d + 2);
+    this.enemyHpText = this.add.text(e.bx - 5, e.by - 3, '', { fontSize: '11px', color: '#ffffff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(1, 0).setDepth(d + 4);
+    this.enemyAuraText = this.add.text(e.bx - 5, e.by + 13, '', { fontSize: '10px', color: '#d9c3ff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(1, 0).setDepth(d + 4);
+    this.enemySyncText = this.add.text(e.bx - 5, e.by + 28, '', { fontSize: '10px', color: '#ffd39a', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600' }).setOrigin(1, 0).setDepth(d + 4);
 
-    const playerKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
-    const hud = this.add.graphics().setDepth(d);
-    drawGlassPanel(hud, 14, mob ? 104 : 112, 190, 42, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.7 });
-    this.add.image(35, mob ? 125 : 133, playerKey).setDisplaySize(30, 30).setDepth(d + 2);
-    this.add.text(56, mob ? 113 : 121, PLAYER_PROFILE.displayName, { fontSize: '12px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(d + 2);
-    this.add.text(56, mob ? 130 : 138, `Soul Rank ${profile?.soulRank.level ?? 1}`, { fontSize: '10px', color: '#ffdf7c', fontFamily: UI_THEME.fonts.family }).setDepth(d + 2);
+    const badgeKey = this.imageKeyOrNull(UI_ASSET_KEYS.turnBadge);
+    if (badgeKey) {
+      const badge = this.add.image(w / 2, mob ? 42 : 52, badgeKey).setDepth(d + 1);
+      const badgeW = clampPx(52, w * 0.06, 86);
+      fitImageContain(badge, badgeW, badgeW);
+      this.logAssetRender(badgeKey, { width: badge.displayWidth, height: badge.displayHeight }, 'turn badge');
+      this.outlineHudBounds(w / 2 - badgeW / 2, (mob ? 42 : 52) - badgeW / 2, badgeW, badgeW, 0xffff00, d + 20);
+    }
+    this.add.text(w / 2, mob ? 27 : 32, 'TURN', { fontSize: mob ? '10px' : '12px', color: '#d74dff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '700' }).setOrigin(0.5).setDepth(d + 3);
+    this.turnText = this.add.text(w / 2, mob ? 47 : 57, '01', { fontSize: mob ? '28px' : '34px', color: '#f8f2ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '900', stroke: '#2b0f4a', strokeThickness: 3 }).setOrigin(0.5).setDepth(d + 3);
   }
 
   private refreshHpBars(): void {
@@ -435,20 +629,25 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemyHpFill.width  = this.hpBarW * er;
     this.playerHpFill.setFillStyle(this.hpColor(pr));
     this.enemyHpFill.setFillStyle(this.hpColor(er));
-    this.playerHpText.setText(`${Math.ceil(this.playerActor.hp)}/${this.playerActor.maxHp}`);
-    this.enemyHpText.setText(`${Math.ceil(this.enemyActor.hp)}/${this.enemyActor.maxHp}`);
+    this.playerHpText.setText(`${Math.ceil(this.playerActor.hp)} / ${this.playerActor.maxHp}`);
+    this.enemyHpText.setText(`${Math.ceil(this.enemyActor.hp)} / ${this.enemyActor.maxHp}`);
 
     // Aura bars
     const par = Math.max(0, this.playerActor.aura / this.playerActor.maxAura);
     const ear = Math.max(0, this.enemyActor.aura  / this.enemyActor.maxAura);
     this.playerAuraFill.width = this.hpBarW * par;
     this.enemyAuraFill.width  = this.hpBarW * ear;
+    this.playerAuraText.setText(`${Math.ceil(this.playerActor.aura)} / ${this.playerActor.maxAura}`);
+    this.enemyAuraText.setText(`${Math.ceil(this.enemyActor.aura)} / ${this.enemyActor.maxAura}`);
 
     // Sync bars
     this.playerSyncFill.width = this.hpBarW * (this.playerSyncSys.getSyncValue() / 100);
     this.enemySyncFill.width  = this.hpBarW * (this.enemySyncSys.getSyncValue()  / 100);
     this.playerSyncFill.setFillStyle(this.syncColor(this.playerSyncSys.getTier()));
     this.enemySyncFill.setFillStyle(this.syncColor(this.enemySyncSys.getTier()));
+    this.playerSyncText.setText(`${Math.round(this.playerSyncSys.getSyncValue())} / 100`);
+    this.enemySyncText.setText(`${Math.round(this.enemySyncSys.getSyncValue())} / 100`);
+    this.turnText?.setText(String(this.turnNumber).padStart(2, '0'));
   }
 
   private syncColor(tier: SoulSyncTier): number {
@@ -469,12 +668,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private buildLabels(w: number): void {
     const mob = IS_TOUCH_DEVICE;
     this.phaseLabel = this.add.text(w / 2, this.hudY - 14, '', {
-      fontSize: mob ? '12px' : '11px', color: '#555577', fontFamily: 'monospace',
+      fontSize: mob ? '12px' : '11px', color: '#8176a6', fontFamily: HUD_FONT_SECONDARY,
     }).setOrigin(0.5).setDepth(15);
 
     // Two separate guard labels — one per actor — so enemy guard is always clear.
     const guardStyle = {
-      fontSize: mob ? '13px' : '11px', color: '#88ddff', fontFamily: 'monospace',
+      fontSize: mob ? '13px' : '11px', color: '#88ddff', fontFamily: HUD_FONT_SECONDARY,
       backgroundColor: '#001e2ecc', padding: { x: 6, y: 3 },
       stroke: '#000000', strokeThickness: 2,
     };
@@ -485,7 +684,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.battleCallout = this.add.text(w / 2, this.groundY - 50, '', {
       fontSize: mob ? '18px' : '16px', color: '#ffffff',
-      fontStyle: 'bold', fontFamily: 'monospace',
+      fontStyle: 'bold', fontFamily: HUD_FONT_PRIMARY,
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(22).setAlpha(0);
   }
@@ -509,25 +708,97 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       approach_target:  'Approaching...',
       return_to_anchor: 'Returning...',
     };
+    if (phase === 'turn_end') this.turnNumber += 1;
     this.phaseLabel.setText(map[phase] ?? '');
+  }
+
+  private buildBottomSoulMeters(w: number, h: number, playerId: string): void {
+    const mob = IS_TOUCH_DEVICE;
+    const d = 28;
+    const meterW = clampPx(260, w * 0.32, 520);
+    const meterH = clampPx(42, h * 0.06, 74);
+    const y = h - meterH - (mob ? SAFE_AREA_BOTTOM + 2 : 8);
+    const leftX = mob ? 10 : 26;
+    const rightX = w - meterW - (mob ? 10 : 26);
+
+    const drawFrame = (key: string, x: number, label: string, fillColor: number) => {
+      const assetKey = this.imageKeyOrNull(key);
+      if (assetKey) {
+        const frame = this.add.image(x + meterW / 2, y + meterH / 2, assetKey).setDepth(d);
+        fitImageContain(frame, meterW, meterH);
+        this.logAssetRender(assetKey, { width: frame.displayWidth, height: frame.displayHeight }, `${label} frame`);
+      } else {
+        const g = this.add.graphics().setDepth(d);
+        drawGlassPanel(g, x, y, meterW, meterH, { radius: 18, fill: 0x050610, stroke: fillColor, glow: fillColor, alpha: 0.88 });
+      }
+      this.add.text(x + 58, y + 12, label, {
+        fontSize: mob ? '12px' : '14px', color: label === 'SOULBOND' ? '#d84dff' : '#21c4ff',
+        fontFamily: HUD_FONT_PRIMARY, fontStyle: '800',
+      }).setOrigin(0, 0.5).setDepth(d + 3);
+      this.add.rectangle(x + 58, y + meterH - 20, meterW - 120, mob ? 10 : 12, 0x060711, 0.94)
+        .setOrigin(0, 0.5).setDepth(d + 1).setStrokeStyle(1, fillColor, 0.7);
+      const fill = this.add.rectangle(x + 58, y + meterH - 20, meterW - 120, mob ? 10 : 12, fillColor, 0.95)
+        .setOrigin(0, 0.5).setDepth(d + 2);
+      const text = this.add.text(x + meterW - 34, y + meterH - 20, '', {
+        fontSize: mob ? '11px' : '13px', color: '#f8f6ff', fontFamily: HUD_FONT_SECONDARY, fontStyle: '600',
+      }).setOrigin(0.5).setDepth(d + 3);
+      this.outlineHudBounds(x, y, meterW, meterH, fillColor, d + 20);
+      return { fill, text, width: meterW - 120 };
+    };
+
+    const bond = drawFrame(UI_ASSET_KEYS.soulbondBar, leftX, 'SOULBOND', 0xc44dff);
+    const sync = drawFrame(UI_ASSET_KEYS.soulsyncBar, rightX, 'SOUL SYNC', 0x21c4ff);
+    this.soulbondFill = bond.fill;
+    this.soulbondText = bond.text;
+    this.soulbondFillMaxW = bond.width;
+    this.soulsyncFill = sync.fill;
+    this.soulsyncText = sync.text;
+    this.soulsyncFillMaxW = sync.width;
+
+    const portraitKey = bestLoadedVisualKey(this, 'monari', playerId, elementColor(MINARI_ROSTER[playerId]?.element));
+    this.add.image(w / 2 - (mob ? 34 : 46), y + meterH / 2, portraitKey).setDisplaySize(mob ? 38 : 48, mob ? 38 : 48).setDepth(d + 4);
+    this.add.text(w / 2, y + meterH / 2, '∞', {
+      fontSize: mob ? '30px' : '38px', color: '#f3f5ff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '900',
+      stroke: '#1f66ff', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(d + 4);
+    const enemyId = this.battleCtx?.enemyMinariId ?? 'droplet';
+    const enemyPortraitKey = bestLoadedVisualKey(this, 'monari', enemyId, elementColor(MINARI_ROSTER[enemyId]?.element));
+    this.add.image(w / 2 + (mob ? 34 : 46), y + meterH / 2, enemyPortraitKey).setDisplaySize(mob ? 38 : 48, mob ? 38 : 48).setDepth(d + 4);
+  }
+
+  private refreshBottomSoulMeters(): void {
+    if (!this.soulbondFill || !this.soulsyncFill) return;
+    const profile = this.registry.get('player_profile') as PlayerProfile | null;
+    const playerId = this.battleCtx?.playerMinariId ?? 'flarepaw';
+    const bond = profile?.bonds[playerId];
+    const bondMax = bond?.bondXPToNext ?? 100;
+    const bondValue = bond?.bondXP ?? (bond?.bondLevel ? bond.bondLevel * 10 : 50);
+    const bondRatio = Phaser.Math.Clamp(bondValue / Math.max(1, bondMax), 0, 1);
+    const syncValue = this.playerSyncSys.getSyncValue();
+    const syncRatio = Phaser.Math.Clamp(syncValue / 100, 0, 1);
+    this.soulbondFill.width = Math.max(1, this.soulbondFillMaxW * bondRatio);
+    this.soulsyncFill.width = Math.max(1, this.soulsyncFillMaxW * syncRatio);
+    this.soulsyncFill.setFillStyle(this.syncColor(this.playerSyncSys.getTier()));
+    this.soulbondText.setText(`${Math.round(bondValue)} / ${bondMax}`);
+    this.soulsyncText.setText(`${Math.round(syncValue)} / 100`);
   }
 
   // ── Battle HUD ─────────────────────────────────────────────────────────────
 
   private buildBattleHud(w: number, _h: number, playerId: string): void {
     const mob  = IS_TOUCH_DEVICE;
-    const gap  = 8;
+    const gap  = mob ? 6 : 12;
     const safeBot = mob ? SAFE_AREA_BOTTOM : 0;
 
     const nMain      = this.MAIN_BTNS.length;
-    this.mainBtnW    = Math.floor((w - (nMain + 1) * gap) / nMain);
-    this.mainBtnH    = this.hudH - 20;
+    this.mainBtnW    = Math.min(clampPx(150, w * (mob ? 0.23 : 0.22), 280), Math.floor((w - (nMain + 1) * gap) / nMain));
+    this.mainBtnH    = clampPx(mob ? 58 : 60, this.hudH - (mob ? 12 : 16), mob ? 88 : 96);
 
     const moveset         = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
     this.menuCommandIds   = [...moveset, BACK_COMMAND];
     const nMoves          = this.menuCommandIds.length;
     const rows            = Math.ceil(nMoves / this.MOVE_COLS);
-    this.moveBtnW         = Math.floor((w - (this.MOVE_COLS + 1) * gap) / this.MOVE_COLS);
+    this.moveBtnW         = Math.min(clampPx(220, w * 0.36, 420), Math.floor((w - (this.MOVE_COLS + 1) * gap) / this.MOVE_COLS));
     this.moveBtnH         = Math.floor((this.hudH - 10 - (rows - 1) * 6) / rows);
 
     this.moveBtnThemes = this.menuCommandIds.map(id => {
@@ -539,7 +810,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hudGroup = this.add.container(0, this.hudY).setDepth(30).setVisible(false);
 
     const bgGfx = this.add.graphics();
-    bgGfx.fillStyle(0x07070f, 0.97);
+    bgGfx.fillStyle(0x07070f, 0.82);
     bgGfx.fillRect(0, 0, w, this.hudH + safeBot);
     bgGfx.lineStyle(2, 0xff6600, 0.6);
     bgGfx.lineBetween(0, 0, w, 0);
@@ -548,15 +819,33 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.hudGroup.add(bgGfx);
 
     // ── Main panel ────────────────────────────────────────────────────────────
-    this.mainPanel    = this.add.container(0, 0);
-    this.mainBtnGfxs  = [];
-    this.mainBtnTexts = [];
+    this.mainPanel     = this.add.container(0, 0);
+    this.mainBtnGfxs   = [];
+    this.mainBtnImages = [];
+    this.mainBtnTexts  = [];
 
     this.MAIN_BTNS.forEach((cfg, i) => {
-      const bx = gap + i * (this.mainBtnW + gap);
+      const totalBtnW = nMain * this.mainBtnW + (nMain - 1) * gap;
+      const startX = (w - totalBtnW) / 2;
+      const bx = startX + i * (this.mainBtnW + gap);
       const by = 10;
       const theme = MAIN_BTN_THEMES[cfg.key];
 
+      const assetKey = this.imageKeyOrNull(MAIN_BTN_ASSET_KEYS[cfg.key]);
+      if (assetKey) {
+        const img = this.add.image(bx + this.mainBtnW / 2, by + this.mainBtnH / 2, assetKey)
+          .setDepth(0);
+        fitImageContain(img, this.mainBtnW, this.mainBtnH);
+        this.logAssetRender(assetKey, { width: img.displayWidth, height: img.displayHeight }, `${cfg.label} button`);
+        img.setInteractive(new Phaser.Geom.Rectangle(-this.mainBtnW / 2, -this.mainBtnH / 2, this.mainBtnW, this.mainBtnH), Phaser.Geom.Rectangle.Contains);
+        img.input!.cursor = 'pointer';
+        img.on('pointerover', () => { this.mainCursor = i; this.refreshMainCursor(); });
+        img.on('pointerdown', () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
+        this.mainPanel.add(img);
+        this.mainBtnImages.push(img);
+      }
+
+      this.outlineHudBounds(bx, this.hudY + by, this.mainBtnW, this.mainBtnH, theme.accent, 90);
       const gfx = this.add.graphics();
       gfx.setPosition(bx, by);
       this.mainPanel.add(gfx);
@@ -565,7 +854,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const lbl = this.add.text(
         bx + this.mainBtnW / 2, by + this.mainBtnH / 2,
         cfg.label,
-        { fontSize: mob ? '17px' : '15px', color: '#d9d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold', align: 'center' },
+        { fontSize: mob ? '20px' : '22px', color: '#f1efff', fontFamily: HUD_FONT_PRIMARY, fontStyle: '900', align: 'center', stroke: '#090711', strokeThickness: 3 },
       ).setOrigin(0.5);
       lbl.setInteractive(
         new Phaser.Geom.Rectangle(-this.mainBtnW / 2 - 4, -this.mainBtnH / 2 - 4, this.mainBtnW + 8, this.mainBtnH + 8),
@@ -577,10 +866,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.mainPanel.add(lbl);
       this.mainBtnTexts.push(lbl);
 
+      const icon = this.add.text(bx + 28, by + this.mainBtnH / 2, cfg.icon, {
+        fontSize: mob ? '24px' : '28px', color: MAIN_BTN_COLORS[cfg.key], fontFamily: HUD_FONT_PRIMARY,
+      }).setOrigin(0.5);
+      this.mainPanel.add(icon);
       const dot = this.add.graphics();
-      dot.setPosition(bx + 10, by + 10);
-      dot.fillStyle(theme.accent, 0.6);
-      dot.fillCircle(0, 0, 4);
+      dot.setPosition(bx + 12, by + 10);
+      dot.fillStyle(theme.accent, 0.8);
+      dot.fillCircle(0, 0, 3);
       this.mainPanel.add(dot);
     });
 
@@ -598,6 +891,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const by   = 5 + row * (this.moveBtnH + 6);
       const theme = this.moveBtnThemes[i];
 
+      this.outlineHudBounds(bx, this.hudY + by, this.moveBtnW, this.moveBtnH, theme.accent, 90);
       const gfx = this.add.graphics();
       gfx.setPosition(bx, by);
       this.movesPanel.add(gfx);
@@ -618,7 +912,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const lbl = this.add.text(
         bx + 14, by + this.moveBtnH / 2,
         label + costTag,
-        { fontSize: mob ? '14px' : '13px', color: '#888899', fontFamily: 'monospace' },
+        { fontSize: mob ? '14px' : '13px', color: '#888899', fontFamily: HUD_FONT_SECONDARY, fontStyle: '700' },
       ).setOrigin(0, 0.5);
       lbl.setInteractive(
         new Phaser.Geom.Rectangle(-14, -this.moveBtnH / 2 - 4, this.moveBtnW + 4, this.moveBtnH + 8),
@@ -664,9 +958,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.mainBtnGfxs.forEach((gfx, i) => {
       this.drawHudBtn(gfx, this.mainBtnW, this.mainBtnH, MAIN_BTN_THEMES[this.MAIN_BTNS[i].key], i === this.mainCursor);
     });
+    this.mainBtnImages.forEach((img, i) => {
+      img.setAlpha(i === this.mainCursor ? 1 : 0.86);
+      fitImageContain(img, this.mainBtnW, this.mainBtnH, i === this.mainCursor ? 1.02 : 1);
+    });
     this.mainBtnTexts.forEach((t, i) => {
       const locked = this.MAIN_BTNS[i].key === 'capture' && (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild');
-      t.setColor(locked ? '#6f6a90' : i === this.mainCursor ? '#ffffff' : '#b8b2dc');
+      t.setColor(locked ? '#6f6a90' : i === this.mainCursor ? '#ffffff' : '#d8d2e8');
     });
   }
 
