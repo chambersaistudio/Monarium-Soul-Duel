@@ -30,8 +30,8 @@ export const SAFE_SKIP_FOLDERS = new Set([
 export const SAFE_MAX_FRAMES = 4;
 
 // Normalized canvas size used in PreloadScene and ClassicActor sprite-scale math.
-// Mobile uses 256 px (4× less GPU memory per frame); desktop uses 512 px.
-export const NORM_SIZE: number = IS_TOUCH_DEVICE ? 256 : 512;
+// Mobile uses 384 px to preserve high-DPI sharpness while remaining lighter than desktop 512 px textures.
+export const NORM_SIZE: number = IS_TOUCH_DEVICE ? 384 : 512;
 
 // Bottom safe-area inset (home indicator on iPhone, etc.).
 // Measured once at module load time so Phaser scene code can add clearance.

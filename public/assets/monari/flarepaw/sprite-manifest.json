@@ -1,6 +1,6 @@
 {
   "character": "flarepaw",
-  "generated": "2026-06-09",
+  "generated": "2026-06-10",
   "animations": {
     "attack": [
       "frame_032",
@@ -100,5 +100,19 @@
       "frame_031",
       "frame_032"
     ]
+  },
+  "folderBases": {
+    "attack": "attack",
+    "flame_guard": "flame_guard",
+    "guard": "guard",
+    "hurt": "hurt",
+    "idle": "idle",
+    "jump": "jump",
+    "jump_air": "jump_air",
+    "jump_fall": "jump_fall",
+    "jump_forward": "jump_forward",
+    "jump_start": "jump_start",
+    "land": "land",
+    "run": "run"
   }
 }

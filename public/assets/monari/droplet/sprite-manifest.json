@@ -1,6 +1,6 @@
 {
   "character": "droplet",
-  "generated": "2026-06-09",
+  "generated": "2026-06-10",
   "animations": {
     "attack": [
       "frame_031"
@@ -29,5 +29,12 @@
       "frame_017",
       "frame_018"
     ]
+  },
+  "folderBases": {
+    "attack": "attack",
+    "guard": "guard",
+    "hurt": "hurt",
+    "idle": "idle",
+    "run": "run"
   }
 }

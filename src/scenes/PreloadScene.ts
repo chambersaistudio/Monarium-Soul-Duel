@@ -12,7 +12,7 @@ import {
 } from '../config/mobileConfig';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
-type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
+type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]>; folderBases?: Record<string, string> };
 
 function phaserKey(charId: string, folder: string, stem: string): string {
   return `${charId}_${folder}_${stem}`;
@@ -20,6 +20,10 @@ function phaserKey(charId: string, folder: string, stem: string): string {
 
 function normKey(rawKey: string): string {
   return `n_${rawKey}`;
+}
+
+function framePath(base: string, folder: string, stem: string, folderBases?: Record<string, string>): string {
+  return `${base}/${folderBases?.[folder] ?? folder}/${stem}.png`;
 }
 
 // Return at most maxCount evenly-spaced items from the array.
@@ -84,7 +88,7 @@ export class PreloadScene extends Phaser.Scene {
           for (const stem of filtered) {
             const key = phaserKey(charId, folder, stem);
             if (!this.textures.exists(key)) {
-              this.load.image(key, `${manifest.base}/${folder}/${stem}.png`);
+              this.load.image(key, framePath(manifest.base, folder, stem, json.folderBases ?? manifest.folderBases));
             }
           }
         }
@@ -96,7 +100,7 @@ export class PreloadScene extends Phaser.Scene {
         if (SAFE_MODE && SAFE_SKIP_FOLDERS.has(folder)) continue;
         const filtered = SAFE_MODE ? thinFrames(stems, SAFE_MAX_FRAMES) : (stems as string[]);
         for (const stem of filtered) {
-          this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
+          this.load.image(phaserKey(charId, folder, stem), framePath(manifest.base, folder, stem, manifest.folderBases));
         }
       }
     }

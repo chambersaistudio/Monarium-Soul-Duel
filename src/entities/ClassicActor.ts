@@ -6,11 +6,10 @@ import { CombatFormulaSystem } from '../systems/CombatFormulaSystem';
 import type { ComputedBattleStats } from '../systems/CombatFormulaSystem';
 import { MONARI_DEX } from '../data/monariDex';
 
-// On mobile the normalized texture is 256 px (vs 512 px desktop), so SPRITE_SCALE
-// must be computed from the actual NORM_SIZE to get the correct display height.
-// Mobile uses a slightly smaller display height so characters don't overwhelm the
-// compact landscape viewport (≈390 px tall).
-const DISPLAY_HEIGHT = IS_TOUCH_DEVICE ? 170 : 220;
+// SPRITE_SCALE is computed from the actual normalized texture size so mobile
+// can use sharper 384 px frames while desktop keeps 512 px frames.
+// Keep battle Monari large enough for crisp high-DPI display without dominating the arena.
+const DISPLAY_HEIGHT = IS_TOUCH_DEVICE ? 210 : 240;
 const NORM_BASE      = 40;
 const SPRITE_SCALE   = DISPLAY_HEIGHT / NORM_SIZE;
 const FEET_OFFSET    = Math.round(NORM_BASE * SPRITE_SCALE);

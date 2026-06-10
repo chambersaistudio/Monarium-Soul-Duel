@@ -3,12 +3,20 @@
 
 export interface CharacterManifest {
   base: string;
+  folderBases?: Record<string, string>;
   animations: Record<string, readonly string[]>;
 }
 
 export const CHARACTERS_MANIFEST: Record<string, CharacterManifest> = {
   droplet: {
     base: 'assets/monari/droplet',
+    folderBases: {
+      attack: 'attack',
+      guard: 'guard',
+      hurt: 'hurt',
+      idle: 'idle',
+      run: 'run',
+    },
     animations: {
       attack: ['frame_031'],
       guard: ['frame_046', 'frame_048', 'frame_050'],
@@ -19,6 +27,20 @@ export const CHARACTERS_MANIFEST: Record<string, CharacterManifest> = {
   },
   flarepaw: {
     base: 'assets/monari/flarepaw',
+    folderBases: {
+      attack: 'attack',
+      flame_guard: 'flame_guard',
+      guard: 'guard',
+      hurt: 'hurt',
+      idle: 'idle',
+      jump: 'jump',
+      jump_air: 'jump_air',
+      jump_fall: 'jump_fall',
+      jump_forward: 'jump_forward',
+      jump_start: 'jump_start',
+      land: 'land',
+      run: 'run',
+    },
     animations: {
       attack: ['frame_032', 'frame_036', 'frame_037', 'frame_044'],
       flame_guard: ['frame_062', 'frame_063', 'frame_064', 'frame_065', 'frame_066', 'frame_067', 'frame_068', 'frame_069', 'frame_070', 'frame_071', 'frame_072', 'frame_073', 'frame_074', 'frame_075', 'frame_076', 'frame_077', 'frame_078', 'frame_079', 'frame_080', 'frame_081'],
