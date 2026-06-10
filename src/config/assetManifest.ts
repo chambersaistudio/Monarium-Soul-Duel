@@ -45,7 +45,7 @@ function character(id: string, reference = 'full_body.png'): CharacterPaths {
 }
 
 export const MONARI_PATHS: Record<string, MonariPaths> = {
-  flarepaw: monari('flarepaw', 'flarepaw_sheet.png'),
+  flarepaw: monari('flarepaw', 'neutral.png'),
   droplet: monari('droplet', 'fullbody.png'),
   umbrelette: monari('umbrelette', 'fullbody.png'),
   uvee: monari('uvee', 'fullbody.png'),

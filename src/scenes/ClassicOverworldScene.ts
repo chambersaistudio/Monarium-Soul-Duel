@@ -78,6 +78,13 @@ export class ClassicOverworldScene extends Phaser.Scene {
     ['player', 'renzo', 'warren_ellis', 'amari', 'erix'].forEach(id => {
       preloadVisualCandidates(this, 'character', id, visualCandidates(getCharacterVisualPaths(id)));
     });
+    // Overworld fullbody sprites (separate from portrait assets)
+    ['player', 'renzo', 'amari', 'erix'].forEach(id => {
+      this.load.image(`ow_char_${id}`, `assets/characters/${id}/overworld/fullbody.png`);
+    });
+    ['flarepaw', 'sproutodon'].forEach(id => {
+      this.load.image(`ow_monari_${id}`, `assets/monari/${id}/overworld/fullbody.png`);
+    });
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -128,7 +135,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
     }
 
     this.playerImg = null;
-    const playerTexKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
+    const playerTexKey = this.textures.exists('ow_char_player') ? 'ow_char_player'
+      : bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
     if (!playerTexKey.startsWith('generated_')) {
       this.playerImg = this.add.image(this.playerX, this.playerY - this.playerH / 2, playerTexKey)
         .setDisplaySize(this.playerW * 2, this.playerH * 2)
@@ -266,9 +274,30 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private buildNpcs(w: number, h: number): void {
     for (const npc of this.mapDef.npcs) {
       const nx = npc.x * w, ny = npc.y * h;
-      const imgKey = bestLoadedVisualKey(this, 'character', npc.id, npc.color);
+      let imgKey: string | null = null;
 
-      if (!imgKey.startsWith('generated_')) {
+      if (npc.role?.startsWith('starter_pedestal_')) {
+        const monariId = npc.id.replace('pedestal_', '');
+        const owKey = `ow_monari_${monariId}`;
+        if (this.textures.exists(owKey)) {
+          imgKey = owKey;
+        } else {
+          for (const k of [`monari_${monariId}_portrait`, `monari_${monariId}_reference`]) {
+            if (this.textures.exists(k)) { imgKey = k; break; }
+          }
+        }
+      } else {
+        const owKey = `ow_char_${npc.id}`;
+        if (this.textures.exists(owKey)) {
+          imgKey = owKey;
+        } else {
+          for (const k of [`character_${npc.id}_reference`, `character_${npc.id}_portrait`]) {
+            if (this.textures.exists(k)) { imgKey = k; break; }
+          }
+        }
+      }
+
+      if (imgKey) {
         const npcH = Math.round(44 * this.scl);
         const npcW = Math.round(28 * this.scl);
         this.add.image(nx, ny - npcH / 2, imgKey)
@@ -822,6 +851,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.dialogIndex  = 0;
     this.dialogOnEnd  = onEnd ?? null;
     this.dialogPanel  = [];
+    this.dpad?.setVisible(false);
     this.buildDialogPanel();
     this.renderDialogLine();
   }
@@ -834,32 +864,32 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const panX = 18;
     const panW = w - 36;
 
-    const bg = this.add.graphics().setDepth(80);
+    const bg = this.add.graphics().setDepth(105);
     drawGlassPanel(bg, panX, panY, panW, panH, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
 
-    const portraitBg = this.add.graphics().setDepth(81);
+    const portraitBg = this.add.graphics().setDepth(106);
     portraitBg.fillStyle(UI_THEME.colors.gold, 0.14).fillRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
     portraitBg.lineStyle(1.5, UI_THEME.colors.gold, 0.5).strokeRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
 
-    const portrait = this.add.image(panX + 56, panY + 36, bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold)).setDisplaySize(72, 72).setDepth(82);
+    const portrait = this.add.image(panX + 56, panY + 36, bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold)).setDisplaySize(72, 72).setDepth(107);
     portrait.setName('dialogPortrait');
 
-    const nameplate = this.add.graphics().setDepth(82);
+    const nameplate = this.add.graphics().setDepth(107);
     nameplate.fillStyle(UI_THEME.colors.gold, 0.2).fillRoundedRect(panX + 112, panY + 12, 160, 24, 12);
     nameplate.lineStyle(1, UI_THEME.colors.gold, 0.42).strokeRoundedRect(panX + 112, panY + 12, 160, 24, 12);
     this.dialogNameText = this.add.text(panX + 126, panY + 24, 'Amari', {
       fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(83);
+    }).setOrigin(0, 0.5).setDepth(108);
 
     this.dialogBodyText = this.add.text(panX + 118, panY + 48, '', {
       fontSize: mob ? '14px' : '13px',
       color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family,
       wordWrap: { width: panW - 148 }, align: 'left',
-    }).setOrigin(0, 0).setDepth(83);
+    }).setOrigin(0, 0).setDepth(108);
 
     const hint = this.add.text(panX + panW - 16, panY + panH - 12, mob ? 'tap • A / ENTER' : 'ENTER / SPACE / tap', {
       fontSize: '10px', color: '#9f98c6', fontFamily: UI_THEME.fonts.family,
-    }).setOrigin(1, 1).setDepth(83);
+    }).setOrigin(1, 1).setDepth(108);
 
     this.dialogPanel.push(bg, portraitBg, portrait, nameplate, this.dialogNameText, this.dialogBodyText, hint);
 
@@ -892,7 +922,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const text = split?.[2] ?? line;
     const low = speaker.toLowerCase();
     const characterId = low.includes('renzo') ? 'renzo'
-      : low.includes('warren') || low.includes('ellis') || low.includes('dr.') ? 'warren_ellis'
+      : low.includes('warren') || low.includes('ellis') || low.includes('dr.') || low.includes('professor') ? 'warren_ellis'
       : 'player';
     const display = characterId === 'warren_ellis' ? 'Dr. Warren Ellis' : speaker;
     return { speaker: display, text, characterId };
@@ -911,6 +941,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.dialogPanel.forEach(o => o.destroy());
     this.dialogPanel  = [];
     this.dialogActive = false;
+    this.dpad?.setVisible(IS_TOUCH_DEVICE);
 
     // Lock interact input briefly so the key that closed dialogue
     // doesn't instantly reopen it in the same frame.

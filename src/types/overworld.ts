@@ -63,10 +63,13 @@ export interface MapDef {
 }
 
 export interface ClassicBattleContext {
-  returnMap:     string;
-  returnSpawn:   string;
+  returnMap:      string;
+  returnSpawn:    string;
   playerMinariId: string;
   enemyMinariId:  string;
-  bondable:      boolean;
-  battleType:    'rival' | 'wild';
+  bondable:       boolean;
+  battleType:     'rival' | 'wild' | 'lab';
+  playerLevel?:   number;
+  enemyLevel?:    number;
+  labMode?:       boolean;
 }

@@ -444,7 +444,7 @@
 
 /* Back chip */
 .bhud__move-btn--back {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   width: auto;
   min-width: 64px;
   height: 58px;
@@ -554,7 +554,7 @@
   .bhud__move-btn--utility { min-height: 22px; }
   .bhud__move-btn--utility .bhud__move-name { font-size: 8px; }
   .bhud__move-btn--special  { height: 50px; }
-  .bhud__move-btn--back     { min-height: 50px; width: auto; min-width: 56px; height: 50px; }
+  .bhud__move-btn--back     { flex: 0 0 auto; min-height: 50px; width: auto; min-width: 56px; height: 50px; }
 
   .bhud__bottom { padding: 3px 6px 6px; gap: 5px; }
   .bhud__sync-strip { padding: 3px 6px; }
@@ -602,7 +602,7 @@
 .bhud--mobile-preview .bhud__move-btn--utility { min-height: 22px; }
 .bhud--mobile-preview .bhud__move-btn--utility .bhud__move-name { font-size: 8px; }
 .bhud--mobile-preview .bhud__move-btn--special  { height: 50px; }
-.bhud--mobile-preview .bhud__move-btn--back     { min-height: 50px; width: auto; min-width: 56px; height: 50px; }
+.bhud--mobile-preview .bhud__move-btn--back     { flex: 0 0 auto; min-height: 50px; width: auto; min-width: 56px; height: 50px; }
 .bhud--mobile-preview .bhud__move-meta  { font-size: 8px; }
 .bhud--mobile-preview .bhud__bottom { padding: 3px 6px 6px; gap: 5px; }
 .bhud--mobile-preview .bhud__sync-strip { padding: 3px 6px; }

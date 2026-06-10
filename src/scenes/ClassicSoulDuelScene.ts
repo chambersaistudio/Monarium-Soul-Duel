@@ -252,8 +252,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     const playerBond   = profile?.bonds[playerMinId];
     const playerBondLv = playerBond?.bondLevel ?? 1;
-    const playerLevel  = profile?.monariLevels[playerMinId]?.level ?? DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
-    const enemyLevel   = DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
+    const playerLevel  = this.battleCtx?.playerLevel
+      ?? profile?.monariLevels[playerMinId]?.level
+      ?? DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
+    const enemyLevel   = this.battleCtx?.enemyLevel ?? DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
     this.playerLevel = playerLevel;
     this.enemyLevel  = enemyLevel;
 
@@ -1298,10 +1300,21 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     const ctx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
 
+    if (ctx?.labMode) {
+      this.add.text(w / 2, h / 2 + 110, 'R — Try Again  |  ESC — Back to Lab Setup', {
+        fontSize: mob ? '14px' : '12px', color: '#7788aa', fontFamily: 'monospace',
+      }).setOrigin(0.5).setDepth(61);
+    }
+
     this.time.delayedCall(600, () => {
       const goBack = (): void => {
         this.input.off('pointerup', goBack);
-        if (ctx?.returnMap) {
+        this.input.keyboard!.off('keydown-ENTER', goBack);
+        if (ctx?.labMode) {
+          this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+            if (p === 1) this.scene.start('BattleLabSetupScene');
+          });
+        } else if (ctx?.returnMap) {
           this.registry.set('classic_current_map', ctx.returnMap);
           this.registry.set('classic_spawn_name',  ctx.returnSpawn ?? 'default');
           this.registry.remove('classic_battle_context');
@@ -1314,8 +1327,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
           });
         }
       };
+      const tryAgain = (): void => {
+        if (!ctx?.labMode) return;
+        this.input.keyboard!.off('keydown-R', tryAgain);
+        this.input.keyboard!.off('keydown-ESC', goBack);
+        this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+          if (p === 1) this.scene.restart();
+        });
+      };
       this.input.keyboard!.once('keydown-ENTER', goBack);
       this.input.once('pointerup', goBack);
+      if (ctx?.labMode) {
+        this.input.keyboard!.once('keydown-R',   tryAgain);
+        this.input.keyboard!.once('keydown-ESC', goBack);
+      }
     });
   }
 }

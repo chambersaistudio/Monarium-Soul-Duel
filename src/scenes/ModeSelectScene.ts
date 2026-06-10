@@ -9,6 +9,11 @@ const BASE_MODES = [
     desc: 'Explore the world, bond Monari, battle rivals.',
   },
   {
+    key:  'BattleLabSetupScene',
+    name: 'Battle Lab',
+    desc: 'Jump straight into battle — test moves, levels, and damage.',
+  },
+  {
     key:  'OverworldScene',
     name: 'Arena Duel',
     desc: 'Real-time action prototype (original battle mode).',
@@ -18,8 +23,8 @@ const BASE_MODES = [
 const DEBUG_MODES = [
   {
     key:  'BattleLabScene',
-    name: 'Battle Lab',
-    desc: 'Formula debugger — damage calc sandbox. [DEBUG]',
+    name: 'Formula Debugger',
+    desc: 'Damage calc sandbox — keyboard-driven. [DEBUG]',
   },
 ];
 
