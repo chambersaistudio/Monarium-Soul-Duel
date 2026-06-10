@@ -1,0 +1,524 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MONARIUM Battle HUD DOM Overlay
+   Orbitron = major labels/names/turn   Rajdhani = bars/stats/small text
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bhud {
+  --bhud-font-hud:  "Orbitron", "Arial", sans-serif;
+  --bhud-font-stat: "Rajdhani", "Arial Narrow", Arial, sans-serif;
+  --bhud-c-bg:      rgba(7, 8, 20, 0.90);
+  --bhud-c-bg-cmd:  rgba(4, 5, 14, 0.94);
+  --bhud-c-border:  rgba(68, 78, 168, 0.55);
+  --bhud-c-text:    #f0ecff;
+  --bhud-c-muted:   #7a7498;
+  --bhud-c-hp:      #2edb5a;
+  --bhud-c-hp-warn: #ffaa22;
+  --bhud-c-hp-crit: #ff3344;
+  --bhud-c-aura:    #1e88ff;
+  --bhud-c-sync:    #d9a826;
+  --bhud-c-gold:    #ffe39a;
+  --bhud-c-stroke:  rgba(200, 190, 255, 0.30);
+
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-family: var(--bhud-font-stat);
+}
+
+/* ── Top row ─────────────────────────────────────────────────────────────────
+   Three columns: player card | turn badge | enemy card
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.bhud__top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 6px;
+  padding: 6px 8px 0;
+}
+
+/* ── Status cards ─────────────────────────────────────────────────────────── */
+
+.bhud__status {
+  background: var(--bhud-c-bg);
+  border: 1px solid var(--bhud-c-border);
+  border-radius: 8px;
+  padding: 6px 8px 5px;
+  min-width: 0;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.bhud__status--player {
+  border-color: rgba(255, 140, 0, 0.48);
+}
+
+.bhud__status--enemy {
+  border-color: rgba(70, 130, 255, 0.48);
+}
+
+/* Name row */
+
+.bhud__name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  min-width: 0;
+}
+
+.bhud__status--enemy .bhud__name-row {
+  flex-direction: row-reverse;
+}
+
+.bhud__elem-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px currentColor;
+}
+
+.bhud__name {
+  font-family: var(--bhud-font-hud);
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.bhud__level {
+  font-family: var(--bhud-font-stat);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bhud-c-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bhud__gender {
+  width: 11px;
+  height: 11px;
+  object-fit: contain;
+  flex-shrink: 0;
+  opacity: 0.80;
+}
+
+/* Bar rows */
+
+.bhud__bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.bhud__status--enemy .bhud__bar-row {
+  flex-direction: row-reverse;
+}
+
+.bhud__bar-label {
+  font-family: var(--bhud-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--bhud-c-muted);
+  width: 22px;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+}
+
+.bhud__status--enemy .bhud__bar-label {
+  text-align: right;
+}
+
+.bhud__bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.bhud__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.18s ease, background-color 0.3s ease;
+}
+
+.bhud__bar-fill--hp      { background: var(--bhud-c-hp);      }
+.bhud__bar-fill--hp-warn { background: var(--bhud-c-hp-warn);  }
+.bhud__bar-fill--hp-crit { background: var(--bhud-c-hp-crit);  }
+.bhud__bar-fill--aura    { background: var(--bhud-c-aura);     }
+.bhud__bar-fill--sync    { background: var(--bhud-c-sync);     }
+
+.bhud__hp-val {
+  font-family: var(--bhud-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(200, 220, 220, 0.75);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 44px;
+  text-align: right;
+}
+
+.bhud__status--enemy .bhud__hp-val {
+  text-align: left;
+}
+
+.bhud__bond-tag {
+  font-family: var(--bhud-font-hud);
+  font-size: 7px;
+  color: var(--bhud-c-gold);
+  opacity: 0.65;
+  text-align: center;
+  margin-top: 3px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Turn badge ──────────────────────────────────────────────────────────────
+   Centered between the two status cards.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.bhud__turn-badge {
+  background: var(--bhud-c-bg);
+  border: 1px solid rgba(80, 100, 200, 0.55);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px 4px;
+  min-width: 72px;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.bhud__turn-label {
+  font-family: var(--bhud-font-hud);
+  font-size: 7px;
+  font-weight: 700;
+  color: #5566aa;
+  letter-spacing: 4px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.bhud__turn-num {
+  font-family: var(--bhud-font-hud);
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+}
+
+/* ── Flexible spacer (game arena sits here) ──────────────────────────────── */
+
+.bhud__spacer { flex: 1; }
+
+/* ── Command area ─────────────────────────────────────────────────────────── */
+
+.bhud__command {
+  pointer-events: none;
+}
+
+.bhud__command-bg {
+  background: var(--bhud-c-bg-cmd);
+  border-top: 1px solid rgba(60, 80, 200, 0.30);
+  padding: 8px 10px;
+  display: none;
+  pointer-events: auto;
+}
+
+.bhud--menu-visible .bhud__command-bg {
+  display: block;
+}
+
+/* Panel visibility */
+
+.bhud__main-panel  { display: none; flex-direction: row; gap: 8px; }
+.bhud__moves-panel { display: none; flex-wrap: wrap; gap: 6px; }
+
+.bhud__main-panel.bhud--active  { display: flex; }
+.bhud__moves-panel.bhud--active { display: flex; }
+
+/* ── Main command buttons (FIGHT / BAG / BOND / RUN) ────────────────────── */
+
+.bhud__cmd-btn {
+  flex: 1;
+  height: 60px;
+  background: rgba(12, 14, 36, 0.90);
+  border: 1px solid rgba(70, 80, 160, 0.50);
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s, box-shadow 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* PNG image inside button — fills the button, no cropping */
+.bhud__cmd-btn img.bhud__btn-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Fallback text — shown by default; hidden once PNG loads */
+.bhud__btn-fb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--bhud-font-hud);
+  font-size: 13px;
+  font-weight: 700;
+  color: #c8c0f0;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+/* Once the PNG loads we add .bhud--loaded to the img, which hides the fallback */
+.bhud__cmd-btn img.bhud__btn-img.bhud--loaded ~ .bhud__btn-fb {
+  display: none;
+}
+
+/* Selected / unselected states */
+.bhud__cmd-btn--selected {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55), 0 0 8px rgba(140, 120, 255, 0.4);
+  border-color: rgba(180, 170, 255, 0.70);
+}
+
+.bhud__cmd-btn--unselected {
+  opacity: 0.48;
+  filter: saturate(0.35) brightness(0.85);
+}
+
+/* ── Move list buttons ────────────────────────────────────────────────────── */
+
+.bhud__move-btn {
+  flex: 1 1 calc(50% - 6px);
+  min-width: 0;
+  height: 54px;
+  background: rgba(10, 14, 36, 0.92);
+  border: 1px solid rgba(55, 70, 160, 0.42);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 10px 0 14px;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, border-color 0.10s;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+
+/* Element accent bar on left edge */
+.bhud__move-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--move-accent, #5577aa);
+  opacity: 0.70;
+}
+
+.bhud__move-name {
+  font-family: var(--bhud-font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: #9aaccb;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.bhud__move-meta {
+  font-family: var(--bhud-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: #4a6080;
+  line-height: 1;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.bhud__move-btn--selected {
+  background: rgba(18, 35, 90, 0.96);
+  border-color: rgba(80, 140, 255, 0.75);
+}
+
+.bhud__move-btn--selected .bhud__move-name {
+  color: #ffffff;
+}
+
+.bhud__move-btn--selected .bhud__move-meta {
+  color: #6688aa;
+}
+
+.bhud__move-btn--dimmed {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.bhud__move-btn--back .bhud__move-name {
+  color: #667788;
+}
+
+/* ── Bottom soul sync strips ─────────────────────────────────────────────── */
+
+.bhud__bottom {
+  display: flex;
+  gap: 6px;
+  padding: 5px 8px 8px;
+  pointer-events: none;
+}
+
+.bhud__sync-strip {
+  flex: 1;
+  background: rgba(7, 8, 20, 0.78);
+  border: 1px solid rgba(40, 50, 90, 0.50);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+}
+
+.bhud__sync-strip--enemy {
+  flex-direction: row-reverse;
+}
+
+.bhud__sync-label {
+  font-family: var(--bhud-font-hud);
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--bhud-c-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.05em;
+  opacity: 0.80;
+}
+
+.bhud__sync-track {
+  flex: 1;
+  height: 5px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bhud__sync-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--bhud-c-sync);
+  transition: width 0.28s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive: mobile landscape  (max-height ≤ 500 px, orientation landscape)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .bhud__top    { padding: 4px 6px 0; gap: 5px; }
+
+  .bhud__status { padding: 4px 6px 4px; border-radius: 6px; }
+  .bhud__name   { font-size: 11px; }
+  .bhud__level  { font-size: 9px; }
+  .bhud__gender { width: 9px; height: 9px; }
+  .bhud__elem-dot { width: 7px; height: 7px; }
+  .bhud__bar-track { height: 5px; }
+  .bhud__bar-label { font-size: 8px; width: 18px; }
+  .bhud__hp-val    { font-size: 8px; min-width: 36px; }
+  .bhud__bond-tag  { font-size: 6px; margin-top: 2px; }
+  .bhud__name-row  { margin-bottom: 3px; gap: 3px; }
+  .bhud__bar-row   { margin-bottom: 2px; gap: 3px; }
+
+  .bhud__turn-badge { min-width: 64px; padding: 3px 10px 3px; }
+  .bhud__turn-label { font-size: 6px; letter-spacing: 3px; }
+  .bhud__turn-num   { font-size: 22px; }
+
+  .bhud__command-bg { padding: 6px 8px; }
+  .bhud__cmd-btn    { height: 50px; }
+  .bhud__main-panel { gap: 6px; }
+  .bhud__moves-panel { gap: 5px; }
+  .bhud__move-btn   { height: 48px; }
+  .bhud__move-name  { font-size: 10px; }
+  .bhud__move-meta  { font-size: 8px; }
+
+  .bhud__bottom { padding: 3px 6px 6px; gap: 5px; }
+  .bhud__sync-strip { padding: 3px 6px; }
+  .bhud__sync-label { font-size: 6px; }
+  .bhud__sync-track { height: 4px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive: very small screens  (max-height ≤ 380 px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 380px) {
+  .bhud__name       { font-size: 10px; }
+  .bhud__turn-num   { font-size: 18px; }
+  .bhud__cmd-btn    { height: 44px; }
+  .bhud__move-btn   { height: 42px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dev preview: ?hud=mobile  — forces mobile-landscape styles on desktop
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bhud--mobile-preview .bhud__top    { padding: 4px 6px 0; gap: 5px; }
+.bhud--mobile-preview .bhud__status { padding: 4px 6px 4px; border-radius: 6px; }
+.bhud--mobile-preview .bhud__name   { font-size: 11px; }
+.bhud--mobile-preview .bhud__level  { font-size: 9px; }
+.bhud--mobile-preview .bhud__gender { width: 9px; height: 9px; }
+.bhud--mobile-preview .bhud__elem-dot  { width: 7px; height: 7px; }
+.bhud--mobile-preview .bhud__bar-track { height: 5px; }
+.bhud--mobile-preview .bhud__bar-label { font-size: 8px; width: 18px; }
+.bhud--mobile-preview .bhud__hp-val    { font-size: 8px; min-width: 36px; }
+.bhud--mobile-preview .bhud__bond-tag  { font-size: 6px; margin-top: 2px; }
+.bhud--mobile-preview .bhud__name-row  { margin-bottom: 3px; gap: 3px; }
+.bhud--mobile-preview .bhud__bar-row   { margin-bottom: 2px; gap: 3px; }
+.bhud--mobile-preview .bhud__turn-badge { min-width: 64px; padding: 3px 10px 3px; }
+.bhud--mobile-preview .bhud__turn-label { font-size: 6px; letter-spacing: 3px; }
+.bhud--mobile-preview .bhud__turn-num   { font-size: 22px; }
+.bhud--mobile-preview .bhud__command-bg { padding: 6px 8px; }
+.bhud--mobile-preview .bhud__cmd-btn    { height: 50px; }
+.bhud--mobile-preview .bhud__main-panel { gap: 6px; }
+.bhud--mobile-preview .bhud__moves-panel { gap: 5px; }
+.bhud--mobile-preview .bhud__move-btn   { height: 48px; }
+.bhud--mobile-preview .bhud__move-name  { font-size: 10px; }
+.bhud--mobile-preview .bhud__move-meta  { font-size: 8px; }
+.bhud--mobile-preview .bhud__bottom { padding: 3px 6px 6px; gap: 5px; }
+.bhud--mobile-preview .bhud__sync-strip { padding: 3px 6px; }
+.bhud--mobile-preview .bhud__sync-label { font-size: 6px; }
+.bhud--mobile-preview .bhud__sync-track { height: 4px; }

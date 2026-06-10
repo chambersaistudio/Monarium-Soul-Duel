@@ -33,6 +33,12 @@ export const SAFE_MAX_FRAMES = 4;
 // Mobile uses 256 px (4× less GPU memory per frame); desktop uses 512 px.
 export const NORM_SIZE: number = IS_TOUCH_DEVICE ? 256 : 512;
 
+// Force the DOM HUD overlay into mobile-landscape layout on desktop (dev preview).
+// Activate with ?hud=mobile in the URL.
+export const FORCE_MOBILE_HUD: boolean =
+  typeof location !== 'undefined' &&
+  new URLSearchParams(location.search).get('hud') === 'mobile';
+
 // Bottom safe-area inset (home indicator on iPhone, etc.).
 // Measured once at module load time so Phaser scene code can add clearance.
 export const SAFE_AREA_BOTTOM: number = (() => {

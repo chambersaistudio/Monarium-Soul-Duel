@@ -20,6 +20,7 @@ import {
   type PixelLayout,
 } from '../config/battleHudLayout';
 import { getEffectivenessMessage } from '../config/elementEffectivenessConfig';
+import { BattleHudOverlay } from '../ui/BattleHudOverlay';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
 import type { ClassicBattleContext } from '../types/overworld';
 import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '../types/progression';
@@ -178,7 +179,16 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // Normalized pixel layout (computed once per create() from the chosen config)
   private layout!: PixelLayout;
 
+  // DOM HUD overlay
+  private domHud!: BattleHudOverlay;
+  private playerLevel = 1;
+  private enemyLevel  = 1;
+
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
+
+  shutdown(): void {
+    this.domHud?.destroy();
+  }
 
   // ── Preload ────────────────────────────────────────────────────────────────
 
@@ -242,6 +252,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const playerBondLv = playerBond?.bondLevel ?? 1;
     const playerLevel  = profile?.monariLevels[playerMinId]?.level ?? DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
     const enemyLevel   = DAMAGE_FORMULA.DEFAULT_ENEMY_LEVEL;
+    this.playerLevel = playerLevel;
+    this.enemyLevel  = enemyLevel;
 
     this.playerSyncSys = new SoulSyncSystem(playerMinId, playerBondLv);
     this.enemySyncSys  = new SoulSyncSystem(enemyMinId,  1);
@@ -289,10 +301,40 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.battle);
 
-    this.buildHpBars(w, playerData.name, enemyData.name, playerLevel, enemyLevel, playerBondLv);
-    this.buildBattleHud(w, h, playerData.id);
-    this.buildTurnBadge(w);
-    this.buildBottomBars(w, h);
+    // Populate move list before building callbacks
+    const moveset       = CLASSIC_COMMAND_SETS[playerMinId] ?? ['basic_attack'];
+    this.menuCommandIds = [...moveset, BACK_COMMAND];
+
+    this.domHud = new BattleHudOverlay({
+      onMainCommand: (key) => {
+        switch (key) {
+          case 'fight':
+            this.audio.playUi(AUDIO_KEYS.ui.confirm);
+            this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura);
+            break;
+          case 'capture':
+            this.audio.playUi(AUDIO_KEYS.ui.confirm);
+            this.handleCaptureAttempt();
+            break;
+          case 'run':
+            this.audio.playUi(AUDIO_KEYS.ui.confirm);
+            this.handleRun();
+            break;
+          default:
+            this.audio.playUi(AUDIO_KEYS.ui.move);
+            this.showPlaceholderOverlay(key.toUpperCase(), 'Coming soon!');
+        }
+      },
+      onMoveSelect: (id) => {
+        this.audio.playUi(AUDIO_KEYS.ui.confirm);
+        this.engine.submitPlayerMove(id);
+      },
+      onBack: () => {
+        this.audio.playUi(AUDIO_KEYS.ui.move);
+        this.domHud.showMainPanel();
+      },
+    });
+
     this.buildLabels(w);
 
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -310,7 +352,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   update(): void {
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
-    this.refreshHpBars();
+    this.domHud.update(this.getHUDData(), this.playerLevel, this.enemyLevel);
     this.updateGuardLabel();
 
     if (!this.menuVisible) return;
@@ -322,23 +364,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const jOk    = Phaser.Input.Keyboard.JustDown(this.enterKey);
     const jEsc   = Phaser.Input.Keyboard.JustDown(this.escKey);
 
-    if (this.hudPhase === 'main') {
-      const n = this.MAIN_BTNS.length;
-      if (jLeft  || jUp)   { this.mainCursor = (this.mainCursor - 1 + n) % n; this.refreshMainCursor(); this.audio.playUi(AUDIO_KEYS.ui.move); }
-      if (jRight || jDown) { this.mainCursor = (this.mainCursor + 1) % n;     this.refreshMainCursor(); this.audio.playUi(AUDIO_KEYS.ui.move); }
-      if (jOk)             { this.activateMainBtn(this.mainCursor); }
-    } else {
-      const n = this.menuCommandIds.length;
-      if (jLeft  || jUp)   { this.menuCursor = (this.menuCursor - 1 + n) % n; this.refreshMoveCursor(); }
-      if (jRight || jDown) { this.menuCursor = (this.menuCursor + 1) % n;     this.refreshMoveCursor(); }
-      if (jOk)  { this.confirmMove(); }
-      if (jEsc) { this.audio.playUi(AUDIO_KEYS.ui.move); this.showMainPanel(); }
-
-      if (this.menuCursor !== this.prevCursor) {
-        if (this.prevCursor !== -1) this.audio.playUi(AUDIO_KEYS.ui.move);
-        this.prevCursor = this.menuCursor;
-      }
-    }
+    if (jLeft  || jUp)   { this.domHud.navLeft();  this.audio.playUi(AUDIO_KEYS.ui.move); }
+    if (jRight || jDown) { this.domHud.navRight(); this.audio.playUi(AUDIO_KEYS.ui.move); }
+    if (jOk)             { this.domHud.confirm(); }
+    if (jEsc)            { this.domHud.back();     this.audio.playUi(AUDIO_KEYS.ui.move); }
   }
 
   // ── Background ─────────────────────────────────────────────────────────────
@@ -732,9 +761,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private onPhaseChange(phase: ClassicBattlePhase): void {
-    if (phase === 'player_command' && this.turnBadgeTxt) {
+    if (phase === 'player_command') {
       this.turnNumber++;
-      this.turnBadgeTxt.setText(String(this.turnNumber).padStart(2, '0'));
+      this.domHud.setTurnNumber(this.turnNumber);
     }
     const map: Partial<Record<ClassicBattlePhase, string>> = {
       player_command:   'Choose your move...',
@@ -959,30 +988,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   private showMenu(): void {
     this.menuVisible = true;
-    this.hudGroup.setVisible(true);
-    this.showMainPanel();
+    this.domHud.showMenu();
   }
 
   private hideMenu(): void {
     this.menuVisible = false;
-    this.hudGroup.setVisible(false);
+    this.domHud.hideMenu();
   }
 
   private showMainPanel(): void {
-    this.hudPhase   = 'main';
-    this.mainCursor = 0;
-    this.mainPanel.setVisible(true);
-    this.movesPanel.setVisible(false);
-    this.refreshMainCursor();
+    this.domHud.showMainPanel();
   }
 
   private showMovesPanel(): void {
-    this.hudPhase   = 'moves';
-    this.menuCursor = 0;
-    this.prevCursor = -1;
-    this.mainPanel.setVisible(false);
-    this.movesPanel.setVisible(true);
-    this.refreshMoveCursor();
+    this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura);
   }
 
   private activateMainBtn(index: number): void {
