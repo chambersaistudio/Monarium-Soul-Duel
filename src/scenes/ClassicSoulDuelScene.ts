@@ -13,6 +13,12 @@ import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from 
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
+import {
+  DESKTOP_BATTLE_HUD,
+  MOBILE_LANDSCAPE_BATTLE_HUD,
+  computePixelLayout,
+  type PixelLayout,
+} from '../config/battleHudLayout';
 import { getEffectivenessMessage } from '../config/elementEffectivenessConfig';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
 import type { ClassicBattleContext } from '../types/overworld';
@@ -169,6 +175,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // Battle context
   private battleCtx: ClassicBattleContext | null = null;
 
+  // Normalized pixel layout (computed once per create() from the chosen config)
+  private layout!: PixelLayout;
+
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
   // ── Preload ────────────────────────────────────────────────────────────────
@@ -209,15 +218,18 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.battleCtx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
     const profile  = this.registry.get('player_profile') as PlayerProfile | null;
 
-    this.groundY  = Math.round(h * (mob ? 0.60 : 0.70));
-    this.pAnchorX = Math.round(w * 0.20);
-    this.eAnchorX = Math.round(w * 0.80);
+    const hudCfg  = mob ? MOBILE_LANDSCAPE_BATTLE_HUD : DESKTOP_BATTLE_HUD;
+    this.layout   = computePixelLayout(hudCfg, w, h);
+
+    this.groundY  = Math.round(this.layout.groundY);
+    this.pAnchorX = Math.round(this.layout.playerMonari.x);
+    this.eAnchorX = Math.round(this.layout.enemyMonari.x);
     this.hpBarW   = mob ? Math.round(w * 0.28) : 200; // overridden in buildHpBars
     this.hpBarH   = mob ? 18 : 14;
     this.auraBarH = mob ? 8  : 6;
     this.syncBarH = mob ? 6  : 5;
-    this.hudH     = mob ? 92 : 100;
-    this.hudY     = h - this.hudH - (mob ? SAFE_AREA_BOTTOM : 0);
+    this.hudH     = Math.round(h * (mob ? 0.145 : 0.145));
+    this.hudY     = Math.round(this.layout.commandRow.y);
 
     this.drawBackground(w, h);
 
@@ -380,9 +392,11 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const playerMinId = this.battleCtx?.playerMinariId ?? 'flarepaw';
     const enemyMinId  = this.battleCtx?.enemyMinariId  ?? 'droplet';
 
-    // Panel dimensions (PNG ratio ~3:1)
-    const panelW   = mob ? Math.min(Math.round(w * 0.40), 220) : Math.min(240, Math.round(w * 0.26));
-    const panelH   = Math.round(panelW / 2.99);
+    // Panel dimensions driven by normalized layout config
+    const pLyt     = this.layout.playerStatus;
+    const eLyt     = this.layout.enemyStatus;
+    const panelW   = Math.round(pLyt.w);
+    const panelH   = Math.round(pLyt.h);
     const iconArea = Math.round(panelW * 0.22); // portrait + element icon strip
     const labelW   = 26;                         // bar label text reserved width
 
@@ -392,13 +406,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.auraBarH = mob ? 5 : 6;
     this.syncBarH = 4;
 
-    const panelY = 6;
+    const panelY = Math.round(pLyt.y);
 
     const buildCard = (
       side: 'player' | 'enemy',
       minId: string, name: string, level: number, bond: number,
     ): { bx: number; by: number } => {
-      const px = side === 'player' ? 8 : w - panelW - 8;
+      const px = side === 'player' ? Math.round(pLyt.x) : Math.round(eLyt.x);
 
       // PNG panel frame
       const frameKey = side === 'player' ? 'ui_panel_left' : 'ui_panel_right';
@@ -586,12 +600,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   // ── Turn badge ─────────────────────────────────────────────────────────────
 
-  private buildTurnBadge(w: number): void {
+  private buildTurnBadge(_w: number): void {
     const mob    = IS_TOUCH_DEVICE;
-    const badgeW = mob ? 50 : 58;
-    const badgeH = Math.round(badgeW / 0.75); // PNG portrait ratio ~0.75:1
-    const bx     = w / 2;
-    const by     = 4 + badgeH / 2;
+    const lyt    = this.layout.turnBadge;
+    // Minimum 60 px wide so the number is always readable
+    const badgeW = Math.max(60, Math.round(lyt.w));
+    const badgeH = Math.round(lyt.h);
+    const bx     = Math.round(lyt.x + lyt.w / 2);
+    const by     = Math.round(lyt.y + badgeH / 2);
 
     if (this.textures.exists('ui_turn_badge')) {
       this.add.image(bx, by, 'ui_turn_badge')
@@ -601,20 +617,23 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     } else {
       const g = this.add.graphics().setDepth(22);
       g.fillStyle(UI_THEME.colors.panelDeep, 0.88);
-      g.fillRoundedRect(bx - badgeW / 2, 4, badgeW, badgeH, 8);
+      g.fillRoundedRect(bx - badgeW / 2, lyt.y, badgeW, badgeH, 8);
       g.lineStyle(1, UI_THEME.colors.gold, 0.45);
-      g.strokeRoundedRect(bx - badgeW / 2, 4, badgeW, badgeH, 8);
+      g.strokeRoundedRect(bx - badgeW / 2, lyt.y, badgeW, badgeH, 8);
     }
 
-    this.add.text(bx, by - Math.round(badgeH * 0.16), 'TURN', {
-      fontSize:   mob ? '6px' : '7px',
+    const labelSz = Math.max(7, Math.round(badgeH * 0.25));
+    const numSz   = Math.max(14, Math.round(badgeH * 0.42));
+
+    this.add.text(bx, by - Math.round(badgeH * 0.18), 'TURN', {
+      fontSize:   `${labelSz}px`,
       color:      UI_THEME.colors.textMuted,
       fontFamily: UI_THEME.fonts.family,
       fontStyle:  'bold',
     }).setOrigin(0.5, 0.5).setDepth(23);
 
     this.turnBadgeTxt = this.add.text(bx, by + Math.round(badgeH * 0.10), '01', {
-      fontSize:   mob ? '17px' : '20px',
+      fontSize:   `${numSz}px`,
       color:      UI_THEME.colors.text,
       fontFamily: UI_THEME.fonts.family,
       fontStyle:  'bold',
@@ -623,46 +642,55 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   // ── Bottom Soul Sync strips ────────────────────────────────────────────────
 
-  private buildBottomBars(w: number, h: number): void {
-    const mob     = IS_TOUCH_DEVICE;
-    const safeBot = mob ? SAFE_AREA_BOTTOM : 0;
-    const frameH  = mob ? 20 : 22;
-    const gap     = 6;
-    const halfW   = Math.floor((w - gap * 3) / 2);
-    this.botBarW  = halfW - 44;
-    const by      = h - safeBot - frameH - 2;
-    const depth   = 12;
+  private buildBottomBars(_w: number, _h: number): void {
+    const mob   = IS_TOUCH_DEVICE;
+    const depth = 12;
+    const plyt  = this.layout.soulbondBar;
+    const elyt  = this.layout.soulsyncBar;
 
-    const buildBar = (label: string, bx: number): Phaser.GameObjects.Rectangle => {
+    const buildBar = (
+      label: string,
+      lyt: { x: number; y: number; w: number; h: number },
+    ): Phaser.GameObjects.Rectangle => {
+      const bx      = Math.round(lyt.x);
+      const by      = Math.round(lyt.y);
+      const frameW  = Math.round(lyt.w);
+      const frameH  = Math.round(lyt.h);
+      const labelW  = 40;
+      const fillX   = bx + labelW;
+      const fillY   = by + Math.round((frameH - 6) / 2);
+      this.botBarW  = frameW - labelW;
+
       if (this.textures.exists('ui_soulsync_bar')) {
         this.add.image(bx, by, 'ui_soulsync_bar')
           .setOrigin(0, 0)
-          .setDisplaySize(halfW, frameH)
+          .setDisplaySize(frameW, frameH)
           .setDepth(depth)
           .setAlpha(0.80);
       } else {
         const g = this.add.graphics().setDepth(depth);
         g.fillStyle(UI_THEME.colors.panelDeep, 0.7);
-        g.fillRoundedRect(bx, by, halfW, frameH, 4);
+        g.fillRoundedRect(bx, by, frameW, frameH, 4);
         g.lineStyle(1, UI_THEME.colors.strokeDim, 0.38);
-        g.strokeRoundedRect(bx, by, halfW, frameH, 4);
+        g.strokeRoundedRect(bx, by, frameW, frameH, 4);
       }
-      const fillX = bx + 40;
-      const fillY = by + Math.round((frameH - 6) / 2);
+
+      const sz = Math.max(7, Math.round(frameH * 0.38));
       this.add.text(bx + 4, by + frameH / 2, label, {
-        fontSize:   '7px',
+        fontSize:   `${sz}px`,
         color:      '#ffe18c',
         fontFamily: UI_THEME.fonts.stat,
         fontStyle:  'bold',
       }).setOrigin(0, 0.5).setDepth(depth + 1);
+
       this.add.rectangle(fillX, fillY, this.botBarW, 6, UI_THEME.bars.track, 0.8)
         .setOrigin(0, 0).setDepth(depth + 1);
       return this.add.rectangle(fillX, fillY, 0, 6, UI_THEME.bars.soulSync)
         .setOrigin(0, 0).setDepth(depth + 2);
     };
 
-    this.botPlayerSyncFill = buildBar('SYNC ▶', gap);
-    this.botEnemySyncFill  = buildBar('◀ SYNC', gap * 2 + halfW);
+    this.botPlayerSyncFill = buildBar('SYNC ▶', plyt);
+    this.botEnemySyncFill  = buildBar('◀ SYNC', elyt);
   }
 
   // ── Phase / guard labels ────────────────────────────────────────────────────
@@ -722,13 +750,13 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const mob     = IS_TOUCH_DEVICE;
     const gap     = 8;
     const safeBot = mob ? SAFE_AREA_BOTTOM : 0;
+    const cmdRow  = this.layout.commandRow;
 
-    // PNG button ratio 2:1; size constrained by hudH
-    const btnH       = Math.min(this.hudH - 16, Math.round(w * 0.085));
-    const btnW       = btnH * 2;
-    const nMain      = this.MAIN_BTNS.length;
-    const totalBtnsW = nMain * btnW + (nMain + 1) * gap;
-    const btnOffX    = Math.floor((w - totalBtnsW) / 2);
+    // Buttons fill the command row evenly
+    const nMain   = this.MAIN_BTNS.length;
+    const btnH    = Math.round(cmdRow.h - 8);
+    const btnW    = Math.round((cmdRow.w - gap * (nMain + 1)) / nMain);
+    const btnOffX = Math.round(cmdRow.x);
 
     this.mainBtnW = btnW;
     this.mainBtnH = btnH;
@@ -745,7 +773,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       return dmgTypeTheme(CLASSIC_MOVES[id]?.damageType ?? '');
     });
 
-    // HUD backdrop
+    // HUD backdrop — positioned at commandRow top, extends to canvas bottom
     this.hudGroup = this.add.container(0, this.hudY).setDepth(30).setVisible(false);
     const bgGfx = this.add.graphics();
     bgGfx.fillStyle(0x07070f, 0.94);
@@ -770,41 +798,50 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const by = Math.floor((this.hudH - btnH) / 2);
 
       if (allPngsLoaded) {
+        // PNG buttons have the label baked in — no text overlay
         const img = this.add.image(bx, by, MAIN_BTN_PNG[cfg.key])
           .setOrigin(0, 0)
           .setDisplaySize(btnW, btnH)
           .setAlpha(0.65);
         this.mainPanel.add(img);
         this.mainBtnImgs.push(img);
+
+        // Invisible hit-target for pointer events (covers PNG area)
+        const hitArea = this.add.rectangle(bx + btnW / 2, by + btnH / 2, btnW, btnH, 0x000000, 0)
+          .setInteractive({ cursor: 'pointer' });
+        hitArea.on('pointerover',  () => { this.mainCursor = i; this.refreshMainCursor(); });
+        hitArea.on('pointerdown',  () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
+        this.mainPanel.add(hitArea);
+        // Push null placeholder so mainBtnTexts index stays aligned
+        this.mainBtnTexts.push(null as unknown as Phaser.GameObjects.Text);
       } else {
+        // Graphics fallback — label is necessary
         const gfx = this.add.graphics();
         gfx.setPosition(bx, by);
         this.mainPanel.add(gfx);
         this.mainBtnGfxs.push(gfx);
+
+        const lbl = this.add.text(
+          bx + btnW / 2, by + btnH / 2, cfg.label,
+          {
+            fontSize:   mob ? '14px' : '13px',
+            color:      '#d9d3ff',
+            fontFamily: UI_THEME.fonts.family,
+            fontStyle:  'bold',
+            align:      'center',
+          },
+        ).setOrigin(0.5);
+
+        lbl.setInteractive(
+          new Phaser.Geom.Rectangle(-btnW / 2 - 4, -btnH / 2 - 4, btnW + 8, btnH + 8),
+          Phaser.Geom.Rectangle.Contains,
+        );
+        lbl.input!.cursor = 'pointer';
+        lbl.on('pointerover',  () => { this.mainCursor = i; this.refreshMainCursor(); });
+        lbl.on('pointerdown',  () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
+        this.mainPanel.add(lbl);
+        this.mainBtnTexts.push(lbl);
       }
-
-      const lbl = this.add.text(
-        bx + btnW / 2, by + btnH / 2, cfg.label,
-        {
-          fontSize:        mob ? '14px' : '13px',
-          color:           '#d9d3ff',
-          fontFamily:      UI_THEME.fonts.family,
-          fontStyle:       'bold',
-          align:           'center',
-          stroke:          '#000000',
-          strokeThickness: allPngsLoaded ? 2 : 0,
-        },
-      ).setOrigin(0.5);
-
-      lbl.setInteractive(
-        new Phaser.Geom.Rectangle(-btnW / 2 - 4, -btnH / 2 - 4, btnW + 8, btnH + 8),
-        Phaser.Geom.Rectangle.Contains,
-      );
-      lbl.input!.cursor = 'pointer';
-      lbl.on('pointerover',  () => { this.mainCursor = i; this.refreshMainCursor(); });
-      lbl.on('pointerdown',  () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
-      this.mainPanel.add(lbl);
-      this.mainBtnTexts.push(lbl);
     });
 
     this.hudGroup.add(this.mainPanel);
