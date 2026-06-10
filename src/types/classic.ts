@@ -34,6 +34,8 @@ export interface ClassicMoveConfig {
   accuracy?: number;
   /** Whether this move can roll a critical hit. */
   canCrit: boolean;
+  /** Turn priority; higher acts first. Guard default +4, normal moves default 0. */
+  priority?: number;
   returnToAnchor: boolean;
   auraCost?: number;
   /** Flat Aura restored to user when the move is used (guard/stance moves). */
@@ -83,4 +85,6 @@ export interface EngineCallbacks {
   onHitMeta?:  (target: ClassicActorRole, meta: CombatHitMeta) => void;
   /** Optional: called when a sync-damage status move connects. */
   onSyncDamage?: (target: ClassicActorRole, delta: number) => void;
+  /** Optional: called when a guard/stance move is blocked because it was used last turn. */
+  onGuardBlocked?: (role: ClassicActorRole) => void;
 }

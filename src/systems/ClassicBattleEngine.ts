@@ -10,8 +10,7 @@ const ENEMY_ANCHOR_X  = 760;
 const CONTACT_OFFSET  = 100;  // px from the target's centre where the attacker stops
 const APPROACH_SPEED  = 380;  // px/s
 
-const AURA_GAIN_ATTACK = 10;
-const AURA_GAIN_GUARD  = 0;   // guard-specific aura comes from move.auraGain
+const AURA_GAIN_GUARD_BLOCK = 4;  // Aura restored to defender on successful guard block
 
 export class ClassicBattleEngine {
   private phase: ClassicBattlePhase = 'battle_intro';
@@ -50,6 +49,17 @@ export class ClassicBattleEngine {
       { role: 'player', moveId },
       { role: 'enemy',  moveId: this.selectEnemyMove() },
     ];
+    // Sort by priority (desc) → speed (desc) → random tiebreak
+    const getPrio  = (a: PendingAction) => CLASSIC_MOVES[a.moveId]?.priority ?? 0;
+    const getSpeed = (a: PendingAction) =>
+      (a.role === 'player' ? this.player : this.enemy).computedStats.speed;
+    this.actionQueue.sort((a, b) => {
+      const dp = getPrio(b) - getPrio(a);
+      if (dp !== 0) return dp;
+      const ds = getSpeed(b) - getSpeed(a);
+      if (ds !== 0) return ds;
+      return Math.random() - 0.5;
+    });
     this.setPhase('action_queue');
     this.executeNextAction();
   }
@@ -82,7 +92,11 @@ export class ClassicBattleEngine {
 
   private selectEnemyMove(): string {
     const moves = CLASSIC_COMMAND_SETS[this.enemy.actorId] ?? ['basic_attack'];
-    return moves[Math.floor(Math.random() * moves.length)];
+    const pool = this.enemy.usedGuardLastTurn
+      ? moves.filter(id => !CLASSIC_MOVES[id]?.holdsStance)
+      : moves;
+    const available = pool.length > 0 ? pool : moves;
+    return available[Math.floor(Math.random() * available.length)];
   }
 
   private executeNextAction(): void {
@@ -114,10 +128,18 @@ export class ClassicBattleEngine {
 
     // ── Guard / stance-hold moves ─────────────────────────────────────────
     if (move.holdsStance) {
+      if (attacker.usedGuardLastTurn) {
+        // Cannot guard twice in a row — silently lose turn
+        attacker.playAnim('idle');
+        this.callbacks.onGuardBlocked?.(action.role);
+        this.busy = false;
+        this.afterAction();
+        return;
+      }
       this.setPhase('perform_action');
       attacker.playAnim(move.animFolder, true);
       attacker.isGuarding = true;
-      this.gainAura(attacker, move.auraGain ?? AURA_GAIN_GUARD);
+      // No aura on activation — aura is given only when guard successfully blocks a hit
       this.busy = false;
       this.afterAction();
       return;
@@ -152,8 +174,9 @@ export class ClassicBattleEngine {
           this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
           this.callbacks.onHitMeta?.(targetRole, { isCrit, typeModifier, typeAdvantage, typeResisted });
           if (!isBlocked) defender.flashDamage();
-          this.gainAura(attacker, AURA_GAIN_ATTACK);
+          if (isBlocked) this.gainAura(defender, AURA_GAIN_GUARD_BLOCK);
         }
+        if ((move.auraGain ?? 0) > 0) this.gainAura(attacker, move.auraGain!);
         attacker.playAnim('idle');
         this.busy = false;
         this.afterAction();
@@ -197,7 +220,8 @@ export class ClassicBattleEngine {
             if (!isBlocked) defender.flashDamage();
           }
 
-          this.gainAura(attacker, AURA_GAIN_ATTACK);
+          if (isBlocked) this.gainAura(defender, AURA_GAIN_GUARD_BLOCK);
+          if ((move.auraGain ?? 0) > 0) this.gainAura(attacker, move.auraGain!);
 
           this.setPhase('target_reaction');
           if (move.targetReaction === 'hurt' && !isBlocked) {
@@ -263,6 +287,7 @@ export class ClassicBattleEngine {
 
   private releaseGuardStances(): void {
     for (const actor of [this.player, this.enemy]) {
+      actor.usedGuardLastTurn = actor.isGuarding;
       if (actor.isGuarding) {
         actor.isGuarding = false;
         actor.playAnim('idle');

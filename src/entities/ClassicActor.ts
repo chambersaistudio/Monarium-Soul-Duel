@@ -36,6 +36,8 @@ export class ClassicActor extends Phaser.GameObjects.Container {
   readonly computedStats: ComputedBattleStats;
   /** True while this actor is in a guard stance (set/cleared by ClassicBattleEngine). */
   isGuarding = false;
+  /** True if this actor used a guard/stance move last turn. Reset at turn end. */
+  usedGuardLastTurn = false;
 
   private sprite:    Phaser.GameObjects.Sprite | null   = null;
   private body_gfx:  Phaser.GameObjects.Graphics | null = null;

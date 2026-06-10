@@ -27,7 +27,7 @@ export const DAMAGE_FORMULA = {
   LEVEL_BASE:          0.35,
   CRIT_BASE_CHANCE:    0.08,
   CRIT_MULTIPLIER:     1.50,
-  GUARD_MODIFIER:      0.30,  // fraction of damage that passes a guard
+  GUARD_MODIFIER:      0.35,  // fraction of damage that passes a guard
   RANDOM_MIN:          0.90,
   RANDOM_MAX:          1.10,
   DEFAULT_ENEMY_LEVEL: 7,

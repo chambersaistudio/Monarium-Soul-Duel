@@ -310,7 +310,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         switch (key) {
           case 'fight':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
-            this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura);
+            this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura, this.playerActor.usedGuardLastTurn);
             break;
           case 'capture':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
@@ -740,7 +740,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemyGuardLabel  = this.add.text(this.eAnchorX, 0, '[ GUARD ]', guardStyle)
       .setOrigin(0.5).setDepth(25).setVisible(false);
 
-    this.battleCallout = this.add.text(w / 2, this.groundY - 50, '', {
+    this.battleCallout = this.add.text(w / 2, Math.round(this.layout.commandRow.y) - 28, '', {
       fontSize: mob ? '18px' : '16px', color: '#ffffff',
       fontStyle: 'bold', fontFamily: 'monospace',
       stroke: '#000000', strokeThickness: 3,
@@ -1265,6 +1265,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Battle end ─────────────────────────────────────────────────────────────
 
   private onBattleEnd(winner: ClassicActorRole): void {
+    this.domHud.hide();
+    this.menuVisible = false;
+
     const { width: w, height: h } = this.scale;
     const mob    = IS_TOUCH_DEVICE;
     const isWin  = winner === 'player';

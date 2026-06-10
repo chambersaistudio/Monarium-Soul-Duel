@@ -150,6 +150,7 @@ export class BattleHudOverlay {
         <span class="bhud__name"     id="bhud-p-name">---</span>
         <img  class="bhud__gender"   id="bhud-p-gender" src="" alt="" draggable="false" style="display:none">
         <span class="bhud__level"    id="bhud-p-level">Lv.1</span>
+        <span class="bhud__bond-pill" id="bhud-p-bond">B.1</span>
       </div>
       <div class="bhud__bar-row">
         <span class="bhud__bar-label">HP</span>
@@ -170,7 +171,6 @@ export class BattleHudOverlay {
           <div class="bhud__bar-fill bhud__bar-fill--sync" id="bhud-p-sync-fill" style="width:0%"></div>
         </div>
       </div>
-      <div class="bhud__bond-tag" id="bhud-p-bond">Bond Lv.1</div>
     `;
     this.pHpFill   = card.querySelector<HTMLDivElement>('#bhud-p-hp-fill')!;
     this.pAuraFill = card.querySelector<HTMLDivElement>('#bhud-p-aura-fill')!;
@@ -209,7 +209,6 @@ export class BattleHudOverlay {
         </div>
         <span class="bhud__bar-label">SYNC</span>
       </div>
-      <div class="bhud__bond-tag" style="visibility:hidden" id="bhud-e-bond"></div>
     `;
     this.eHpFill   = card.querySelector<HTMLDivElement>('#bhud-e-hp-fill')!;
     this.eAuraFill = card.querySelector<HTMLDivElement>('#bhud-e-aura-fill')!;
@@ -388,7 +387,7 @@ export class BattleHudOverlay {
 
     // Bond tag (player only)
     const bondEl = document.getElementById(`bhud-${px}-bond`);
-    if (bondEl && p) bondEl.textContent = `Bond Lv.${bond}`;
+    if (bondEl && p) bondEl.textContent = `B.${bond}`;
 
     // HP bar
     const hpFill = p ? this.pHpFill : this.eHpFill;
@@ -438,61 +437,146 @@ export class BattleHudOverlay {
     this.refreshMainCursor();
   }
 
-  showMovesPanel(moveIds: string[], playerAura: number): void {
+  showMovesPanel(moveIds: string[], playerAura: number, guardBlocked = false): void {
     this.inMoves    = true;
     this.moveCursor = 0;
     this.moveIds    = moveIds;
     this.mainPanel.classList.remove('bhud--active');
     this.movesPanel.classList.add('bhud--active');
-    this.buildMoveBtns(moveIds, playerAura);
+    this.buildMoveBtns(moveIds, playerAura, guardBlocked);
     this.refreshMoveCursor();
   }
 
-  private buildMoveBtns(ids: string[], playerAura: number): void {
+  private buildMoveBtns(ids: string[], playerAura: number, guardBlocked: boolean): void {
     this.movesPanel.innerHTML = '';
     this.moveBtns = [];
 
-    ids.forEach((id, i) => {
-      const isBack = id === BACK_COMMAND;
-      const move   = isBack ? undefined : CLASSIC_MOVES[id];
-      const cost   = move?.auraCost ?? 0;
-      const dimmed = cost > 0 && playerAura < cost;
-      const accent = elemColor(move?.damageType);
+    const nonBack  = ids.filter(id => id !== BACK_COMMAND);
+    const hasBack  = ids.includes(BACK_COMMAND);
+    const utilIds  = nonBack.filter(id => id === 'basic_attack' || (CLASSIC_MOVES[id]?.holdsStance ?? false));
+    const specIds  = nonBack.filter(id => id !== 'basic_attack' && !(CLASSIC_MOVES[id]?.holdsStance ?? false));
 
+    // Update moveIds to match the dock button order for keyboard confirm()
+    this.moveIds = [...utilIds, ...specIds, ...(hasBack ? [BACK_COMMAND] : [])];
+
+    // Utility column
+    if (utilIds.length > 0) {
+      const col = document.createElement('div');
+      col.className = 'bhud__move-util-col';
+      for (const id of utilIds) {
+        const move     = CLASSIC_MOVES[id];
+        const isGuard  = move?.holdsStance ?? false;
+        const cost     = move?.auraCost ?? 0;
+        const blocked  = isGuard && guardBlocked;
+        const noAura   = cost > 0 && playerAura < cost;
+        const dimmed   = blocked || noAura;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'bhud__move-btn bhud__move-btn--utility'
+          + (dimmed ? ' bhud__move-btn--dimmed' : '');
+        btn.setAttribute('aria-label', move?.displayName ?? id);
+        if (dimmed) btn.disabled = true;
+
+        const nameStr  = id === 'basic_attack' ? 'BASIC ATK' : (move?.displayName?.toUpperCase() ?? id.toUpperCase());
+        const metaStr  = id === 'basic_attack'
+          ? `+${move?.auraGain ?? 0} AU`
+          : (isGuard ? `Guard · P+4` : (cost > 0 ? `${cost} AU` : ''));
+        btn.innerHTML  = `<span class="bhud__move-name">${nameStr}${blocked ? ' <span class="bhud__move-locked">LOCKED</span>' : ''}</span>`
+          + (metaStr ? `<span class="bhud__move-meta">${metaStr}</span>` : '');
+
+        const idx = this.moveBtns.length;
+        btn.addEventListener('pointerenter', () => {
+          if (!this.menuOpen || !this.inMoves || dimmed) return;
+          this.moveCursor = idx;
+          this.refreshMoveCursor();
+        });
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (!this.menuOpen || !this.inMoves || dimmed) return;
+          this.moveCursor = idx;
+          this.refreshMoveCursor();
+          this.cb.onMoveSelect(id);
+        });
+        col.appendChild(btn);
+        this.moveBtns.push(btn);
+      }
+      this.movesPanel.appendChild(col);
+    }
+
+    // Divider
+    if (utilIds.length > 0 && specIds.length > 0) {
+      const div = document.createElement('div');
+      div.className = 'bhud__move-divider';
+      this.movesPanel.appendChild(div);
+    }
+
+    // Specials row
+    if (specIds.length > 0) {
+      const row = document.createElement('div');
+      row.className = 'bhud__move-spec-row';
+      for (const id of specIds) {
+        const move    = CLASSIC_MOVES[id];
+        const cost    = move?.auraCost ?? 0;
+        const dimmed  = cost > 0 && playerAura < cost;
+        const accent  = elemColor(move?.damageType);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'bhud__move-btn bhud__move-btn--special'
+          + (dimmed ? ' bhud__move-btn--dimmed' : '');
+        btn.setAttribute('aria-label', move?.displayName ?? id);
+        if (dimmed) btn.disabled = true;
+        btn.style.setProperty('--move-accent', accent);
+
+        const nameStr = move?.displayName?.toUpperCase() ?? id.toUpperCase();
+        const costStr = cost > 0 ? `${cost} AU · ${elemLabel(move?.damageType)}` : elemLabel(move?.damageType);
+        btn.innerHTML = `<span class="bhud__move-name">${nameStr}</span>`
+          + `<span class="bhud__move-meta">${costStr}</span>`;
+
+        const idx = this.moveBtns.length;
+        btn.addEventListener('pointerenter', () => {
+          if (!this.menuOpen || !this.inMoves || dimmed) return;
+          this.moveCursor = idx;
+          this.refreshMoveCursor();
+        });
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (!this.menuOpen || !this.inMoves || dimmed) return;
+          this.moveCursor = idx;
+          this.refreshMoveCursor();
+          this.cb.onMoveSelect(id);
+        });
+        row.appendChild(btn);
+        this.moveBtns.push(btn);
+      }
+      this.movesPanel.appendChild(row);
+    }
+
+    // Back chip
+    if (hasBack) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'bhud__move-btn'
-        + (isBack  ? ' bhud__move-btn--back'   : '')
-        + (dimmed  ? ' bhud__move-btn--dimmed'  : '');
-      btn.style.setProperty('--move-accent', accent);
+      btn.className = 'bhud__move-btn bhud__move-btn--back';
+      btn.setAttribute('aria-label', 'Back');
+      btn.innerHTML = '<span class="bhud__move-name">← BACK</span>';
 
-      const label   = isBack
-        ? '← BACK'
-        : (move?.displayName?.toUpperCase() ?? id.toUpperCase());
-      const costStr = (move && cost > 0)
-        ? `${cost} AU  ·  ${elemLabel(move.damageType)}`
-        : '';
-
-      btn.innerHTML = `<span class="bhud__move-name">${label}</span>`
-        + (costStr ? `<span class="bhud__move-meta">${costStr}</span>` : '');
-
+      const idx = this.moveBtns.length;
       btn.addEventListener('pointerenter', () => {
         if (!this.menuOpen || !this.inMoves) return;
-        this.moveCursor = i;
+        this.moveCursor = idx;
         this.refreshMoveCursor();
       });
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (!this.menuOpen || !this.inMoves) return;
-        this.moveCursor = i;
+        this.moveCursor = idx;
         this.refreshMoveCursor();
-        if (isBack) this.cb.onBack();
-        else        this.cb.onMoveSelect(id);
+        this.cb.onBack();
       });
-
       this.movesPanel.appendChild(btn);
       this.moveBtns.push(btn);
-    });
+    }
 
     this.refreshMoveCursor();
   }
@@ -521,7 +605,8 @@ export class BattleHudOverlay {
       this.mainCursor = (this.mainCursor - 1 + MAIN_BTNS.length) % MAIN_BTNS.length;
       this.refreshMainCursor();
     } else {
-      const n = this.moveIds.length;
+      const n = this.moveBtns.length;
+      if (n === 0) return;
       this.moveCursor = (this.moveCursor - 1 + n) % n;
       this.refreshMoveCursor();
     }
@@ -533,7 +618,8 @@ export class BattleHudOverlay {
       this.mainCursor = (this.mainCursor + 1) % MAIN_BTNS.length;
       this.refreshMainCursor();
     } else {
-      const n = this.moveIds.length;
+      const n = this.moveBtns.length;
+      if (n === 0) return;
       this.moveCursor = (this.moveCursor + 1) % n;
       this.refreshMoveCursor();
     }
@@ -563,5 +649,9 @@ export class BattleHudOverlay {
 
   destroy(): void {
     this.root.remove();
+  }
+
+  hide(): void {
+    this.root.style.display = 'none';
   }
 }
