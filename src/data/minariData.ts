@@ -61,7 +61,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
 
   sproutodon: {
     id: 'sproutodon',
-    name: 'Sproutodon',
+    name: 'Sproutadon',
     element: 'flora',
     rarity: 'rare',
     stats: {

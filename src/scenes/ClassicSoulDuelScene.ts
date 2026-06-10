@@ -222,6 +222,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   create(): void {
+    this.turnNumber = 0;
+    this.domHud?.destroy();
     const { width: w, height: h } = this.scale;
     const mob = IS_TOUCH_DEVICE;
 
@@ -1001,7 +1003,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private showMovesPanel(): void {
-    this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura);
+    this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura, this.playerActor.usedGuardLastTurn);
   }
 
   private activateMainBtn(index: number): void {

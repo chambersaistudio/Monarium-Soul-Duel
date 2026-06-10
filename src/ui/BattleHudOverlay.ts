@@ -88,6 +88,12 @@ export class BattleHudOverlay {
   private eAuraFill!: HTMLDivElement;
   private eSyncFill!: HTMLDivElement;
   private eHpVal!:    HTMLSpanElement;
+  private eAuVal!:    HTMLSpanElement;
+  private eSyncVal!:  HTMLSpanElement;
+
+  // Aura / sync value spans — player
+  private pAuVal!:   HTMLSpanElement;
+  private pSyncVal!: HTMLSpanElement;
 
   // Bottom sync strips
   private bpSyncFill!: HTMLDivElement;
@@ -164,18 +170,22 @@ export class BattleHudOverlay {
         <div class="bhud__bar-track">
           <div class="bhud__bar-fill bhud__bar-fill--aura" id="bhud-p-aura-fill" style="width:100%"></div>
         </div>
+        <span class="bhud__hp-val" id="bhud-p-au-val">---</span>
       </div>
       <div class="bhud__bar-row">
         <span class="bhud__bar-label">SYNC</span>
         <div class="bhud__bar-track">
           <div class="bhud__bar-fill bhud__bar-fill--sync" id="bhud-p-sync-fill" style="width:0%"></div>
         </div>
+        <span class="bhud__hp-val" id="bhud-p-sync-val">---</span>
       </div>
     `;
     this.pHpFill   = card.querySelector<HTMLDivElement>('#bhud-p-hp-fill')!;
     this.pAuraFill = card.querySelector<HTMLDivElement>('#bhud-p-aura-fill')!;
     this.pSyncFill = card.querySelector<HTMLDivElement>('#bhud-p-sync-fill')!;
     this.pHpVal    = card.querySelector<HTMLSpanElement>('#bhud-p-hp-val')!;
+    this.pAuVal    = card.querySelector<HTMLSpanElement>('#bhud-p-au-val')!;
+    this.pSyncVal  = card.querySelector<HTMLSpanElement>('#bhud-p-sync-val')!;
     return card;
   }
 
@@ -198,12 +208,14 @@ export class BattleHudOverlay {
         <span class="bhud__bar-label">HP</span>
       </div>
       <div class="bhud__bar-row">
+        <span class="bhud__hp-val" id="bhud-e-au-val">---</span>
         <div class="bhud__bar-track">
           <div class="bhud__bar-fill bhud__bar-fill--aura" id="bhud-e-aura-fill" style="width:100%"></div>
         </div>
         <span class="bhud__bar-label">AU</span>
       </div>
       <div class="bhud__bar-row">
+        <span class="bhud__hp-val" id="bhud-e-sync-val">---</span>
         <div class="bhud__bar-track">
           <div class="bhud__bar-fill bhud__bar-fill--sync" id="bhud-e-sync-fill" style="width:0%"></div>
         </div>
@@ -214,6 +226,8 @@ export class BattleHudOverlay {
     this.eAuraFill = card.querySelector<HTMLDivElement>('#bhud-e-aura-fill')!;
     this.eSyncFill = card.querySelector<HTMLDivElement>('#bhud-e-sync-fill')!;
     this.eHpVal    = card.querySelector<HTMLSpanElement>('#bhud-e-hp-val')!;
+    this.eAuVal    = card.querySelector<HTMLSpanElement>('#bhud-e-au-val')!;
+    this.eSyncVal  = card.querySelector<HTMLSpanElement>('#bhud-e-sync-val')!;
     return card;
   }
 
@@ -409,6 +423,14 @@ export class BattleHudOverlay {
     // HP value text
     const hpVal = p ? this.pHpVal : this.eHpVal;
     hpVal.textContent = `${Math.ceil(hp)}/${maxH}`;
+
+    // AU value text
+    const auVal = p ? this.pAuVal : this.eAuVal;
+    if (auVal) auVal.textContent = `${Math.ceil(au)}/${maxA}`;
+
+    // Sync value text
+    const syncValEl = p ? this.pSyncVal : this.eSyncVal;
+    if (syncValEl) syncValEl.textContent = `${Math.round(sync)}/100`;
   }
 
   setTurnNumber(n: number): void {
@@ -453,8 +475,8 @@ export class BattleHudOverlay {
 
     const nonBack  = ids.filter(id => id !== BACK_COMMAND);
     const hasBack  = ids.includes(BACK_COMMAND);
-    const utilIds  = nonBack.filter(id => id === 'basic_attack' || (CLASSIC_MOVES[id]?.holdsStance ?? false));
-    const specIds  = nonBack.filter(id => id !== 'basic_attack' && !(CLASSIC_MOVES[id]?.holdsStance ?? false));
+    const utilIds  = nonBack.filter(id => id === 'basic_attack' || id === 'guard');
+    const specIds  = nonBack.filter(id => id !== 'basic_attack' && id !== 'guard');
 
     // Update moveIds to match the dock button order for keyboard confirm()
     this.moveIds = [...utilIds, ...specIds, ...(hasBack ? [BACK_COMMAND] : [])];
@@ -480,8 +502,8 @@ export class BattleHudOverlay {
 
         const nameStr  = id === 'basic_attack' ? 'BASIC ATK' : (move?.displayName?.toUpperCase() ?? id.toUpperCase());
         const metaStr  = id === 'basic_attack'
-          ? `+${move?.auraGain ?? 0} AU`
-          : (isGuard ? `Guard · P+4` : (cost > 0 ? `${cost} AU` : ''));
+          ? `PWR ${move?.power ?? 0}  +${move?.auraGain ?? 0}AU  ${move?.accuracy ?? 100}%`
+          : (isGuard ? 'Priority +4' : (cost > 0 ? `${cost} AU` : ''));
         btn.innerHTML  = `<span class="bhud__move-name">${nameStr}${blocked ? ' <span class="bhud__move-locked">LOCKED</span>' : ''}</span>`
           + (metaStr ? `<span class="bhud__move-meta">${metaStr}</span>` : '');
 
@@ -530,7 +552,12 @@ export class BattleHudOverlay {
         btn.style.setProperty('--move-accent', accent);
 
         const nameStr = move?.displayName?.toUpperCase() ?? id.toUpperCase();
-        const costStr = cost > 0 ? `${cost} AU · ${elemLabel(move?.damageType)}` : elemLabel(move?.damageType);
+        const hasSyncDmg = (move?.syncDamage ?? 0) !== 0;
+        const costStr = hasSyncDmg
+          ? `SYNC ${move!.syncDamage}  ${cost > 0 ? cost + 'AU' : 'Free'}  ${move?.accuracy ?? 100}%`
+          : (move?.holdsStance
+            ? `Stance · ${cost > 0 ? cost + 'AU' : 'Free'}`
+            : `PWR ${move?.power ?? 0}  ${cost > 0 ? cost + 'AU' : 'Free'}  ${move?.accuracy ?? 100}%`);
         btn.innerHTML = `<span class="bhud__move-name">${nameStr}</span>`
           + `<span class="bhud__move-meta">${costStr}</span>`;
 

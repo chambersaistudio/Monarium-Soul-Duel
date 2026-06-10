@@ -308,10 +308,10 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
 // ── Per-character command menus ────────────────────────────────────────────────
 // Ordered list of move IDs shown in the command menu for each character.
 export const CLASSIC_COMMAND_SETS: Record<string, string[]> = {
-  flarepaw:   ['basic_attack', 'flame_paw_barrage', 'ember_shot',      'heat_guard'],
-  droplet:    ['basic_attack', 'aqua_ripple',       'crystal_knuckle', 'shell_guard'],
-  sproutodon: ['basic_attack', 'vine_snap',         'bark_guard',      'pollen_haze'],
-  umbravine:  ['basic_attack', 'shadow_coil',       'guard'],
+  flarepaw:   ['basic_attack', 'guard', 'flame_paw_barrage', 'ember_shot',      'heat_guard'],
+  droplet:    ['basic_attack', 'guard', 'aqua_ripple',       'crystal_knuckle', 'shell_guard'],
+  sproutodon: ['basic_attack', 'guard', 'vine_snap',         'bark_guard',      'pollen_haze'],
+  umbravine:  ['basic_attack', 'guard', 'shadow_coil'],
 };
 
 // Sentinel value for the Back / do-nothing menu slot (handled by the scene, not engine)

@@ -39,6 +39,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private playerW    = PLAYER_W_REF;
   private playerH    = PLAYER_H_REF;
   private walkSpeed: number = PLAYER_PROFILE.walkSpeed;
+  private scl        = 1;
+  private playerImg: Phaser.GameObjects.Image | null = null;
 
   // Interact prompt — can target an NPC or a requiresInteract exit
   private interactPrompt!: Phaser.GameObjects.Text;
@@ -96,10 +98,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
 
-    const scl    = w / 960;
-    this.playerW = Math.round(PLAYER_W_REF * scl);
-    this.playerH = Math.round(PLAYER_H_REF * scl);
-    this.walkSpeed = PLAYER_PROFILE.walkSpeed * scl;
+    this.scl     = w / 960;
+    this.playerW = Math.round(PLAYER_W_REF * this.scl);
+    this.playerH = Math.round(PLAYER_H_REF * this.scl);
+    this.walkSpeed = PLAYER_PROFILE.walkSpeed * this.scl;
 
     this.drawBackground(w, h);
     this.buildNpcs(w, h);
@@ -125,7 +127,15 @@ export class ClassicOverworldScene extends Phaser.Scene {
       this.interactLockUntil = this.time.now + 600;
     }
 
+    this.playerImg = null;
+    const playerTexKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
+    if (!playerTexKey.startsWith('generated_')) {
+      this.playerImg = this.add.image(this.playerX, this.playerY - this.playerH / 2, playerTexKey)
+        .setDisplaySize(this.playerW * 2, this.playerH * 2)
+        .setDepth(20);
+    }
     this.playerGfx = this.add.graphics().setDepth(20);
+    if (this.playerImg) this.playerGfx.setVisible(false);
     this.drawPlayer();
 
     this.nameLabel = this.add.text(0, 0, this.getPlayerName(), {
@@ -256,11 +266,21 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private buildNpcs(w: number, h: number): void {
     for (const npc of this.mapDef.npcs) {
       const nx = npc.x * w, ny = npc.y * h;
-      const g = this.add.graphics().setDepth(12);
-      g.fillStyle(npc.color, 0.9);
-      g.fillCircle(nx, ny, 16);
-      g.lineStyle(2, 0xffffff, 0.4);
-      g.strokeCircle(nx, ny, 16);
+      const imgKey = bestLoadedVisualKey(this, 'character', npc.id, npc.color);
+
+      if (!imgKey.startsWith('generated_')) {
+        const npcH = Math.round(44 * this.scl);
+        const npcW = Math.round(28 * this.scl);
+        this.add.image(nx, ny - npcH / 2, imgKey)
+          .setDisplaySize(npcW * 2, npcH * 2)
+          .setDepth(12);
+      } else {
+        const g = this.add.graphics().setDepth(12);
+        g.fillStyle(npc.color, 0.9);
+        g.fillCircle(nx, ny, 16);
+        g.lineStyle(2, 0xffffff, 0.4);
+        g.strokeCircle(nx, ny, 16);
+      }
 
       this.add.text(nx, ny - 20, npc.displayName, {
         fontSize: '9px', color: '#ccccff', fontFamily: 'monospace',
@@ -292,6 +312,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── Player drawing ────────────────────────────────────────────────────────────
 
   private drawPlayer(): void {
+    if (this.playerImg) {
+      this.playerImg.setPosition(this.playerX, this.playerY - this.playerH / 2);
+      return;
+    }
     const g  = this.playerGfx;
     const px = this.playerX, py = this.playerY;
     const hw = this.playerW / 2, hh = this.playerH;
