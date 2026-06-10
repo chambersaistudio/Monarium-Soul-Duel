@@ -83,6 +83,7 @@ export const CLASSIC_COMMAND_SETS: Record<string, string[]> = {
   flarepaw:  ['basic_attack', 'flame_paw_barrage', 'guard'],
   droplet:   ['basic_attack', 'aqua_ripple', 'guard'],
   umbravine: ['basic_attack', 'shadow_coil', 'guard'],
+  sproutodon: ['basic_attack', 'guard'],
 };
 
 // Sentinel value for the Back / do-nothing menu slot (handled by the scene, not engine)

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
+import { getMonariBattleFramePath } from '../config/assetManifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
@@ -84,7 +85,7 @@ export class PreloadScene extends Phaser.Scene {
           for (const stem of filtered) {
             const key = phaserKey(charId, folder, stem);
             if (!this.textures.exists(key)) {
-              this.load.image(key, `${manifest.base}/${folder}/${stem}.png`);
+              this.load.image(key, getMonariBattleFramePath(charId, manifest.base, folder, stem));
             }
           }
         }
@@ -96,7 +97,7 @@ export class PreloadScene extends Phaser.Scene {
         if (SAFE_MODE && SAFE_SKIP_FOLDERS.has(folder)) continue;
         const filtered = SAFE_MODE ? thinFrames(stems, SAFE_MAX_FRAMES) : (stems as string[]);
         for (const stem of filtered) {
-          this.load.image(phaserKey(charId, folder, stem), `${manifest.base}/${folder}/${stem}.png`);
+          this.load.image(phaserKey(charId, folder, stem), getMonariBattleFramePath(charId, manifest.base, folder, stem));
         }
       }
     }
