@@ -5,7 +5,7 @@ import { UI_THEME, elementColor, elementLabel } from '../config/uiTheme';
 import { drawGlassPanel } from '../ui/phaserUi';
 import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
-import type { ClassicBattleContext } from '../types/overworld';
+import type { BattleStatOverrides, ClassicBattleContext } from '../types/overworld';
 
 const SELECTABLE_MONARI = ['flarepaw', 'droplet', 'sproutodon', 'umbravine'] as const;
 const MIN_LEVEL = 1;
@@ -19,6 +19,10 @@ export class BattleLabSetupScene extends Phaser.Scene {
 
   private objects: Phaser.GameObjects.GameObject[] = [];
   private audio!: AudioManager;
+  private overlay?: HTMLDivElement;
+  private playerOverrides: BattleStatOverrides = {};
+  private enemyOverrides: BattleStatOverrides = {};
+  private debugEnabled = false;
 
   constructor() { super({ key: 'BattleLabSetupScene' }); }
 
@@ -29,12 +33,66 @@ export class BattleLabSetupScene extends Phaser.Scene {
     this.playerLevel = 7;
     this.enemyLevel  = 7;
     this.objects     = [];
+    this.playerOverrides = {};
+    this.enemyOverrides = {};
+    this.debugEnabled = false;
 
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
 
-    this.buildUI();
+    this.cameras.main.setBackgroundColor('#05050a');
+    this.showDomOverlay();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.hideDomOverlay());
     this.cameras.main.fadeIn(300);
+  }
+
+
+  private statValue(side: 'player' | 'enemy', stat: keyof BattleStatOverrides): number {
+    const id = SELECTABLE_MONARI[side === 'player' ? this.playerIdx : this.enemyIdx];
+    const base = MINARI_ROSTER[id]?.stats;
+    const fallback = stat === 'defense' ? base?.defense : stat === 'speed' ? base?.speed : base?.power;
+    const overrides = side === 'player' ? this.playerOverrides : this.enemyOverrides;
+    return overrides[stat] ?? fallback ?? 50;
+  }
+
+  private setStatValue(side: 'player' | 'enemy', stat: keyof BattleStatOverrides, value: number): void {
+    const overrides = side === 'player' ? this.playerOverrides : this.enemyOverrides;
+    overrides[stat] = Phaser.Math.Clamp(Math.round(value), 1, 150);
+    this.renderDomOverlay();
+  }
+
+  private showDomOverlay(): void {
+    this.hideDomOverlay();
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'battle-lab-dom-overlay';
+    this.overlay.style.cssText = 'position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));box-sizing:border-box;background:radial-gradient(circle at 50% 10%,rgba(122,74,255,.26),transparent 34%),rgba(4,4,12,.94);color:#fff4c7;font-family:Rajdhani,Orbitron,sans-serif;';
+    document.body.appendChild(this.overlay);
+    this.renderDomOverlay();
+  }
+
+  private hideDomOverlay(): void {
+    this.overlay?.remove();
+    this.overlay = undefined;
+  }
+
+  private renderDomOverlay(): void {
+    if (!this.overlay) return;
+    const buildSide = (side: 'player' | 'enemy') => {
+      const idx = side === 'player' ? this.playerIdx : this.enemyIdx;
+      const level = side === 'player' ? this.playerLevel : this.enemyLevel;
+      const ids = SELECTABLE_MONARI.map((id, i) => `<button data-side="${side}" data-pick="${i}" class="blab-pill ${idx === i ? 'active' : ''}">${MINARI_ROSTER[id]?.name ?? id}</button>`).join('');
+      const stats: Array<[keyof BattleStatOverrides,string]> = [['attack','Attack'],['specialAttack','Sp. Attack'],['defense','Defense'],['specialDefense','Sp. Defense'],['speed','Speed']];
+      return `<section class="blab-panel"><h2>${side === 'player' ? 'Player' : 'Enemy'}</h2><div class="blab-picks">${ids}</div><div class="blab-level"><button data-side="${side}" data-level="-1">−</button><b>Lv. ${level}</b><button data-side="${side}" data-level="1">+</button></div><div class="blab-stats">${stats.map(([key,label]) => `<label><span>${label}</span><input type="range" min="1" max="150" value="${this.statValue(side,key)}" data-side="${side}" data-stat="${key}"><b>${this.statValue(side,key)}</b></label>`).join('')}</div></section>`;
+    };
+    this.overlay.innerHTML = `<style>
+      .blab-card{width:min(94vw,980px);max-height:92vh;overflow:auto;border:1px solid rgba(255,190,108,.5);border-radius:28px;background:rgba(6,6,18,.96);box-shadow:0 20px 70px rgba(0,0,0,.55),0 0 32px rgba(122,74,255,.18);padding:18px;box-sizing:border-box}.blab-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.blab-head h1{margin:0;font-family:Orbitron, Rajdhani, sans-serif;color:#ffbf72}.blab-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.blab-panel{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:rgba(255,255,255,.055);padding:14px}.blab-panel h2{margin:0 0 10px;color:#fff4c7}.blab-picks{display:grid;grid-template-columns:1fr 1fr;gap:8px}.blab-pill,.blab-actions button,.blab-level button{border:1px solid rgba(255,190,108,.45);border-radius:999px;background:rgba(122,74,255,.18);color:#fff4c7;font-weight:900;min-height:38px}.blab-pill.active{background:rgba(255,142,64,.28);box-shadow:0 0 16px rgba(255,142,64,.25)}.blab-level{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0}.blab-level button{width:42px}.blab-stats{display:grid;gap:8px}.blab-stats label{display:grid;grid-template-columns:92px 1fr 34px;gap:8px;align-items:center}.blab-stats span{color:#ffcf8a;font-weight:800}.blab-stats b{text-align:right}.blab-actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}.blab-debug{display:flex;gap:8px;align-items:center;color:#cfc7ff}.blab-actions button{padding:0 18px}.blab-note{color:#9e96c9;font-size:14px}@media(max-width:720px){.blab-grid{grid-template-columns:1fr}.blab-card{padding:14px}.blab-head{display:block}.blab-stats label{grid-template-columns:84px 1fr 30px}}
+    </style><div class="blab-card"><div class="blab-head"><div><h1>Battle Lab</h1><div class="blab-note">Choose Monari, levels, stat test values, and enable formula debug.</div></div><label class="blab-debug"><input type="checkbox" id="blab-debug" ${this.debugEnabled ? 'checked' : ''}> Debug formula</label></div><div class="blab-grid">${buildSide('player')}${buildSide('enemy')}</div><div class="blab-actions"><button id="blab-back">Back</button><button id="blab-start">Start Battle</button></div></div>`;
+    this.overlay.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach(btn => btn.onclick = () => { const side = btn.dataset.side as 'player'|'enemy'; if (side === 'player') this.playerIdx = Number(btn.dataset.pick); else this.enemyIdx = Number(btn.dataset.pick); this.audio.playUi(AUDIO_KEYS.ui.move); this.renderDomOverlay(); });
+    this.overlay.querySelectorAll<HTMLButtonElement>('[data-level]').forEach(btn => btn.onclick = () => { const side = btn.dataset.side as 'player'|'enemy'; const delta = Number(btn.dataset.level); if (side === 'player') this.playerLevel = Phaser.Math.Clamp(this.playerLevel + delta, MIN_LEVEL, MAX_LEVEL); else this.enemyLevel = Phaser.Math.Clamp(this.enemyLevel + delta, MIN_LEVEL, MAX_LEVEL); this.renderDomOverlay(); });
+    this.overlay.querySelectorAll<HTMLInputElement>('[data-stat]').forEach(input => input.oninput = () => this.setStatValue(input.dataset.side as 'player'|'enemy', input.dataset.stat as keyof BattleStatOverrides, Number(input.value)));
+    this.overlay.querySelector<HTMLInputElement>('#blab-debug')!.onchange = (e) => { this.debugEnabled = (e.currentTarget as HTMLInputElement).checked; };
+    this.overlay.querySelector<HTMLButtonElement>('#blab-back')!.onclick = () => { this.hideDomOverlay(); this.scene.start('ModeSelectScene'); };
+    this.overlay.querySelector<HTMLButtonElement>('#blab-start')!.onclick = () => this.startBattle();
   }
 
   private obj<T extends Phaser.GameObjects.GameObject>(o: T): T {
@@ -212,7 +270,11 @@ export class BattleLabSetupScene extends Phaser.Scene {
       playerLevel:    this.playerLevel,
       enemyLevel:     this.enemyLevel,
       labMode:        true,
+      labDebug:       this.debugEnabled,
+      playerStatOverrides: this.playerOverrides,
+      enemyStatOverrides:  this.enemyOverrides,
     };
+    this.hideDomOverlay();
     this.registry.set('classic_battle_context', ctx);
     this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p !== 1) return;

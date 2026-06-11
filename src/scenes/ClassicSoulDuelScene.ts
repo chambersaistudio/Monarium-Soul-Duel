@@ -23,7 +23,7 @@ import {
 import { getEffectivenessMessage } from '../config/elementEffectivenessConfig';
 import { BattleHudOverlay } from '../ui/BattleHudOverlay';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
-import type { ClassicBattleContext } from '../types/overworld';
+import type { BattleStatOverrides, ClassicBattleContext } from '../types/overworld';
 import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '../types/progression';
 
 // ── HUD button colour schemes (fallback when PNGs absent) ────────────────────
@@ -244,6 +244,29 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     });
   };
 
+
+  private applyLabStatOverrides(actor: ClassicActor, overrides?: BattleStatOverrides): void {
+    if (!overrides) return;
+    const stats = actor.computedStats as unknown as Record<string, number>;
+    if (overrides.attack !== undefined) stats.attack = overrides.attack;
+    if (overrides.specialAttack !== undefined) stats.specialAttack = overrides.specialAttack;
+    if (overrides.defense !== undefined) stats.defense = overrides.defense;
+    if (overrides.specialDefense !== undefined) stats.specialDefense = overrides.specialDefense;
+    if (overrides.speed !== undefined) stats.speed = overrides.speed;
+  }
+
+  private updateLabDebugRegistry(): void {
+    if (!this.battleCtx?.labDebug) return;
+    const lines = this.registry.get('battle_layout_debug') as string[] | undefined ?? [];
+    this.registry.set('battle_layout_debug', [
+      ...lines,
+      `formula damage=floor(power × atk/def × (0.35+level/100) × type × sync × crit × variance × guard)`,
+      `type effective 1.75 resisted 0.75 variance 0.90-1.10 crit 1.5`,
+      `player stats A${this.playerActor.computedStats.attack}/SA${this.playerActor.computedStats.specialAttack}/D${this.playerActor.computedStats.defense}/SD${this.playerActor.computedStats.specialDefense}/Spd${this.playerActor.computedStats.speed}`,
+      `enemy stats A${this.enemyActor.computedStats.attack}/SA${this.enemyActor.computedStats.specialAttack}/D${this.enemyActor.computedStats.defense}/SD${this.enemyActor.computedStats.specialDefense}/Spd${this.enemyActor.computedStats.speed}`,
+    ]);
+  }
+
   create(): void {
     this.turnNumber = 0;
     this.domHud?.destroy();
@@ -299,6 +322,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     const battleActorScale = dpr * (landscape ? 0.74 : 0.96);
     this.playerActor.setScale(battleActorScale);
     this.enemyActor.setScale(battleActorScale);
+    this.applyLabStatOverrides(this.playerActor, this.battleCtx?.playerStatOverrides);
+    this.applyLabStatOverrides(this.enemyActor, this.battleCtx?.enemyStatOverrides);
 
     this.engine = new ClassicBattleEngine(this, this.playerActor, this.enemyActor, {
       onPhaseChange:     (p)              => this.onPhaseChange(p),
@@ -387,6 +412,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     });
 
     this.debugBattleLayout('create');
+    this.updateLabDebugRegistry();
     this.cameras.main.fadeIn(500);
     this.time.delayedCall(800, () => this.engine.startBattle());
   }

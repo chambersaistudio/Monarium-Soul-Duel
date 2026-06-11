@@ -55,46 +55,46 @@ export interface MonariDexEntry {
 
 export const MONARI_DEX: Record<string, MonariDexEntry> = {
 
-  // ── Flarepaw — fire, physical attacker ──────────────────────────────────────
+  // ── Flarepaw — fire, mixed special striker ─────────────────────────────────
   flarepaw: {
     id:    'flarepaw',
     rarity: 'rare',
     baseStats: {
-      hp:             45,
-      aura:           35,
-      attack:         65,
-      specialAttack:  48,
-      defense:        48,
-      specialDefense: 42,
-      speed:          70,
+      hp:             42,
+      aura:           42,
+      attack:         62,
+      specialAttack:  72,
+      defense:        38,
+      specialDefense: 36,
+      speed:          56,
     },
     baseXPYield:    60,
     evo1MinLevel:   20,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
-    battleArchetype: 'Physical Striker',
+    battleArchetype: 'Special Striker',
   },
 
-  // ── Droplet — water, special attacker ───────────────────────────────────────
+  // ── Droplet — water, physical attacker ──────────────────────────────────────
   droplet: {
     id:    'droplet',
     rarity: 'common',
     baseStats: {
-      hp:             40,
-      aura:           40,
-      attack:         48,
-      specialAttack:  65,
-      defense:        40,
-      specialDefense: 52,
-      speed:          80,
+      hp:             44,
+      aura:           36,
+      attack:         78,
+      specialAttack:  52,
+      defense:        62,
+      specialDefense: 34,
+      speed:          50,
     },
     baseXPYield:    30,
     evo1MinLevel:   18,
     evo2MinLevel:   0,
     evolutions:     [],
     encounterWeight: 1.0,
-    battleArchetype: 'Arcane Caster',
+    battleArchetype: 'Physical Bruiser',
   },
 
   // ── Umbravine — shadow, balanced attacker ────────────────────────────────────
@@ -118,18 +118,18 @@ export const MONARI_DEX: Record<string, MonariDexEntry> = {
     battleArchetype: 'Shadow Assassin',
   },
 
-  // ── Sproutodon — earth, physical tank ───────────────────────────────────────
+  // ── Sproutodon — flora, defensive tank ──────────────────────────────────────
   sproutodon: {
     id:    'sproutodon',
     rarity: 'uncommon',
     baseStats: {
-      hp:             50,
-      aura:           32,
-      attack:         60,
-      specialAttack:  42,
-      defense:        65,
-      specialDefense: 58,
-      speed:          50,
+      hp:             58,
+      aura:           34,
+      attack:         38,
+      specialAttack:  50,
+      defense:        74,
+      specialDefense: 78,
+      speed:          28,
     },
     baseXPYield:    40,
     evo1MinLevel:   16,

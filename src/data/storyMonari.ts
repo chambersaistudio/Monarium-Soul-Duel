@@ -31,7 +31,7 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
       fullBody: 'assets/monari/flarepaw/reference/neutral.png',
       battleIdle: 'assets/monari/flarepaw/idle/frame_002.png',
     },
-    stats: { hp: 99, attack: 62, defense: 44, specialAttack: 55, specialDefense: 42, speed: 68, aura: 51, soulSync: 70, level: 7 },
+    stats: { hp: 97, attack: 51, defense: 36, specialAttack: 57, specialDefense: 35, speed: 47, aura: 55, soulSync: 70, level: 7 },
   },
   droplet: {
     id: 'droplet',
@@ -39,12 +39,12 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
     element: 'water',
     elementLabel: 'Water',
     elementIcon: 'assets/ui/elements/water.png',
-    role: 'Balanced special style',
-    description: 'A Water element partner with clean Aura control, flexible spacing, and balanced trades.',
+    role: 'Physical water bruiser',
+    description: 'A Water element partner with heavy physical pressure, sturdy defense, and direct powerful strikes.',
     assets: {
       battleIdle: 'assets/monari/droplet/idle/frame_002.png',
     },
-    stats: { hp: 92, attack: 48, defense: 50, specialAttack: 64, specialDefense: 57, speed: 54, aura: 58, soulSync: 70, level: 7 },
+    stats: { hp: 98, attack: 61, defense: 51, specialAttack: 45, specialDefense: 34, speed: 44, aura: 52, soulSync: 70, level: 7 },
   },
   sproutodon: {
     id: 'sproutodon',
@@ -60,7 +60,7 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
       fullBody: 'assets/monari/sproutodon/reference/fullbody.png',
       battleIdle: 'assets/monari/sproutodon/reference/battle_ref.png',
     },
-    stats: { hp: 112, attack: 50, defense: 70, specialAttack: 42, specialDefense: 68, speed: 34, aura: 44, soulSync: 70, level: 7 },
+    stats: { hp: 108, attack: 36, defense: 58, specialAttack: 44, specialDefense: 60, speed: 30, aura: 51, soulSync: 70, level: 7 },
   },
 };
 

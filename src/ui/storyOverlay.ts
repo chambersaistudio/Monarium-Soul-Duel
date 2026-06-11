@@ -2,6 +2,7 @@ import { STORY_MONARI, type StoryGender, type StoryMonariDef } from '../data/sto
 import { viewportCssSize } from '../config/highDpi';
 
 export interface StoryHudState { mapName: string; playerName: string; starter?: string }
+export interface StoryMenuState { title: string; subtitle: string; partner?: string; onSave: () => void; onClose: () => void }
 export interface StoryDialogueLine { speaker: string; text: string; portrait?: string }
 export interface StarterPreviewState { monari: StoryMonariDef; gender: StoryGender; image?: string; onChoose: () => void; onCancel: () => void }
 
@@ -15,6 +16,7 @@ function ensureRoot(): HTMLElement {
       <div id="story-prompt" class="story-prompt" hidden></div>
       <div id="story-dialogue" class="story-dialogue" hidden><img id="story-dialogue-portrait" alt=""><div class="story-dialogue-copy"><b id="story-dialogue-speaker"></b><p id="story-dialogue-text"></p><small>Tap</small></div></div>
       <div id="story-starter-card" class="story-starter-card" hidden></div>
+      <div id="story-menu-card" class="story-menu-card" hidden></div>
       <button id="story-menu" class="story-menu-button" type="button">MENU</button><div class="story-controls"><div id="story-joy" class="story-joy"><div id="story-joy-thumb"></div></div><div class="story-actions"><button id="story-a" type="button">A</button></div></div>
     `;
     document.body.appendChild(root);
@@ -125,9 +127,22 @@ export class StoryOverlayController {
     el<HTMLButtonElement>('story-cancel').onclick = state.onCancel;
   }
 
+
+  showMenu(state: StoryMenuState): void {
+    const card = el('story-menu-card');
+    card.hidden = false;
+    this.root.classList.add('story-modal-active');
+    this.releaseStick();
+    card.innerHTML = `<h2>${state.title}</h2><p>${state.subtitle}</p><div class="story-menu-row"><span>Partner</span><b>${state.partner ?? 'Not chosen'}</b></div><div class="story-menu-actions"><button id="story-save">Save Game</button><button id="story-menu-close">Close</button></div><small id="story-save-status"></small>`;
+    el<HTMLButtonElement>('story-save').onclick = () => { state.onSave(); el('story-save-status').textContent = 'Saved.'; };
+    el<HTMLButtonElement>('story-menu-close').onclick = () => { this.hideMenu(); state.onClose(); };
+  }
+
+  hideMenu(): void { el('story-menu-card').hidden = true; this.root.classList.remove('story-modal-active'); }
+
   hideStarterPreview(): void { el('story-starter-card').hidden = true; this.root.classList.remove('story-modal-active'); }
-  isDialogueOpen(): boolean { return !el('story-dialogue').hidden || !el('story-starter-card').hidden; }
-  handleAdvance(): void { if (!el('story-dialogue').hidden) this.advanceDialogue(); else this.interactCb(); }
+  isDialogueOpen(): boolean { return !el('story-dialogue').hidden || !el('story-starter-card').hidden || !el('story-menu-card').hidden; }
+  handleAdvance(): void { if (!el('story-dialogue').hidden) this.advanceDialogue(); else if (!el('story-menu-card').hidden) this.hideMenu(); else this.interactCb(); }
 
   private updateStick(x: number, y: number): void {
     const joy = el<HTMLDivElement>('story-joy');
