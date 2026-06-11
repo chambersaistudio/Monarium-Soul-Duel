@@ -6,7 +6,7 @@ import { hideModeSelectOverlay, layoutDomOverlays, showModeSelectOverlay, type M
 
 const BASE_MODES: ModeOverlayOption[] = [
   {
-    key:  'ClassicOverworldScene',
+    key:  'StoryOverworldScene',
     name: 'Classic / Story',
     desc: 'Explore the world, bond Monari, and challenge rivals.',
   },

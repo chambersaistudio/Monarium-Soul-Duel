@@ -95,7 +95,7 @@ function updateDomDebug(game: Phaser.Game, reason: string, css: { width: number;
   overlay.style.height = `${css.height}px`;
   overlay.textContent = [
     `[viewport-sync] ${reason}`,
-    `scene ${scene?.scene.key ?? 'n/a'} bootOverlay ${!(document.getElementById('boot-overlay') as HTMLElement | null)?.hidden} modeOverlay ${!(document.getElementById('mode-select-overlay') as HTMLElement | null)?.hidden}`,
+    `scene ${scene?.scene.key ?? 'n/a'} bootOverlay ${!(document.getElementById('boot-overlay') as HTMLElement | null)?.hidden} modeOverlay ${!(document.getElementById('mode-select-overlay') as HTMLElement | null)?.hidden} storyOverlay ${!!(document.getElementById('story-ui-overlay') as HTMLElement | null) && !(document.getElementById('story-ui-overlay') as HTMLElement).hidden}`,
     `visualViewport ${css.width}x${css.height} window ${window.innerWidth}x${window.innerHeight} DPR ${dpr}`,
     `parent ${parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none'}`,
     `canvas css ${Math.round(rect.width)}x${Math.round(rect.height)} style ${canvas.style.width}x${canvas.style.height} internal ${canvas.width}x${canvas.height}`,

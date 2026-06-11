@@ -159,7 +159,7 @@ export function updateMobileDebugOverlay(values: DomDebugValues): void {
   overlay.hidden = false;
   overlay.textContent = [
     `[viewport-sync] ${values.reason}`,
-    `scene ${values.scene ?? 'n/a'} bootOverlay ${isBootOverlayActive()} modeOverlay ${isModeSelectOverlayActive()}`,
+    `scene ${values.scene ?? 'n/a'} bootOverlay ${isBootOverlayActive()} modeOverlay ${isModeSelectOverlayActive()} storyOverlay ${!!(document.getElementById('story-ui-overlay') as HTMLElement | null) && !(document.getElementById('story-ui-overlay') as HTMLElement).hidden}`,
     `visualViewport ${values.viewport} window ${values.windowSize} DPR ${values.dpr}`,
     `parent ${values.parentSize}`,
     `canvas css ${values.canvasCss} style ${values.canvasStyle} internal ${values.canvasInternal}`,

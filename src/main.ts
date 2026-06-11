@@ -7,6 +7,7 @@ import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
+import { StoryOverworldScene } from './scenes/StoryOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
 import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
@@ -30,6 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
     PreloadScene,
     TitleScene,
     ModeSelectScene,
+    StoryOverworldScene,
     ClassicOverworldScene,
     ClassicSoulDuelScene,
     BattleLabScene,

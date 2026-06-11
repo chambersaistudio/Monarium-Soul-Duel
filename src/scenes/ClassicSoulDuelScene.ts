@@ -1319,7 +1319,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
           this.registry.set('classic_spawn_name',  ctx.returnSpawn ?? 'default');
           this.registry.remove('classic_battle_context');
           this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
-            if (p === 1) this.scene.start('ClassicOverworldScene');
+            if (p !== 1) return;
+            const storyState = this.registry.get('story_state') as { mapId?: string; spawn?: string } | undefined;
+            if (storyState) {
+              this.registry.set('story_state', { ...storyState, mapId: ctx.returnMap, spawn: ctx.returnSpawn ?? 'south' });
+              this.scene.start('StoryOverworldScene');
+              return;
+            }
+            this.scene.start('ClassicOverworldScene');
           });
         } else {
           this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
