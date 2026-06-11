@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
+import { hideBootOverlay, layoutDomOverlays, showStartOverlay } from '../ui/bootOverlay';
 
 // TitleScene layout strategy:
 // • Phaser canvas = animated particle background only.  The particle update loop
@@ -21,20 +22,28 @@ export class TitleScene extends Phaser.Scene {
   private particles:   Particle[] = [];
   private bgGfx!:      Phaser.GameObjects.Graphics;
   private particleGfx!: Phaser.GameObjects.Graphics;
-  private enterKey!:   Phaser.Input.Keyboard.Key;
-  private audio!:      AudioManager;
+  private enterKey!: Phaser.Input.Keyboard.Key;
+  private audio!: AudioManager;
+  private titleText!: Phaser.GameObjects.Text;
+  private subtitleText!: Phaser.GameObjects.Text;
+  private protoText!: Phaser.GameObjects.Text;
+  private promptText!: Phaser.GameObjects.Text;
+  private controlsText!: Phaser.GameObjects.Text;
+  private lineGfx!: Phaser.GameObjects.Graphics;
+  private debugText: Phaser.GameObjects.Text | null = null;
+  private starting = false;
 
   private titleOverlay: HTMLDivElement | null = null;
   private blinkTimer:   ReturnType<typeof setInterval> | null = null;
   private started = false;
 
-  constructor() { super({ key: 'TitleScene' }); }
-
   create(): void {
-    const { width: w, height: h } = this.scale;
-    this.started = false;
+    this.particles = [];
+    this.starting = false;
+    const w = this.scale.width;
+    const h = this.scale.height;
 
-    this.bgGfx       = this.add.graphics().setDepth(0);
+    this.bgGfx = this.add.graphics().setDepth(0);
     this.particleGfx = this.add.graphics().setDepth(1);
     this.drawBackground();
 
@@ -50,107 +59,108 @@ export class TitleScene extends Phaser.Scene {
       });
     }
 
-    this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    this.titleText = this.add.text(0, 0, 'MONARIUM', {
+      fontSize: '72px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 6,
+      shadow: { offsetX: 0, offsetY: 0, color: '#ff3300', blur: 30, fill: true },
+    }).setOrigin(0.5).setDepth(2);
 
-    this.audio = new AudioManager(this);
-    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+    this.subtitleText = this.add.text(0, 0, 'SOUL DUEL', {
+      fontSize: '28px', color: '#ffaa44', fontStyle: 'bold', fontFamily: 'monospace',
+      letterSpacing: 12, stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(2);
 
-    this.createTitleOverlay();
+    this.protoText = this.add.text(0, 0, 'PROTOTYPE', {
+      fontSize: '14px', color: '#888888', fontFamily: 'monospace', letterSpacing: 8,
+    }).setOrigin(0.5).setDepth(2);
 
-    this.scale.on('resize', this.onResize, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onShutdown, this);
-  }
+    this.lineGfx = this.add.graphics().setDepth(2);
 
-  // ── DOM overlay ─────────────────────────────────────────────────────────────
+    this.promptText = this.add.text(0, 0, 'Tap or Press ENTER to Start', {
+      fontSize: '20px', color: '#ffffff', fontFamily: 'monospace',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(2);
 
-  private createTitleOverlay(): void {
-    this.removeTitleOverlay();
+    this.tweens.add({ targets: this.promptText, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
 
-    const div = document.createElement('div');
-    div.id = 'title-overlay';
-    div.style.cssText = [
-      'position:fixed', 'inset:0',
-      'display:flex', 'flex-direction:column',
-      'align-items:center', 'justify-content:center',
-      'gap:16px', 'font-family:monospace',
-      'z-index:100', 'pointer-events:auto',
-      'transition:opacity 0.4s ease',
-      'user-select:none', '-webkit-user-select:none',
-    ].join(';');
+    this.controlsText = this.add.text(0, 0,
+      'Controls: Arrows=Move  J=Attack  K=Special  L=Dodge  I=Ability  U=Ultimate  1-4=Slots',
+      { fontSize: '10px', color: '#555555', fontFamily: 'monospace', align: 'center' },
+    ).setOrigin(0.5).setDepth(2);
 
-    div.innerHTML = `
-      <div style="font-size:clamp(38px,10vw,72px);font-weight:bold;color:#ff6600;
-                  letter-spacing:4px;text-align:center;
-                  text-shadow:0 0 30px #ff3300,0 0 60px #ff330044;">MONARIUM</div>
-      <div style="font-size:clamp(13px,3.5vw,26px);color:#ffaa44;font-weight:bold;
-                  letter-spacing:10px;text-align:center;">SOUL DUEL</div>
-      <div style="font-size:clamp(9px,2vw,14px);color:#666666;
-                  letter-spacing:6px;text-align:center;">PROTOTYPE</div>
-      <div style="width:min(280px,55vw);height:1px;background:#ff6600;
-                  opacity:0.35;margin:4px 0;"></div>
-      <div id="title-start-prompt"
-           style="font-size:clamp(13px,3.5vw,20px);color:#ffffff;letter-spacing:2px;
-                  padding:12px 28px;border:1px solid #ffffff33;border-radius:4px;
-                  cursor:pointer;text-align:center;
-                  -webkit-tap-highlight-color:transparent;">
-        TAP / ENTER TO START
-      </div>
-      <div style="position:absolute;
-                  bottom:max(14px,env(safe-area-inset-bottom,14px));
-                  font-size:9px;color:#333344;letter-spacing:1px;
-                  text-align:center;padding:0 16px;pointer-events:none;">
-        ARROWS=MOVE &nbsp; J=ATTACK &nbsp; K=SPECIAL &nbsp; L=DODGE &nbsp; I=ABILITY
-      </div>
-    `;
-
-    document.body.appendChild(div);
-    this.titleOverlay = div;
-
-    // Blink the "tap to start" prompt
-    const prompt = div.querySelector<HTMLElement>('#title-start-prompt');
-    if (prompt) {
-      let vis = true;
-      this.blinkTimer = setInterval(() => {
-        if (prompt) prompt.style.opacity = vis ? '1' : '0.25';
-        vis = !vis;
-      }, 600);
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')) {
+      this.debugText = this.add.text(0, 0, '', {
+        fontSize: '9px', color: '#777777', fontFamily: 'monospace', align: 'center',
+      }).setOrigin(0.5, 1).setDepth(3);
     }
 
-    // Pointer tap anywhere on overlay starts the game
-    div.addEventListener('pointerdown', () => this.doStart(), { once: true, passive: true });
-  }
-
-  private removeTitleOverlay(): void {
-    if (this.blinkTimer !== null) {
-      clearInterval(this.blinkTimer);
-      this.blinkTimer = null;
-    }
-    this.titleOverlay?.remove();
-    this.titleOverlay = null;
-    document.getElementById('title-overlay')?.remove();
-  }
-
-  private doStart(): void {
-    if (this.started) return;
-    this.started = true;
-    if (this.titleOverlay) {
-      this.titleOverlay.style.opacity       = '0';
-      this.titleOverlay.style.pointerEvents = 'none';
-    }
-    this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
-      if (p === 1) this.scene.start('ModeSelectScene');
+    layoutDomOverlays();
+    this.layoutStartScreen();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutStartScreen, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutStartScreen, this);
     });
-  }
 
-  // ── Phaser lifecycle ─────────────────────────────────────────────────────────
+    this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
   private onResize(): void {
     this.drawBackground();
   }
 
-  private onShutdown(): void {
-    this.scale.off('resize', this.onResize, this);
-    this.removeTitleOverlay();
+    showStartOverlay(() => this.startGame());
+    this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
+
+    // Canvas tap / click is a fallback for desktop or if the DOM overlay is hidden.
+    this.input.once('pointerup', () => this.startGame());
+  }
+
+  private layoutStartScreen(): void {
+    const w = Math.max(1, this.scale.width || this.scale.gameSize.width);
+    const h = Math.max(1, this.scale.height || this.scale.gameSize.height);
+    const cx = w / 2;
+    const cy = h / 2;
+    const compact = h < 420 || w < 520;
+    const titleOffset = compact ? Math.min(76, h * 0.24) : 120;
+    const titleSize = Math.floor(Math.min(compact ? 46 : 72, Math.max(30, w / 9)));
+    const subtitleSize = Math.floor(Math.min(compact ? 20 : 28, Math.max(16, w / 22)));
+    const promptY = Math.min(h - 72, cy + (compact ? 64 : 80));
+    const lineW = Math.min(300, Math.max(170, w - 64));
+
+    this.drawBackground();
+    this.titleText.setPosition(cx, cy - titleOffset).setFontSize(titleSize);
+    this.subtitleText.setPosition(cx, cy - (compact ? 22 : 40)).setFontSize(subtitleSize);
+    this.protoText.setPosition(cx, cy + (compact ? 10 : 0)).setFontSize(compact ? 11 : 14);
+    this.promptText.setPosition(cx, promptY).setFontSize(compact ? 15 : 20);
+    this.controlsText
+      .setPosition(cx, h - 30)
+      .setFontSize(compact ? 8 : 10)
+      .setWordWrapWidth(Math.max(220, w - 36));
+
+    this.lineGfx.clear();
+    this.lineGfx.lineStyle(1, 0xff6600, 0.4);
+    this.lineGfx.lineBetween(cx - lineW / 2, cy + (compact ? 28 : 25), cx + lineW / 2, cy + (compact ? 28 : 25));
+
+    if (this.debugText) {
+      const canvas = this.game.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const orientation = w >= h ? 'landscape' : 'portrait';
+      this.debugText
+        .setPosition(cx, h - 6)
+        .setText([
+          `viewport ${Math.round(window.visualViewport?.width ?? window.innerWidth)}x${Math.round(window.visualViewport?.height ?? window.innerHeight)} ${orientation}`,
+          `scale ${Math.round(w)}x${Math.round(h)} css ${Math.round(rect.width)}x${Math.round(rect.height)} internal ${canvas.width}x${canvas.height}`,
+          `camera zoom ${this.cameras.main.zoom.toFixed(2)} ui center ${Math.round(cx)},${Math.round(cy)}`,
+        ]);
+    }
+  }
+
+  private startGame(): void {
+    if (this.starting) return;
+    this.starting = true;
+    hideBootOverlay();
+    this.cameras.main.fade(400, 0, 0, 0, false, (_cam: unknown, progress: number) => {
+      if (progress === 1) this.scene.start('ModeSelectScene');
+    });
   }
 
   private drawBackground(): void {
@@ -172,9 +182,7 @@ export class TitleScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     const { width: w, height: h } = this.scale;
 
-    if (Phaser.Input.Keyboard.JustDown(this.enterKey)) {
-      this.doStart();
-    }
+    if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.startGame();
 
     this.particleGfx.clear();
     for (const p of this.particles) {

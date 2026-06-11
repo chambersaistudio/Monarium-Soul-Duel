@@ -9,6 +9,7 @@ import {
   SAFE_MAX_FRAMES,
   NORM_SIZE,
 } from '../config/mobileConfig';
+import { setBootLoading } from '../ui/bootOverlay';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
@@ -35,24 +36,61 @@ function thinFrames(stems: readonly string[], maxCount: number): string[] {
 
 export class PreloadScene extends Phaser.Scene {
   private loadErrors = new Set<string>();
+  private loadingTrack!: Phaser.GameObjects.Rectangle;
+  private loadingBar!: Phaser.GameObjects.Rectangle;
+  private titleText!: Phaser.GameObjects.Text;
+  private statusText!: Phaser.GameObjects.Text;
+  private safeModeText: Phaser.GameObjects.Text | null = null;
+  private debugText: Phaser.GameObjects.Text | null = null;
+  private progressValue = 0;
 
   constructor() {
     super({ key: 'PreloadScene' });
   }
 
   preload(): void {
-    // Loading UI is handled by the #boot-overlay DOM element in index.html.
-    // Updating via DOM keeps the bar perfectly centred in any viewport/orientation —
-    // immune to Phaser coordinate-space timing during rotation.
-    const barEl    = document.getElementById('boot-bar')    as HTMLDivElement | null;
-    const statusEl = document.getElementById('boot-status') as HTMLDivElement | null;
+    // ── Loading bar ────────────────────────────────────────────────────────
+    this.loadingTrack = this.add.rectangle(0, 0, 300, 20, 0x222222);
+    this.loadingBar = this.add.rectangle(0, 0, 0, 16, 0xff6600).setOrigin(0, 0.5);
+    this.titleText = this.add.text(0, 0, 'MONARIUM', {
+      fontSize: '32px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
+    }).setOrigin(0.5);
 
-    this.load.on('progress', (v: number) => {
-      if (barEl) barEl.style.width = `${Math.round(v * 100)}%`;
+    // Status line — always visible so mobile users can see progress before crash
+    this.statusText = this.add.text(0, 0, 'Loading assets…', {
+      fontSize: '11px', color: '#888888', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    if (SAFE_MODE) {
+      this.safeModeText = this.add.text(0, 0, `Safe mode — ${NORM_SIZE}px textures`, {
+        fontSize: '10px', color: '#446644', fontFamily: 'monospace',
+      }).setOrigin(0.5);
+    }
+
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')) {
+      this.debugText = this.add.text(0, 0, '', {
+        fontSize: '9px', color: '#777777', fontFamily: 'monospace', align: 'center',
+      }).setOrigin(0.5, 1);
+    }
+
+    this.layoutLoadingScreen();
+    this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
+    setBootLoading(this.progressValue, 'Loading assets…', SAFE_MODE);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
+    });
+
+    this.load.on('progress',     (v: number) => {
+      this.progressValue = v;
+      this.layoutLoadingScreen();
+      setBootLoading(v, this.statusText.text, SAFE_MODE);
     });
     this.load.on('fileprogress', (f: Phaser.Loader.File) => {
       const label = f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key;
-      if (statusEl) statusEl.textContent = label;
+      this.statusText.setText(label);
+      this.layoutLoadingScreen();
+      setBootLoading(this.progressValue, label, SAFE_MODE);
     });
     this.load.on('loaderror', (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
@@ -125,7 +163,36 @@ export class PreloadScene extends Phaser.Scene {
     }
   }
 
+  private layoutLoadingScreen(): void {
+    const w = Math.max(1, this.scale.width || this.scale.gameSize.width);
+    const h = Math.max(1, this.scale.height || this.scale.gameSize.height);
+    const cx = w / 2;
+    const cy = h / 2;
+    const barW = Math.min(300, Math.max(180, w - 48));
+    const titleSize = Math.max(24, Math.min(34, Math.floor(w / 12)));
+
+    this.titleText?.setPosition(cx, cy - 44).setFontSize(titleSize);
+    this.loadingTrack?.setPosition(cx, cy).setSize(barW, 20);
+    this.loadingBar?.setPosition(cx - (barW - 4) / 2, cy).setSize((barW - 4) * this.progressValue, 16);
+    this.statusText?.setPosition(cx, cy + 30);
+    this.safeModeText?.setPosition(cx, cy + 50);
+
+    if (this.debugText) {
+      const canvas = this.game.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const orientation = w >= h ? 'landscape' : 'portrait';
+      this.debugText
+        .setPosition(cx, h - 8)
+        .setText([
+          `viewport ${Math.round(window.visualViewport?.width ?? window.innerWidth)}x${Math.round(window.visualViewport?.height ?? window.innerHeight)} ${orientation}`,
+          `scale ${Math.round(w)}x${Math.round(h)} css ${Math.round(rect.width)}x${Math.round(rect.height)} internal ${canvas.width}x${canvas.height}`,
+          `camera zoom ${this.cameras.main.zoom.toFixed(2)} center ${Math.round(cx)},${Math.round(cy)}`,
+        ]);
+    }
+  }
+
   create(): void {
+    setBootLoading(1, 'Assets ready', SAFE_MODE);
     for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
       this.createCharacter(charId);
     }

@@ -18,6 +18,8 @@ export type MonariRarity =
 
 export type BattleArchetype =
   | 'Physical Striker'
+  | 'Physical Bruiser'
+  | 'Special Striker'
   | 'Arcane Caster'
   | 'Shadow Assassin'
   | 'Bulky Guardian'

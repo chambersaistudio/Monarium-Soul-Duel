@@ -17,14 +17,15 @@ export function ensurePlaceholderTexture(scene: Phaser.Scene, key: string, color
 }
 
 export function preloadVisualCandidates(scene: Phaser.Scene, kind: 'monari' | 'character', id: string, paths: string[]): void {
+  const names = ['profile', 'fullBody', 'battleIdle', 'portrait', 'icon', 'reference'];
   paths.forEach((path, index) => {
-    const key = `${kind}_${id}_${index === 0 ? 'portrait' : index === 1 ? 'icon' : 'reference'}`;
+    const key = `${kind}_${id}_${names[index] ?? `candidate${index}`}`;
     if (!scene.textures.exists(key)) scene.load.image(key, path);
   });
 }
 
 export function bestLoadedVisualKey(scene: Phaser.Scene, kind: 'monari' | 'character', id: string, placeholderColor?: number): string {
-  const keys = [`${kind}_${id}_portrait`, `${kind}_${id}_icon`, `${kind}_${id}_reference`];
+  const keys = [`${kind}_${id}_profile`, `${kind}_${id}_fullBody`, `${kind}_${id}_battleIdle`, `${kind}_${id}_portrait`, `${kind}_${id}_icon`, `${kind}_${id}_reference`];
   return keys.find(k => scene.textures.exists(k)) ?? ensurePlaceholderTexture(scene, `generated_${kind}_${id}`, placeholderColor);
 }
 

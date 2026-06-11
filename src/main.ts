@@ -7,15 +7,18 @@ import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
+import { StoryOverworldScene } from './scenes/StoryOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
+import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
+import { layoutDomOverlays } from './ui/bootOverlay';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 960,
   height: 600,
   backgroundColor: '#0a0a0f',
-  parent: document.body,
+  parent: 'game',
   physics: {
     default: 'arcade',
     arcade: {
@@ -28,6 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
     PreloadScene,
     TitleScene,
     ModeSelectScene,
+    StoryOverworldScene,
     ClassicOverworldScene,
     ClassicSoulDuelScene,
     BattleLabScene,
@@ -42,7 +46,7 @@ const config: Phaser.Types.Core.GameConfig = {
     // game coordinate space by DPR (so this.scale.width becomes cssWidth/dpr),
     // breaking all hardcoded pixel values throughout the codebase.
     mode: Phaser.Scale.RESIZE,
-    parent: document.body,
+    parent: 'game',
   },
   render: {
     antialias:   true,
@@ -57,22 +61,33 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// ── Mobile orientation / resize reliability ──────────────────────────────────
-// iOS Safari fires `resize` during rotation but sometimes reports stale
-// dimensions.  Refreshing the Scale Manager at +100 ms and +300 ms catches the
-// final stabilised viewport size.  body { position:fixed; inset:0 } (index.html)
-// ensures body.offsetWidth/Height are correct at those points.
-function scheduleScaleRefresh(): void {
-  setTimeout(() => { try { game.scale.refresh(); } catch { /* ok */ } }, 100);
-  setTimeout(() => { try { game.scale.refresh(); } catch { /* ok */ } }, 300);
+// Phaser 3.80 has no top-level renderer `resolution` GameConfig field, and
+// ScaleManager `zoom` changes CSS sizing rather than the drawing-buffer DPR.
+// Keep scene/layout units in CSS pixels, but render into a DPR-sized canvas
+// (clamped for mobile performance) and zoom cameras back to CSS-pixel world units.
+let viewportSyncTimer: number | undefined;
+function syncViewport(reason: string): void {
+  layoutDomOverlays();
+  applyHighDpiCanvas(game, reason);
 }
-window.addEventListener('resize',            scheduleScaleRefresh, { passive: true });
-window.addEventListener('orientationchange', scheduleScaleRefresh, { passive: true });
-if (typeof window.visualViewport !== 'undefined') {
-  window.visualViewport?.addEventListener('resize', scheduleScaleRefresh, { passive: true });
+function scheduleViewportSync(reason: string): void {
+  syncViewport(reason);
+  requestAnimationFrame(() => syncViewport(`${reason}:raf`));
+  window.clearTimeout(viewportSyncTimer);
+  viewportSyncTimer = window.setTimeout(() => syncViewport(`${reason}:settled`), 250);
 }
 
-// ── Web Audio unlock (required by iOS Safari) ──────────────────────────────────
+game.events.on(Phaser.Core.Events.READY, () => {
+  syncViewport('ready');
+  console.info('[render-resolution]', { dpr: getRenderDpr(), canvas: `${game.canvas.width}x${game.canvas.height}` });
+});
+game.events.on(Phaser.Core.Events.PRE_RENDER, () => syncViewport('pre-render'));
+window.addEventListener('resize', () => scheduleViewportSync('window-resize'), { passive: true });
+window.addEventListener('orientationchange', () => scheduleViewportSync('orientationchange'), { passive: true });
+window.visualViewport?.addEventListener('resize', () => scheduleViewportSync('visualViewport-resize'), { passive: true });
+window.visualViewport?.addEventListener('scroll', () => scheduleViewportSync('visualViewport-scroll'), { passive: true });
+
+// Unlock Web Audio API on first interaction (required by iOS Safari)
 function tryUnlockAudio(): void {
   try {
     if (game.sound instanceof Phaser.Sound.WebAudioSoundManager) {

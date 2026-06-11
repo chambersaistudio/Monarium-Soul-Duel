@@ -3,7 +3,7 @@
  * All in-battle type matchups flow through getElementModifier().
  *
  * Terminology (precise):
- *   "Effective" — the attacking element is STRONG AGAINST the defender → ×1.25
+ *   "Effective" — the attacking element is STRONG AGAINST the defender → ×1.75
  *   "Resisted"  — the defending element RESISTS the attacking element  → ×0.75
  *   "Neutral"   — no special relationship                              → ×1.0
  *
@@ -11,7 +11,7 @@
  * attacker being weak. These are not the same concept.
  *
  * Chart is keyed by the ATTACKING element.
- *   strongAgainst — defenders this element hits for ×1.25
+ *   strongAgainst — defenders this element hits for ×1.75
  *   resistedBy    — defenders that reduce this element to ×0.75
  *
  * Starter triangle:
@@ -20,7 +20,7 @@
  *   Flora beats Water (Flora strong against Water / Water resisted by Flora)
  *
  * Do NOT use 2× damage in MVP — MONARIUM's multi-layer systems (Aura, Sync,
- * Guard, Bond) make 2× too swingy. 1.25×/0.75× is the locked MVP range.
+ * Guard, Bond) make 2× too swingy. 1.75×/0.75× is the current starter-triangle range.
  *
  * To add matchups: edit ELEMENT_CHART only — all helpers derive from it.
  */
@@ -30,13 +30,13 @@ export type ElementName =
   | 'steel' | 'light' | 'dark' | 'aether' | 'ice' | 'neutral';
 
 export const ELEMENT_MODIFIERS = {
-  EFFECTIVE: 1.25,
+  EFFECTIVE: 1.75,
   RESISTED:  0.75,
   NEUTRAL:   1.0,
 } as const;
 
 interface ElementRelations {
-  /** Defending elements this attacking element deals ×1.25 against. */
+  /** Defending elements this attacking element deals ×1.75 against. */
   strongAgainst: ElementName[];
   /** Defending elements that reduce this element to ×0.75. */
   resistedBy:    ElementName[];
@@ -81,7 +81,7 @@ export const ELEMENT_LABELS: Record<ElementName, string> = {
  * Returns the damage multiplier for an attack of `attacking` element
  * landing on a Monari whose element is `defending`.
  *
- * ×1.25 = attacking element is strong against the defender
+ * ×1.75 = attacking element is strong against the defender
  * ×0.75 = defending element resists the attacking element
  * ×1.0  = neutral (default for any unknown pairing)
  */
@@ -95,7 +95,7 @@ export function getElementModifier(attacking: string, defending: string): number
 
 /**
  * Short semantic label used internally and in the Battle Lab.
- *   ×1.25 → 'effective'
+ *   ×1.75 → 'effective'
  *   ×0.75 → 'resisted'
  *   ×1.0  → 'neutral'
  */
@@ -108,7 +108,7 @@ export function getEffectivenessLabel(modifier: number): 'effective' | 'resisted
 /**
  * Battle callout message shown after a type-advantage/disadvantage hit.
  * Returns null for neutral hits (no message shown in normal battle).
- *   ×1.25 → "It was effective!"
+ *   ×1.75 → "It was effective!"
  *   ×0.75 → "It was resisted!"
  *   ×1.0  → null
  */
@@ -120,7 +120,7 @@ export function getEffectivenessMessage(modifier: number): string | null {
 
 /**
  * Long label for Battle Lab display.
- *   ×1.25 → "1.25× Effective"
+ *   ×1.75 → "1.75× Effective"
  *   ×0.75 → "0.75× Resisted"
  *   ×1.0  → "1.0× Neutral"
  */
@@ -133,9 +133,9 @@ export function getEffectivenessBattleLabLabel(modifier: number): string {
 // ── Starter triangle assertion tests ─────────────────────────────────────────
 
 const STARTER_TRIANGLE_CASES = [
-  { atk: 'water',   def: 'fire',   expected: 1.25, label: 'Water → Fire (effective)'  },
-  { atk: 'fire',    def: 'flora',  expected: 1.25, label: 'Fire → Flora (effective)'  },
-  { atk: 'flora',   def: 'water',  expected: 1.25, label: 'Flora → Water (effective)' },
+  { atk: 'water',   def: 'fire',   expected: 1.75, label: 'Water → Fire (effective)'  },
+  { atk: 'fire',    def: 'flora',  expected: 1.75, label: 'Fire → Flora (effective)'  },
+  { atk: 'flora',   def: 'water',  expected: 1.75, label: 'Flora → Water (effective)' },
   { atk: 'fire',    def: 'water',  expected: 0.75, label: 'Fire → Water (resisted)'   },
   { atk: 'water',   def: 'flora',  expected: 0.75, label: 'Water → Flora (resisted)'  },
   { atk: 'flora',   def: 'fire',   expected: 0.75, label: 'Flora → Fire (resisted)'   },
