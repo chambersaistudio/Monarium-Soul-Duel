@@ -21,7 +21,7 @@ export const STORY_MAPS: Record<StoryMapId, StoryMapDef> = {
     spawns: {
       default: { x: 0.52, y: 0.68 },
       from_lab: { x: 0.31, y: 0.47 },
-      north: { x: 0.5, y: 0.13 }, south: { x: 0.5, y: 0.88 }, west: { x: 0.12, y: 0.58 }, east: { x: 0.88, y: 0.58 },
+      north: { x: 0.5, y: 0.10 }, south: { x: 0.5, y: 0.90 }, west: { x: 0.10, y: 0.58 }, east: { x: 0.90, y: 0.58 },
     },
     exits: [
       { edge: 'north', to: 'training_field', spawn: 'south' },
@@ -35,7 +35,7 @@ export const STORY_MAPS: Record<StoryMapId, StoryMapDef> = {
     id: 'bond_lab_interior',
     displayName: 'Bond Lab',
     background: 'assets/backgrounds/overworld/bond_lab_interior.png',
-    spawns: { default: { x: 0.50, y: 0.82 }, exit: { x: 0.50, y: 0.84 } },
+    spawns: { default: { x: 0.50, y: 0.74 }, exit: { x: 0.50, y: 0.78 } },
     exits: [{ edge: 'south', to: 'starter_village', spawn: 'from_lab' }],
     interactions: [
       { id: 'professor', label: 'Dr. Warren Ellis', x: 0.50, y: 0.33, radius: 0.08, kind: 'professor' },

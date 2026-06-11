@@ -103,6 +103,7 @@ function updateDomDebug(game: Phaser.Game, reason: string, css: { width: number;
     `scale ${Math.round(game.scale.width)}x${Math.round(game.scale.height)} game ${Math.round(game.scale.gameSize.width)}x${Math.round(game.scale.gameSize.height)} base ${Math.round(game.scale.baseSize.width)}x${Math.round(game.scale.baseSize.height)} display ${Math.round(game.scale.displaySize.width)}x${Math.round(game.scale.displaySize.height)}`,
     `camera z${camera?.zoom.toFixed(2) ?? 'n/a'} vp ${camera ? `${Math.round(camera.x)},${Math.round(camera.y)} ${Math.round(camera.width)}x${Math.round(camera.height)}` : 'n/a'}`,
     ...((game.registry.get('story_layout_debug') as string[] | undefined) ?? []),
+    ...((game.registry.get('battle_layout_debug') as string[] | undefined) ?? []),
   ].join('\n');
 }
 
@@ -130,11 +131,11 @@ export function applyHighDpiCanvas(game: Phaser.Game, reason = 'sync'): void {
   game.scene.scenes.forEach(scene => {
     scene.cameras?.cameras.forEach(camera => {
       camera.setViewport(0, 0, renderW, renderH);
-      // StoryOverworldScene lays out the Phaser world directly in renderer
-      // pixels so the map fills the DPR-sized drawing buffer. Other legacy
-      // scenes keep CSS-pixel coordinates and therefore need the DPR camera
-      // zoom shim.
-      camera.setZoom(scene.scene.key === 'StoryOverworldScene' ? 1 : dpr);
+      // StoryOverworldScene and ClassicSoulDuelScene lay out their Phaser
+      // worlds directly in renderer pixels so the map/battlefield fill the
+      // DPR-sized drawing buffer. Other legacy scenes keep CSS-pixel
+      // coordinates and therefore need the DPR camera zoom shim.
+      camera.setZoom(scene.scene.key === 'StoryOverworldScene' || scene.scene.key === 'ClassicSoulDuelScene' ? 1 : dpr);
     });
   });
 

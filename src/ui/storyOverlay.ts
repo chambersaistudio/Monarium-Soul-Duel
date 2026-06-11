@@ -105,22 +105,22 @@ export class StoryOverlayController {
     this.releaseStick();
     const genderIcon = state.gender === 'male' ? 'assets/ui/icons/gender_male.png' : 'assets/ui/icons/gender_female.png';
     card.innerHTML = `
-      <div class="story-starter-art">${state.image ? `<img src="${state.image}" alt="${state.monari.name}">` : ''}</div>
       <div class="story-starter-info">
         <h2>${state.monari.name}</h2>
         <div class="story-starter-meta"><img src="${state.monari.elementIcon}" alt=""> ${state.monari.elementLabel} <span>•</span> Lv.${state.monari.stats.level} <img src="${genderIcon}" alt="${state.gender}"></div>
         <p><strong>Role:</strong> ${state.monari.role}</p>
         <p>${state.monari.description}</p>
-        <div class="story-stats">
-          <span><b>HP</b> ${state.monari.stats.hp}</span>
-          <span><b>Attack</b> ${state.monari.stats.attack}</span>
-          <span><b>Defense</b> ${state.monari.stats.defense}</span>
-          <span><b>Special Attack</b> ${state.monari.stats.specialAttack}</span>
-          <span><b>Special Defense</b> ${state.monari.stats.specialDefense}</span>
-          <span><b>Speed</b> ${state.monari.stats.speed}</span>
-        </div>
-        <div class="story-starter-buttons"><button id="story-choose">Choose as partner?</button><button id="story-cancel">Back</button></div>
-      </div>`;
+      </div>
+      <div class="story-starter-art">${state.image ? `<img src="${state.image}" alt="${state.monari.name}">` : ''}</div>
+      <div class="story-stats">
+        <span><b>HP</b> ${state.monari.stats.hp}</span>
+        <span><b>Attack</b> ${state.monari.stats.attack}</span>
+        <span><b>Defense</b> ${state.monari.stats.defense}</span>
+        <span><b>Special Attack</b> ${state.monari.stats.specialAttack}</span>
+        <span><b>Special Defense</b> ${state.monari.stats.specialDefense}</span>
+        <span><b>Speed</b> ${state.monari.stats.speed}</span>
+      </div>
+      <div class="story-starter-buttons"><button id="story-choose">Choose as Partner</button><button id="story-cancel">Back</button></div>`;
     el<HTMLButtonElement>('story-choose').onclick = state.onChoose;
     el<HTMLButtonElement>('story-cancel').onclick = state.onCancel;
   }

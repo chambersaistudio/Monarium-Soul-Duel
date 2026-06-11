@@ -28,6 +28,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   private busy = false;
   private edgeCooldown = 0;
   private edgeArmed: Record<StoryEdge, boolean> = { north: true, south: true, west: true, east: true };
+  private cutoutDebug: Record<string, string> = {};
 
   constructor() { super({ key: 'StoryOverworldScene' }); }
 
@@ -55,6 +56,7 @@ export class StoryOverworldScene extends Phaser.Scene {
     this.state = (this.registry.get('story_state') as StoryState | undefined) ?? { mapId: 'starter_village', spawn: 'default' };
     this.mapId = this.state.mapId;
     this.map = STORY_MAPS[this.mapId];
+    this.prepareCharacterCutouts();
     this.ui = new StoryOverlayController();
     this.ui.setCallbacks((x, y) => { this.touchMove = { x, y }; }, () => this.interact(), () => this.showMenuStub());
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -88,8 +90,54 @@ export class StoryOverworldScene extends Phaser.Scene {
   }
   private textureKey(keys: string[]): string { return keys.find(k => this.textures.exists(k)) ?? '__MISSING'; }
   private charTexture(id: keyof typeof STORY_CHARACTERS, purpose: 'portrait' | 'overworld' = 'overworld'): string {
-    const order = purpose === 'portrait' ? [`story_char_${id}_portrait`, `story_char_${id}_full`, `story_char_${id}_overworld`] : [`story_char_${id}_overworld`, `story_char_${id}_full`, `story_char_${id}_portrait`];
+    const order = purpose === 'portrait' ? [`story_char_${id}_portrait`, `story_char_${id}_full`, `story_char_${id}_overworld`] : [`story_char_${id}_overworld_cutout`, `story_char_${id}_full_cutout`, `story_char_${id}_overworld`, `story_char_${id}_full`, `story_char_${id}_portrait`];
     return this.textureKey(order);
+  }
+
+  private prepareCharacterCutouts(): void {
+    (Object.keys(STORY_CHARACTERS) as Array<keyof typeof STORY_CHARACTERS>).forEach(id => {
+      [`story_char_${id}_overworld`, `story_char_${id}_full`].forEach(key => {
+        if (this.textures.exists(key)) this.createChromaTrimmedTexture(key, `${key}_cutout`);
+      });
+    });
+  }
+
+  private createChromaTrimmedTexture(sourceKey: string, targetKey: string): void {
+    if (this.textures.exists(targetKey)) return;
+    const tex = this.textures.get(sourceKey);
+    const source = tex.getSourceImage() as CanvasImageSource | undefined;
+    const frame = tex.get();
+    if (!source || !frame) return;
+    const width = frame.width || frame.realWidth;
+    const height = frame.height || frame.realHeight;
+    const src = document.createElement('canvas');
+    src.width = width; src.height = height;
+    const ctx = src.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.drawImage(source, 0, 0, width, height);
+    const data = ctx.getImageData(0, 0, width, height);
+    let minX = width, minY = height, maxX = -1, maxY = -1, green = 0, visible = 0;
+    for (let i = 0; i < data.data.length; i += 4) {
+      const r = data.data[i], g = data.data[i + 1], b = data.data[i + 2], a = data.data[i + 3];
+      const chromaGreen = g > 135 && g > r * 1.28 && g > b * 1.28 && r < 150 && b < 150;
+      if (chromaGreen) { data.data[i + 3] = 0; green++; }
+      if (data.data[i + 3] > 12) {
+        const px = (i / 4) % width; const py = Math.floor((i / 4) / width);
+        minX = Math.min(minX, px); minY = Math.min(minY, py); maxX = Math.max(maxX, px); maxY = Math.max(maxY, py); visible++;
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    if (visible <= 0) return;
+    const pad = 6;
+    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad); maxX = Math.min(width - 1, maxX + pad); maxY = Math.min(height - 1, maxY + pad);
+    const cropW = Math.max(1, maxX - minX + 1); const cropH = Math.max(1, maxY - minY + 1);
+    const out = this.textures.createCanvas(targetKey, cropW, cropH);
+    const outCtx = out?.getContext();
+    if (!out || !outCtx) return;
+    outCtx.clearRect(0, 0, cropW, cropH);
+    outCtx.drawImage(src, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+    out.refresh();
+    this.cutoutDebug[targetKey] = `${sourceKey} raw ${width}x${height} crop ${cropW}x${cropH} greenPx ${green}`;
   }
   private monariTexture(id: StoryMonariDef['id'], purpose: 'portrait' | 'overworld' = 'overworld'): string {
     const order = purpose === 'portrait' ? [`story_monari_${id}_profile`, `story_monari_${id}_full`, `story_monari_${id}_overworld`, `story_monari_${id}_idle`] : [`story_monari_${id}_overworld`, `story_monari_${id}_full`, `story_monari_${id}_profile`, `story_monari_${id}_idle`];
@@ -132,8 +180,11 @@ export class StoryOverworldScene extends Phaser.Scene {
   private fitImageHeight(img: Phaser.GameObjects.Image, targetHeight: number, human = false): void {
     const frame = img.frame;
     const { h: worldH, dpr } = this.worldSize();
-    const labHumanBoost = human && this.mapId === 'bond_lab_interior' ? 1.36 : 1;
-    const h = Phaser.Math.Clamp(targetHeight * labHumanBoost * dpr, 90 * dpr, Math.min(230 * dpr, worldH * 0.32));
+    const landscape = this.worldSize().w > worldH;
+    const labHumanBoost = human && this.mapId === 'bond_lab_interior' ? (landscape ? 1.18 : 1.36) : 1;
+    const labStarterTrim = !human && this.mapId === 'bond_lab_interior' && landscape ? 0.74 : 1;
+    const maxHeight = human && this.mapId === 'bond_lab_interior' ? worldH * (landscape ? 0.34 : 0.30) : worldH * (landscape ? 0.24 : 0.28);
+    const h = Phaser.Math.Clamp(targetHeight * labHumanBoost * labStarterTrim * dpr, 58 * dpr, Math.min(230 * dpr, maxHeight));
     img.setDisplaySize((frame.realWidth / frame.realHeight) * h, h);
   }
 
@@ -203,7 +254,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   private checkEdges(): void {
     if (this.edgeCooldown > 0) return;
     const { w, h, dpr } = this.worldSize();
-    const margin = 88 * dpr;
+    const margin = Math.max(24 * dpr, Math.min(w, h) * 0.045);
     const active: Record<StoryEdge, boolean> = {
       north: this.player.y <= margin,
       south: this.player.y >= h - margin,
@@ -220,13 +271,13 @@ export class StoryOverworldScene extends Phaser.Scene {
     this.state.mapId = mapId;
     this.state.spawn = spawn;
     this.saveState();
-    this.edgeCooldown = 650;
+    this.edgeCooldown = 950;
     this.edgeArmed = { north: false, south: false, west: false, east: false };
     this.cameras.main.fade(180, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p === 1) {
         this.mapId = mapId;
         this.buildMap();
-        this.time.delayedCall(260, () => { this.edgeArmed = { north: true, south: true, west: true, east: true }; });
+        this.time.delayedCall(700, () => { this.edgeArmed = { north: true, south: true, west: true, east: true }; });
         this.busy = false;
         this.cameras.main.fadeIn(180);
         if (mapId === 'bond_lab_interior' && !this.state.professorIntro) {
@@ -246,5 +297,5 @@ export class StoryOverworldScene extends Phaser.Scene {
   private startRivalBattle(): void { if (!this.state.starter || !this.state.renzoStarter) { this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Get a partner from the Bond Lab first.' }]); return; } const ctx: ClassicBattleContext = { returnMap: 'training_field', returnSpawn: 'south', playerMinariId: this.state.starter, enemyMinariId: this.state.renzoStarter, bondable: false, battleType: 'rival', playerLevel: 7, enemyLevel: 8 }; this.registry.set('classic_battle_context', ctx); this.scene.start('ClassicSoulDuelScene'); }
   private showWildEncounter(): void { const ids = Object.keys(STORY_MONARI) as StoryMonariDef['id'][]; const id = ids[Math.floor(Math.random() * ids.length)]; const level = Phaser.Math.Between(7, 10); this.ui.showDialogue([{ speaker: 'Soul Orb', text: `A wild ${STORY_MONARI[id].name} appeared! Lv.${level}. Battle bonding will unlock in the next story pass.` }]); }
   private showMenuStub(): void { this.ui.showDialogue([{ speaker: 'Bonder Menu', text: this.state.starter ? `Partner: ${STORY_MONARI[this.state.starter].name}. Full menu coming soon.` : 'Choose a partner in the Bond Lab. Full menu coming soon.' }]); }
-  private debugSpriteAudit(reason: string): void { const f = this.player?.frame; const bg = this.bg?.frame; const bounds = this.cameras.main.getBounds(); const diagnostics = { reason, scene: this.scene.key, map: this.mapId, viewport: `${this.worldSize().w}x${this.worldSize().h}`, camera: `vp ${this.cameras.main.x},${this.cameras.main.y} ${this.cameras.main.width}x${this.cameras.main.height} scroll ${this.cameras.main.scrollX},${this.cameras.main.scrollY} z${this.cameras.main.zoom}`, worldBounds: `${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}`, bgTexture: bg ? `${bg.realWidth}x${bg.realHeight}` : 'none', bgDisplay: this.bg ? `${Math.round(this.bg.displayWidth)}x${Math.round(this.bg.displayHeight)} @ ${Math.round(this.bg.x)},${Math.round(this.bg.y)} origin ${this.bg.originX},${this.bg.originY}` : 'none', playerTexture: this.player?.texture.key, playerTextureSize: f ? `${f.realWidth}x${f.realHeight}` : 'none', playerDisplay: this.player ? `${Math.round(this.player.displayWidth)}x${Math.round(this.player.displayHeight)} @ ${Math.round(this.player.x)},${Math.round(this.player.y)}` : 'none', playerScale: this.player ? `${this.player.scaleX.toFixed(3)},${this.player.scaleY.toFixed(3)}` : 'none' }; this.registry.set('story_layout_debug', [`story bg tex ${diagnostics.bgTexture} display ${diagnostics.bgDisplay}`, `story player ${diagnostics.playerTexture} tex ${diagnostics.playerTextureSize} display ${diagnostics.playerDisplay} scale ${diagnostics.playerScale}`, `story world ${diagnostics.worldBounds}`]); console.info('[story-overworld-layout]', diagnostics); }
+  private debugSpriteAudit(reason: string): void { const f = this.player?.frame; const bg = this.bg?.frame; const bounds = this.cameras.main.getBounds(); const diagnostics = { reason, scene: this.scene.key, map: this.mapId, viewport: `${this.worldSize().w}x${this.worldSize().h}`, camera: `vp ${this.cameras.main.x},${this.cameras.main.y} ${this.cameras.main.width}x${this.cameras.main.height} scroll ${this.cameras.main.scrollX},${this.cameras.main.scrollY} z${this.cameras.main.zoom}`, worldBounds: `${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}`, bgTexture: bg ? `${bg.realWidth}x${bg.realHeight}` : 'none', bgDisplay: this.bg ? `${Math.round(this.bg.displayWidth)}x${Math.round(this.bg.displayHeight)} @ ${Math.round(this.bg.x)},${Math.round(this.bg.y)} origin ${this.bg.originX},${this.bg.originY}` : 'none', playerTexture: this.player?.texture.key, playerTextureSize: f ? `${f.realWidth}x${f.realHeight}` : 'none', playerDisplay: this.player ? `${Math.round(this.player.displayWidth)}x${Math.round(this.player.displayHeight)} @ ${Math.round(this.player.x)},${Math.round(this.player.y)}` : 'none', playerScale: this.player ? `${this.player.scaleX.toFixed(3)},${this.player.scaleY.toFixed(3)}` : 'none' }; this.registry.set('story_layout_debug', [`story bg tex ${diagnostics.bgTexture} display ${diagnostics.bgDisplay}`, `story player ${diagnostics.playerTexture} tex ${diagnostics.playerTextureSize} display ${diagnostics.playerDisplay} scale ${diagnostics.playerScale}`, `story world ${diagnostics.worldBounds}`, `story transition cooldown ${Math.round(this.edgeCooldown)} margin ${Math.round(Math.max(24 * this.worldSize().dpr, Math.min(this.worldSize().w, this.worldSize().h) * 0.045))}`, ...this.actors.filter(a => a.sprite).map(a => `${a.id} ${a.sprite!.texture.key} ${this.cutoutDebug[a.sprite!.texture.key] ?? 'no trim'} display ${Math.round(a.sprite!.displayWidth)}x${Math.round(a.sprite!.displayHeight)} @ ${Math.round(a.sprite!.x)},${Math.round(a.sprite!.y)} origin ${a.sprite!.originX},${a.sprite!.originY}`)]); console.info('[story-overworld-layout]', diagnostics); }
 }
