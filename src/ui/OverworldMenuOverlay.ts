@@ -1,0 +1,458 @@
+import './OverworldMenuOverlay.css';
+import { MINARI_ROSTER } from '../data/minariData';
+import { elementLabel, rarityLabel } from '../config/uiTheme';
+
+// ── Element accent colours (CSS hex strings) ──────────────────────────────────
+
+const ELEM_CSS: Record<string, string> = {
+  fire:    '#ff6b35', water:   '#38c8ff', flora:   '#66c86d',
+  wind:    '#66e7de', thunder: '#ffe65c', stone:   '#a08a6a',
+  steel:   '#8899bb', light:   '#fff0b8', dark:    '#8b5cff',
+  aether:  '#d7c6ff', ice:     '#88ddff', neutral: '#9da3c7',
+  none:    '#9da3c7',
+};
+
+function elemCss(element: string | undefined): string {
+  return ELEM_CSS[element ?? 'neutral'] ?? ELEM_CSS.neutral;
+}
+
+// Stat bar fill % clamped to [0, 100]
+function statPct(value: number, max = 400): string {
+  return `${Math.min(100, Math.max(0, (value / max) * 100)).toFixed(1)}%`;
+}
+
+// ── Scale a base stat from level 1 to level 7 (simple linear growth) ─────────
+// The roster stores "level 1" base values. We simulate level 7 with +5% per level.
+const LEVEL_DISPLAY = 7;
+const LEVEL_GROWTH  = 0.05; // 5% per level above 1
+
+function scaleStat(base: number): number {
+  return Math.round(base * (1 + (LEVEL_DISPLAY - 1) * LEVEL_GROWTH));
+}
+
+// ── Menu item definitions ──────────────────────────────────────────────────────
+
+const BONDER_MENU_ITEMS = [
+  'Monari',
+  'Bag',
+  'Codex',
+  'Player',
+  'Settings',
+  'Save',
+  'Mode Select',
+  'Back / Close',
+] as const;
+
+type BonderMenuItem = typeof BONDER_MENU_ITEMS[number];
+
+// ── Callback interface ─────────────────────────────────────────────────────────
+
+export interface MenuCallbacks {
+  onClose:      () => void;
+  onModeSelect: () => void;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class OverworldMenuOverlay {
+  private root:   HTMLDivElement;
+  private panel:  HTMLDivElement;
+  private readonly cb: MenuCallbacks;
+
+  // Track the current team ids so Back from Detail can restore them
+  private currentTeamIds: string[] = [];
+
+  constructor(callbacks: MenuCallbacks) {
+    this.cb = callbacks;
+
+    this.root = document.createElement('div');
+    this.root.className = 'owmenu';
+
+    this.panel = document.createElement('div');
+    this.panel.className = 'owmenu__panel';
+
+    this.root.appendChild(this.panel);
+    document.body.appendChild(this.root);
+  }
+
+  // ── Visibility helpers ──────────────────────────────────────────────────────
+
+  isVisible(): boolean {
+    return this.root.classList.contains('owmenu--visible');
+  }
+
+  private show(): void {
+    this.root.classList.add('owmenu--visible');
+  }
+
+  private hide(): void {
+    this.root.classList.remove('owmenu--visible');
+  }
+
+  // ── Bonder Menu ─────────────────────────────────────────────────────────────
+
+  showBonderMenu(): void {
+    this.panel.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = 'Bonder Menu';
+    this.panel.appendChild(title);
+
+    const list = document.createElement('div');
+    list.className = 'owmenu__item-list';
+
+    for (const item of BONDER_MENU_ITEMS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'owmenu__item-btn';
+      btn.textContent = item;
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.handleBonderMenuClick(item as BonderMenuItem);
+      });
+      list.appendChild(btn);
+    }
+
+    this.panel.appendChild(list);
+    this.show();
+  }
+
+  private handleBonderMenuClick(item: BonderMenuItem): void {
+    switch (item) {
+      case 'Monari': {
+        // Show team with all roster IDs
+        const ids = Object.keys(MINARI_ROSTER);
+        this.showTeamScreen(ids);
+        break;
+      }
+      case 'Mode Select':
+        this.cb.onModeSelect();
+        break;
+      case 'Back / Close':
+        this.cb.onClose();
+        this.hide();
+        break;
+      default:
+        this.showComingSoon(item);
+        break;
+    }
+  }
+
+  private showComingSoon(featureName: string): void {
+    this.panel.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = featureName;
+    this.panel.appendChild(title);
+
+    const msg = document.createElement('div');
+    msg.className = 'owmenu__coming-soon';
+    msg.textContent = 'Coming soon…';
+    this.panel.appendChild(msg);
+
+    // Back button
+    const actions = document.createElement('div');
+    actions.className = 'owmenu__detail-actions';
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'owmenu__back-btn';
+    backBtn.textContent = '← Back';
+    backBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.showBonderMenu();
+    });
+    actions.appendChild(backBtn);
+
+    this.panel.appendChild(actions);
+  }
+
+  // ── Team screen ─────────────────────────────────────────────────────────────
+
+  showTeamScreen(teamIds: string[]): void {
+    this.currentTeamIds = [...teamIds];
+    this.panel.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = 'Monari Team';
+    this.panel.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'owmenu__team-grid';
+
+    for (const id of teamIds) {
+      const monari = MINARI_ROSTER[id];
+      if (!monari) continue;
+
+      const card = this.buildMonariCard(id);
+      grid.appendChild(card);
+    }
+
+    this.panel.appendChild(grid);
+
+    // Back button
+    const actions = document.createElement('div');
+    actions.className = 'owmenu__detail-actions';
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'owmenu__back-btn';
+    backBtn.textContent = '← Menu';
+    backBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.showBonderMenu();
+    });
+    actions.appendChild(backBtn);
+
+    this.panel.appendChild(actions);
+    this.show();
+  }
+
+  private buildMonariCard(id: string): HTMLDivElement {
+    const monari  = MINARI_ROSTER[id];
+    const elem    = monari?.element ?? 'neutral';
+    const color   = elemCss(elem);
+
+    const card = document.createElement('div');
+    card.className = 'owmenu__monari-card';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', monari?.name ?? id);
+
+    // Avatar
+    const img = document.createElement('img');
+    img.className = 'owmenu__card-avatar';
+    img.src = `assets/monari/${id}/portraits/neutral.png`;
+    img.alt = monari?.name ?? id;
+    img.draggable = false;
+    img.addEventListener('error', () => { img.style.display = 'none'; });
+    card.appendChild(img);
+
+    // Info column
+    const info = document.createElement('div');
+    info.className = 'owmenu__card-info';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'owmenu__card-name';
+    nameEl.textContent = monari?.name ?? id;
+    info.appendChild(nameEl);
+
+    const levelEl = document.createElement('div');
+    levelEl.className = 'owmenu__card-level';
+    levelEl.textContent = `Lv.${LEVEL_DISPLAY}`;
+    info.appendChild(levelEl);
+
+    const badge = document.createElement('span');
+    badge.className = 'owmenu__elem-badge';
+    badge.style.color = color;
+    badge.textContent = elementLabel(elem);
+    info.appendChild(badge);
+
+    // Mini bars (HP, Aura, Sync placeholder)
+    if (monari) {
+      const bars = document.createElement('div');
+      bars.className = 'owmenu__mini-bars';
+
+      const hp   = scaleStat(monari.stats.maxHp);
+      const aura = scaleStat(monari.stats.maxAura);
+
+      bars.appendChild(this.buildMiniBar('HP',  hp  / 600, '#3be071'));
+      bars.appendChild(this.buildMiniBar('AU',  aura / 400, '#36ccff'));
+      bars.appendChild(this.buildMiniBar('PWR', monari.stats.power / 150, color));
+
+      info.appendChild(bars);
+    }
+
+    card.appendChild(info);
+
+    card.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.showMonariDetail(id);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.showMonariDetail(id);
+      }
+    });
+
+    return card;
+  }
+
+  private buildMiniBar(label: string, ratio: number, color: string): HTMLDivElement {
+    const row = document.createElement('div');
+    row.className = 'owmenu__mini-bar';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'owmenu__mini-bar-label';
+    lbl.textContent = label;
+    row.appendChild(lbl);
+
+    const track = document.createElement('div');
+    track.className = 'owmenu__mini-bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'owmenu__mini-bar-fill';
+    fill.style.width = `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
+    fill.style.background = color;
+
+    track.appendChild(fill);
+    row.appendChild(track);
+    return row;
+  }
+
+  // ── Monari Detail screen ────────────────────────────────────────────────────
+
+  showMonariDetail(id: string): void {
+    const monari = MINARI_ROSTER[id];
+    if (!monari) return;
+
+    this.panel.innerHTML = '';
+
+    const elem    = monari.element ?? 'neutral';
+    const color   = elemCss(elem);
+
+    // ── Title ──
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = 'Monari Detail';
+    this.panel.appendChild(title);
+
+    // ── Header: large portrait + name/meta ──
+    const header = document.createElement('div');
+    header.className = 'owmenu__detail-header';
+
+    const portrait = document.createElement('img');
+    portrait.className = 'owmenu__detail-avatar';
+    portrait.src = `assets/monari/${id}/portraits/neutral.png`;
+    portrait.alt = monari.name;
+    portrait.draggable = false;
+    portrait.addEventListener('error', () => { portrait.style.display = 'none'; });
+    header.appendChild(portrait);
+
+    const meta = document.createElement('div');
+    meta.className = 'owmenu__detail-meta';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'owmenu__detail-name';
+    nameEl.textContent = monari.name;
+    meta.appendChild(nameEl);
+
+    const levelEl = document.createElement('div');
+    levelEl.className = 'owmenu__detail-level';
+    levelEl.textContent = `Lv.${LEVEL_DISPLAY}`;
+    meta.appendChild(levelEl);
+
+    const elemBadge = document.createElement('span');
+    elemBadge.className = 'owmenu__elem-badge';
+    elemBadge.style.color = color;
+    elemBadge.textContent = elementLabel(elem);
+    meta.appendChild(elemBadge);
+
+    const rarityEl = document.createElement('div');
+    rarityEl.className = 'owmenu__detail-rarity';
+    rarityEl.textContent = rarityLabel(monari.rarity);
+    meta.appendChild(rarityEl);
+
+    header.appendChild(meta);
+    this.panel.appendChild(header);
+
+    // ── Stats heading ──
+    const statsHeading = document.createElement('div');
+    statsHeading.className = 'owmenu__stats-heading';
+    statsHeading.textContent = 'Base Stats';
+    this.panel.appendChild(statsHeading);
+
+    // ── Stat rows — SINGLE COLUMN ONLY ──
+    const s = monari.stats;
+    const statDefs: Array<{ label: string; value: number }> = [
+      { label: 'HP',      value: scaleStat(s.maxHp)    },
+      { label: 'Attack',  value: scaleStat(s.power)     },
+      { label: 'Sp.Atk',  value: Math.round(scaleStat(s.power) * 0.88)  },
+      { label: 'Defense', value: scaleStat(s.defense)   },
+      { label: 'Sp.Def',  value: Math.round(scaleStat(s.defense) * 0.88) },
+      { label: 'Speed',   value: scaleStat(s.speed)     },
+      { label: 'Aura',    value: scaleStat(s.maxAura)   },
+    ];
+
+    const statRows = document.createElement('div');
+    statRows.className = 'owmenu__stat-rows';
+
+    for (const def of statDefs) {
+      statRows.appendChild(this.buildStatRow(def.label, def.value, color));
+    }
+
+    this.panel.appendChild(statRows);
+
+    // ── Action buttons ──
+    const actions = document.createElement('div');
+    actions.className = 'owmenu__detail-actions';
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'owmenu__back-btn';
+    backBtn.textContent = '← Team';
+    backBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.showTeamScreen(this.currentTeamIds);
+    });
+    actions.appendChild(backBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'owmenu__close-btn';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.hide();
+      this.cb.onClose();
+    });
+    actions.appendChild(closeBtn);
+
+    this.panel.appendChild(actions);
+    this.show();
+  }
+
+  private buildStatRow(label: string, value: number, barColor: string): HTMLDivElement {
+    const row = document.createElement('div');
+    row.className = 'owmenu__stat-row';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'owmenu__stat-label';
+    labelEl.textContent = label;
+    row.appendChild(labelEl);
+
+    const barWrap = document.createElement('div');
+    barWrap.className = 'owmenu__stat-bar-wrap';
+
+    const fill = document.createElement('div');
+    fill.className = 'owmenu__stat-fill';
+    fill.style.width  = statPct(value, 400);
+    fill.style.background = barColor;
+
+    barWrap.appendChild(fill);
+    row.appendChild(barWrap);
+
+    const valEl = document.createElement('span');
+    valEl.className = 'owmenu__stat-val';
+    valEl.textContent = String(value);
+    row.appendChild(valEl);
+
+    return row;
+  }
+
+  // ── Public close (called by external scene) ─────────────────────────────────
+
+  close(): void {
+    this.hide();
+  }
+
+  // ── Cleanup ─────────────────────────────────────────────────────────────────
+
+  destroy(): void {
+    this.root.remove();
+  }
+}

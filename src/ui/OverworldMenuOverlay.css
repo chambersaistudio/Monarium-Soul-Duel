@@ -1,0 +1,567 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MONARIUM Overworld Menu Overlay
+   Full-screen overlay: Bonder Menu | Monari Team | Monari Detail
+   Orbitron = titles/names/labels   Rajdhani = stats/sub-text
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.owmenu {
+  --owmenu-font-hud:  "Orbitron", "Rajdhani", monospace;
+  --owmenu-font-stat: "Rajdhani", "Orbitron", monospace;
+  --owmenu-c-bg:      rgba(2, 2, 10, 0.65);
+  --owmenu-c-panel:   rgba(8, 9, 24, 0.94);
+  --owmenu-c-panel-deep: rgba(5, 6, 18, 0.98);
+  --owmenu-c-border:  rgba(68, 78, 168, 0.50);
+  --owmenu-c-gold:    #ffe39a;
+  --owmenu-c-purple:  #8b5cff;
+  --owmenu-c-text:    #f0ecff;
+  --owmenu-c-muted:   #7a7498;
+  --owmenu-c-dim:     rgba(200, 190, 255, 0.25);
+  --owmenu-radius:    14px;
+  --owmenu-radius-sm: 8px;
+
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  pointer-events: none;
+  box-sizing: border-box;
+  font-family: var(--owmenu-font-stat);
+}
+
+/* ── Visible state ────────────────────────────────────────────────────────── */
+
+.owmenu--visible {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  /* semi-transparent dark veil */
+  background: var(--owmenu-c-bg);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────────── */
+
+.owmenu__panel {
+  pointer-events: auto;
+  background: var(--owmenu-c-panel);
+  border: 1px solid var(--owmenu-c-border);
+  border-radius: 0 0 var(--owmenu-radius) var(--owmenu-radius);
+  padding: 16px 14px 20px;
+  width: 100%;
+  max-width: 340px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 4, 0.75),
+    inset 0 1px 0 rgba(200, 190, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-sizing: border-box;
+  /* Scrollbar styling for dark theme */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 90, 180, 0.35) transparent;
+}
+
+.owmenu__panel::-webkit-scrollbar {
+  width: 4px;
+}
+.owmenu__panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.owmenu__panel::-webkit-scrollbar-thumb {
+  background: rgba(100, 90, 180, 0.40);
+  border-radius: 4px;
+}
+
+/* On wider screens, anchor the panel to the right side */
+@media (min-width: 600px) {
+  .owmenu--visible {
+    justify-content: flex-end;
+    align-items: flex-start;
+  }
+
+  .owmenu__panel {
+    border-radius: 0 0 0 var(--owmenu-radius);
+    margin-right: 0;
+  }
+}
+
+/* ── Section title ────────────────────────────────────────────────────────── */
+
+.owmenu__title {
+  font-family: var(--owmenu-font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--owmenu-c-gold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 200, 80, 0.20);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Item list (main menu + sub-menus) ────────────────────────────────────── */
+
+.owmenu__item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Individual menu item button ──────────────────────────────────────────── */
+
+.owmenu__item-btn {
+  width: 100%;
+  background: rgba(10, 12, 30, 0.88);
+  border: 1px solid rgba(68, 78, 168, 0.38);
+  border-radius: var(--owmenu-radius-sm);
+  padding: 11px 14px;
+  font-family: var(--owmenu-font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--owmenu-c-text);
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, border-color 0.10s, color 0.10s;
+  box-sizing: border-box;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.owmenu__item-btn:hover,
+.owmenu__item-btn:focus-visible {
+  background: rgba(20, 22, 56, 0.96);
+  border-color: rgba(139, 92, 255, 0.55);
+  color: #ffffff;
+}
+
+.owmenu__item-btn:active {
+  background: rgba(28, 22, 68, 0.98);
+}
+
+.owmenu__item-btn--active {
+  border-color: rgba(255, 200, 80, 0.65);
+  color: var(--owmenu-c-gold);
+  background: rgba(30, 22, 8, 0.92);
+}
+
+/* ── "Coming Soon" notice ─────────────────────────────────────────────────── */
+
+.owmenu__coming-soon {
+  padding: 18px 14px;
+  font-family: var(--owmenu-font-stat);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--owmenu-c-muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
+/* ── Monari Team grid ─────────────────────────────────────────────────────── */
+
+.owmenu__team-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── Individual Monari card ───────────────────────────────────────────────── */
+
+.owmenu__monari-card {
+  background: rgba(10, 12, 30, 0.90);
+  border: 1px solid rgba(68, 78, 168, 0.38);
+  border-radius: var(--owmenu-radius-sm);
+  padding: 8px 9px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, border-color 0.10s;
+  box-sizing: border-box;
+  user-select: none;
+  min-width: 0;
+}
+
+.owmenu__monari-card:hover,
+.owmenu__monari-card:focus-visible {
+  background: rgba(20, 22, 56, 0.96);
+  border-color: rgba(139, 92, 255, 0.55);
+}
+
+.owmenu__monari-card:active {
+  background: rgba(28, 22, 68, 0.98);
+}
+
+/* Avatar image on the card */
+.owmenu__card-avatar {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: rgba(20, 16, 48, 0.55);
+}
+
+/* Card info column */
+.owmenu__card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.owmenu__card-name {
+  font-family: var(--owmenu-font-hud);
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.owmenu__card-level {
+  font-family: var(--owmenu-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--owmenu-c-gold);
+  line-height: 1.1;
+  opacity: 0.82;
+}
+
+/* Element badge */
+.owmenu__elem-badge {
+  display: inline-block;
+  font-family: var(--owmenu-font-stat);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+  white-space: nowrap;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* ── Mini stat bars (HP / Aura / Sync) on cards ───────────────────────────── */
+
+.owmenu__mini-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.owmenu__mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.owmenu__mini-bar-label {
+  font-family: var(--owmenu-font-stat);
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--owmenu-c-muted);
+  width: 14px;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+
+.owmenu__mini-bar-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.owmenu__mini-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* ── Monari Detail screen ─────────────────────────────────────────────────── */
+
+.owmenu__detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(68, 78, 168, 0.30);
+}
+
+.owmenu__detail-avatar {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: rgba(20, 16, 48, 0.60);
+  border: 1px solid rgba(68, 78, 168, 0.35);
+}
+
+.owmenu__detail-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.owmenu__detail-name {
+  font-family: var(--owmenu-font-hud);
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owmenu__detail-level {
+  font-family: var(--owmenu-font-stat);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--owmenu-c-gold);
+  opacity: 0.85;
+}
+
+.owmenu__detail-rarity {
+  font-family: var(--owmenu-font-stat);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Stat section heading ─────────────────────────────────────────────────── */
+
+.owmenu__stats-heading {
+  font-family: var(--owmenu-font-hud);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--owmenu-c-muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ── Stat rows — SINGLE COLUMN ONLY, no two-column layout ────────────────── */
+
+.owmenu__stat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+.owmenu__stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.owmenu__stat-label {
+  font-family: var(--owmenu-font-stat);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--owmenu-c-muted);
+  width: 80px;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owmenu__stat-bar-wrap {
+  flex: 1;
+  height: 7px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.owmenu__stat-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.22s ease;
+}
+
+.owmenu__stat-val {
+  font-family: var(--owmenu-font-stat);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--owmenu-c-text);
+  width: 48px;
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Detail action buttons ────────────────────────────────────────────────── */
+
+.owmenu__detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(68, 78, 168, 0.25);
+}
+
+.owmenu__back-btn,
+.owmenu__close-btn {
+  background: rgba(10, 12, 30, 0.88);
+  border: 1px solid rgba(68, 78, 168, 0.40);
+  border-radius: var(--owmenu-radius-sm);
+  padding: 8px 16px;
+  font-family: var(--owmenu-font-hud);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--owmenu-c-text);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, border-color 0.10s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.owmenu__back-btn:hover,
+.owmenu__back-btn:focus-visible {
+  background: rgba(20, 22, 56, 0.96);
+  border-color: rgba(139, 92, 255, 0.55);
+}
+
+.owmenu__close-btn {
+  color: var(--owmenu-c-gold);
+  border-color: rgba(255, 200, 80, 0.40);
+}
+
+.owmenu__close-btn:hover,
+.owmenu__close-btn:focus-visible {
+  background: rgba(30, 22, 8, 0.96);
+  border-color: rgba(255, 200, 80, 0.70);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mobile landscape — short screens (max-height ≤ 480px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 480px) {
+  .owmenu__panel {
+    padding: 10px 10px 14px;
+    max-height: 95vh;
+  }
+
+  .owmenu__title {
+    font-size: 9px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+
+  .owmenu__item-btn {
+    padding: 8px 11px;
+    font-size: 10px;
+    border-radius: 6px;
+  }
+
+  .owmenu__item-list {
+    gap: 4px;
+  }
+
+  .owmenu__team-grid {
+    gap: 6px;
+  }
+
+  .owmenu__monari-card {
+    padding: 6px 7px;
+    gap: 6px;
+  }
+
+  .owmenu__card-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .owmenu__card-name {
+    font-size: 9px;
+  }
+
+  .owmenu__card-level {
+    font-size: 8px;
+  }
+
+  .owmenu__detail-header {
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .owmenu__detail-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 7px;
+  }
+
+  .owmenu__detail-name {
+    font-size: 13px;
+  }
+
+  .owmenu__detail-level {
+    font-size: 10px;
+  }
+
+  .owmenu__stat-rows {
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+
+  .owmenu__stat-label {
+    font-size: 9px;
+    width: 68px;
+  }
+
+  .owmenu__stat-bar-wrap {
+    height: 5px;
+  }
+
+  .owmenu__stat-val {
+    font-size: 10px;
+    width: 40px;
+  }
+
+  .owmenu__back-btn,
+  .owmenu__close-btn {
+    padding: 6px 12px;
+    font-size: 9px;
+  }
+}

@@ -1,0 +1,217 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MONARIUM Overworld Dialogue Overlay
+   Bottom-anchored glass panel: portrait left | text area right
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.owdlg {
+  --owdlg-font-hud:  "Orbitron", "Rajdhani", monospace;
+  --owdlg-font-body: "Rajdhani", "Orbitron", monospace;
+  --owdlg-c-bg:      rgba(7, 8, 20, 0.92);
+  --owdlg-c-border:  rgba(68, 78, 168, 0.55);
+  --owdlg-c-gold:    #ffe39a;
+  --owdlg-c-text:    #f0ecff;
+  --owdlg-c-muted:   #7a7498;
+  --owdlg-c-hint:    rgba(120, 110, 170, 0.70);
+  --owdlg-radius:    12px;
+
+  /* Hidden by default */
+  display: none;
+
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 55;
+  pointer-events: none;
+
+  /* Safe-area inset for notched/island devices */
+  padding-left:   env(safe-area-inset-left,   0px);
+  padding-right:  env(safe-area-inset-right,  0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+
+  box-sizing: border-box;
+  font-family: var(--owdlg-font-body);
+}
+
+/* ── Visible state ─────────────────────────────────────────────────────────── */
+
+.owdlg--visible {
+  display: block;
+}
+
+/* ── Glass panel ─────────────────────────────────────────────────────────── */
+
+.owdlg__panel {
+  background: var(--owdlg-c-bg);
+  border: 1px solid var(--owdlg-c-border);
+  border-bottom: none;
+  border-radius: var(--owdlg-radius) var(--owdlg-radius) 0 0;
+  margin: 0 8px;
+  padding: 10px 14px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  min-height: 100px;
+  box-shadow:
+    0 -4px 24px rgba(30, 20, 80, 0.45),
+    inset 0 1px 0 rgba(200, 190, 255, 0.10);
+}
+
+/* ── Portrait area ────────────────────────────────────────────────────────── */
+
+.owdlg__portrait-wrap {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(20, 16, 48, 0.80);
+  border: 2px solid rgba(139, 92, 255, 0.50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  box-shadow: 0 0 12px rgba(139, 92, 255, 0.25);
+}
+
+.owdlg__portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+/* ── Text area ────────────────────────────────────────────────────────────── */
+
+.owdlg__text-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.owdlg__speaker-name {
+  font-family: var(--owdlg-font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--owdlg-c-gold);
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 8px rgba(255, 200, 80, 0.35);
+}
+
+.owdlg__body {
+  font-family: var(--owdlg-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--owdlg-c-text);
+  line-height: 1.50;
+  /* Allows the text to wrap naturally */
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Advance hint (bottom-right) ──────────────────────────────────────────── */
+
+.owdlg__hint {
+  position: absolute;
+  bottom: 10px;
+  right: 16px;
+  font-family: var(--owdlg-font-body);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--owdlg-c-hint);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+/* Small blinking caret/chevron before the hint text */
+.owdlg__hint::before {
+  content: '▶';
+  font-size: 7px;
+  opacity: 0.60;
+  animation: owdlg-blink 1.1s ease-in-out infinite;
+}
+
+@keyframes owdlg-blink {
+  0%, 100% { opacity: 0.60; }
+  50%       { opacity: 0.18; }
+}
+
+/* ── Hidden hint (when hasMore = false) ───────────────────────────────────── */
+
+.owdlg__hint--hidden {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mobile landscape  (max-height ≤ 480px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .owdlg__panel {
+    padding: 7px 10px 10px;
+    gap: 9px;
+    min-height: 76px;
+    margin: 0 5px;
+  }
+
+  .owdlg__portrait-wrap {
+    width: 52px;
+    height: 52px;
+  }
+
+  .owdlg__speaker-name {
+    font-size: 10px;
+  }
+
+  .owdlg__body {
+    font-size: 12px;
+    line-height: 1.40;
+  }
+
+  .owdlg__hint {
+    font-size: 8px;
+    bottom: 7px;
+    right: 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Very small screens (max-height ≤ 380px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 380px) {
+  .owdlg__panel {
+    padding: 5px 8px 8px;
+    gap: 7px;
+    min-height: 64px;
+  }
+
+  .owdlg__portrait-wrap {
+    width: 40px;
+    height: 40px;
+  }
+
+  .owdlg__body {
+    font-size: 11px;
+  }
+}
