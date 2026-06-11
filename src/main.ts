@@ -64,7 +64,14 @@ game.events.on(Phaser.Core.Events.READY, () => {
   console.info('[render-resolution]', { dpr: getRenderDpr(), canvas: `${game.canvas.width}x${game.canvas.height}` });
 });
 game.events.on(Phaser.Core.Events.POST_RENDER, () => applyHighDpiCanvas(game));
-window.addEventListener('resize', () => requestAnimationFrame(() => applyHighDpiCanvas(game)), { passive: true });
+window.addEventListener('resize', () => requestAnimationFrame(() => {
+  game.scale.refresh();
+  applyHighDpiCanvas(game);
+}), { passive: true });
+window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(() => {
+  game.scale.refresh();
+  applyHighDpiCanvas(game);
+}), { passive: true });
 
 // Unlock Web Audio API on first interaction (required by iOS Safari)
 function tryUnlockAudio(): void {

@@ -8,11 +8,19 @@ export function getRenderDpr(): number {
   return Math.max(1, Math.min(MAX_RENDER_DPR, dpr));
 }
 
-export function cssCanvasSize(canvas: HTMLCanvasElement): { width: number; height: number } {
+export function cssCanvasSize(canvas: HTMLCanvasElement, game?: Phaser.Game): { width: number; height: number } {
+  // Prefer Phaser's CSS-pixel scale size over the current canvas bounds.
+  // The bounds can be stale for a frame during mobile orientation changes,
+  // and reusing them here can pin the canvas to the previous orientation.
+  const scale = game?.scale;
+  const scaleW = scale ? Math.round(scale.gameSize.width || scale.displaySize.width) : 0;
+  const scaleH = scale ? Math.round(scale.gameSize.height || scale.displaySize.height) : 0;
+  const viewportW = typeof window !== 'undefined' ? Math.round(window.visualViewport?.width ?? window.innerWidth) : 0;
+  const viewportH = typeof window !== 'undefined' ? Math.round(window.visualViewport?.height ?? window.innerHeight) : 0;
   const rect = canvas.getBoundingClientRect();
   return {
-    width: Math.max(1, Math.round(rect.width || canvas.clientWidth || canvas.width)),
-    height: Math.max(1, Math.round(rect.height || canvas.clientHeight || canvas.height)),
+    width: Math.max(1, scaleW || viewportW || Math.round(rect.width || canvas.clientWidth || canvas.width)),
+    height: Math.max(1, scaleH || viewportH || Math.round(rect.height || canvas.clientHeight || canvas.height)),
   };
 }
 
@@ -21,7 +29,7 @@ export function applyHighDpiCanvas(game: Phaser.Game): void {
   if (!canvas) return;
 
   const dpr = getRenderDpr();
-  const css = cssCanvasSize(canvas);
+  const css = cssCanvasSize(canvas, game);
   const renderW = Math.max(1, Math.round(css.width * dpr));
   const renderH = Math.max(1, Math.round(css.height * dpr));
 
@@ -56,7 +64,7 @@ export interface RenderDiagnostics {
 
 export function getRenderDiagnostics(scene: Phaser.Scene): RenderDiagnostics {
   const canvas = scene.game.canvas;
-  const css = cssCanvasSize(canvas);
+  const css = cssCanvasSize(canvas, scene.game);
   const scale = scene.scale;
   return {
     dpr: getRenderDpr(),

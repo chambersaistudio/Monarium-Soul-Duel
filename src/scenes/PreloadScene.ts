@@ -36,36 +36,53 @@ function thinFrames(stems: readonly string[], maxCount: number): string[] {
 
 export class PreloadScene extends Phaser.Scene {
   private loadErrors = new Set<string>();
+  private loadingTrack!: Phaser.GameObjects.Rectangle;
+  private loadingBar!: Phaser.GameObjects.Rectangle;
+  private titleText!: Phaser.GameObjects.Text;
+  private statusText!: Phaser.GameObjects.Text;
+  private safeModeText: Phaser.GameObjects.Text | null = null;
+  private debugText: Phaser.GameObjects.Text | null = null;
+  private progressValue = 0;
 
   constructor() {
     super({ key: 'PreloadScene' });
   }
 
   preload(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-
     // ── Loading bar ────────────────────────────────────────────────────────
-    this.add.rectangle(w / 2, h / 2, 300, 20, 0x222222);
-    const bar = this.add.rectangle(w / 2 - 150, h / 2, 0, 16, 0xff6600).setOrigin(0, 0.5);
-    this.add.text(w / 2, h / 2 - 40, 'MONARIUM', {
+    this.loadingTrack = this.add.rectangle(0, 0, 300, 20, 0x222222);
+    this.loadingBar = this.add.rectangle(0, 0, 0, 16, 0xff6600).setOrigin(0, 0.5);
+    this.titleText = this.add.text(0, 0, 'MONARIUM', {
       fontSize: '32px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
     // Status line — always visible so mobile users can see progress before crash
-    const statusText = this.add.text(w / 2, h / 2 + 30, 'Loading assets…', {
+    this.statusText = this.add.text(0, 0, 'Loading assets…', {
       fontSize: '11px', color: '#888888', fontFamily: 'monospace',
     }).setOrigin(0.5);
 
     if (SAFE_MODE) {
-      this.add.text(w / 2, h / 2 + 50, `Safe mode — ${NORM_SIZE}px textures`, {
+      this.safeModeText = this.add.text(0, 0, `Safe mode — ${NORM_SIZE}px textures`, {
         fontSize: '10px', color: '#446644', fontFamily: 'monospace',
       }).setOrigin(0.5);
     }
 
-    this.load.on('progress',     (v: number) => { bar.width = 296 * v; });
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')) {
+      this.debugText = this.add.text(0, 0, '', {
+        fontSize: '9px', color: '#777777', fontFamily: 'monospace', align: 'center',
+      }).setOrigin(0.5, 1);
+    }
+
+    this.layoutLoadingScreen();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
+    });
+
+    this.load.on('progress',     (v: number) => { this.progressValue = v; this.layoutLoadingScreen(); });
     this.load.on('fileprogress', (f: Phaser.Loader.File) => {
-      statusText.setText(f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key);
+      this.statusText.setText(f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key);
+      this.layoutLoadingScreen();
     });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
@@ -135,6 +152,34 @@ export class PreloadScene extends Phaser.Scene {
     // AudioManager skips missing keys at runtime.
     for (const [key, paths] of Object.entries(AUDIO_FILES)) {
       this.load.audio(key, paths);
+    }
+  }
+
+  private layoutLoadingScreen(): void {
+    const w = Math.max(1, this.scale.width || this.scale.gameSize.width);
+    const h = Math.max(1, this.scale.height || this.scale.gameSize.height);
+    const cx = w / 2;
+    const cy = h / 2;
+    const barW = Math.min(300, Math.max(180, w - 48));
+    const titleSize = Math.max(24, Math.min(34, Math.floor(w / 12)));
+
+    this.titleText?.setPosition(cx, cy - 44).setFontSize(titleSize);
+    this.loadingTrack?.setPosition(cx, cy).setSize(barW, 20);
+    this.loadingBar?.setPosition(cx - (barW - 4) / 2, cy).setSize((barW - 4) * this.progressValue, 16);
+    this.statusText?.setPosition(cx, cy + 30);
+    this.safeModeText?.setPosition(cx, cy + 50);
+
+    if (this.debugText) {
+      const canvas = this.game.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const orientation = w >= h ? 'landscape' : 'portrait';
+      this.debugText
+        .setPosition(cx, h - 8)
+        .setText([
+          `viewport ${Math.round(window.visualViewport?.width ?? window.innerWidth)}x${Math.round(window.visualViewport?.height ?? window.innerHeight)} ${orientation}`,
+          `scale ${Math.round(w)}x${Math.round(h)} css ${Math.round(rect.width)}x${Math.round(rect.height)} internal ${canvas.width}x${canvas.height}`,
+          `camera zoom ${this.cameras.main.zoom.toFixed(2)} center ${Math.round(cx)},${Math.round(cy)}`,
+        ]);
     }
   }
 
