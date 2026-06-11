@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
-import { hideModeSelectOverlay, showModeSelectOverlay, type ModeOverlayOption } from '../ui/bootOverlay';
+import { applyHighDpiCanvas } from '../config/highDpi';
+import { hideModeSelectOverlay, layoutDomOverlays, showModeSelectOverlay, type ModeOverlayOption } from '../ui/bootOverlay';
 
 const BASE_MODES: ModeOverlayOption[] = [
   {
@@ -81,7 +82,22 @@ export class ModeSelectScene extends Phaser.Scene {
     this.routing = true;
     this.audio.playUi(AUDIO_KEYS.ui.confirm);
     hideModeSelectOverlay();
-    this.scene.start(key);
+
+    // The game scenes are canvas-backed, unlike the DOM boot/mode overlays.
+    // Force the visualViewport -> #game -> canvas -> ScaleManager -> renderer
+    // chain to settle before scene creation so Overworld doesn't build from an
+    // old top-left canvas rectangle on mobile rotation.
+    layoutDomOverlays();
+    applyHighDpiCanvas(this.game, `mode-select:${key}:sync-now`);
+    requestAnimationFrame(() => {
+      layoutDomOverlays();
+      applyHighDpiCanvas(this.game, `mode-select:${key}:sync-raf`);
+      window.setTimeout(() => {
+        layoutDomOverlays();
+        applyHighDpiCanvas(this.game, `mode-select:${key}:sync-settled`);
+        this.scene.start(key);
+      }, 80);
+    });
   }
 
   private returnToTitle(): void {

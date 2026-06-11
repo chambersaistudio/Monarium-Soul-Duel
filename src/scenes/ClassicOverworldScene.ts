@@ -8,7 +8,7 @@ import { UI_THEME, elementColor, elementLabel, rarityLabel } from '../config/uiT
 import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
-import { getRenderDiagnostics } from '../config/highDpi';
+import { applyHighDpiCanvas, getRenderDiagnostics, getRenderDpr } from '../config/highDpi';
 import { OVERWORLD_MAPS } from '../data/overworldMaps';
 import { CHALLENGERS } from '../data/challengerData';
 import { PLAYER_PROFILE, renzoCounterPick } from '../data/playerProfile';
@@ -96,6 +96,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   create(): void {
+    applyHighDpiCanvas(this.game, 'overworld:create-before-layout');
+    this.cameras.main.setViewport(0, 0, this.game.renderer.width, this.game.renderer.height);
+    this.cameras.main.setZoom(getRenderDpr());
+    this.cameras.main.setScroll(0, 0);
     const { width: w, height: h } = this.scale;
     this.viewportW = w;
     this.viewportH = h;
@@ -1230,8 +1234,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     const diag = getRenderDiagnostics(this);
     const lines = [
-      `DPR ${diag.dpr} viewport ${diag.viewportSize} CSS ${diag.canvasCss} style ${diag.canvasStyle} internal ${diag.canvasInternal}`,
-      `parent ${diag.parentSize} game ${diag.phaserGameSize} renderer ${diag.rendererSize} camera z${diag.cameraZoom} vp ${diag.cameraViewport}`,
+      `DPR ${diag.dpr} viewport ${diag.viewportSize} canvas ${diag.canvasRect} style ${diag.canvasStyle} internal ${diag.canvasInternal}`,
+      `parent ${diag.parentRect} game ${diag.phaserGameSize} renderer ${diag.rendererSize} camera z${diag.cameraZoom} scroll ${diag.cameraScroll} vp ${diag.cameraViewport}`,
       `base ${diag.phaserBaseSize} display ${diag.phaserDisplaySize}`,
       ...this.assetDiagnosticLines(),
       `[DEBUG] ${this.mapId}  |  D=toggle  R=reset`,
@@ -1243,7 +1247,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const frameLine = (label: string, key: string | null, display?: { width: number; height: number; scaleX: number; scaleY: number }): string => {
       if (!key || !this.textures.exists(key)) return `${label}: missing`;
       const frame = this.textures.getFrame(key);
-      const disp = display ? ` display ${Math.round(display.width)}x${Math.round(display.height)} scale ${display.scaleX.toFixed(3)},${display.scaleY.toFixed(3)}` : '';
+      const pos = display && 'x' in display && 'y' in display ? ` xy ${Math.round((display as { x: number; y: number }).x)},${Math.round((display as { x: number; y: number }).y)}` : '';
+      const disp = display ? `${pos} display ${Math.round(display.width)}x${Math.round(display.height)} scale ${display.scaleX.toFixed(3)},${display.scaleY.toFixed(3)}` : '';
       return `${label}: ${key} tex ${frame.realWidth}x${frame.realHeight}${disp}`;
     };
     const starter = (this.registry.get('classic_player_starter') as string | null) ?? 'flarepaw';

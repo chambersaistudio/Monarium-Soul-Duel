@@ -162,14 +162,17 @@ export interface RenderDiagnostics {
   dpr: number;
   viewportSize: string;
   canvasCss: string;
+  canvasRect: string;
   canvasStyle: string;
   canvasInternal: string;
   parentSize: string;
+  parentRect: string;
   phaserGameSize: string;
   phaserBaseSize: string;
   phaserDisplaySize: string;
   rendererSize: string;
   cameraZoom: string;
+  cameraScroll: string;
   cameraViewport: string;
   sceneKey: string;
 }
@@ -185,14 +188,17 @@ export function getRenderDiagnostics(scene: Phaser.Scene): RenderDiagnostics {
     dpr: getRenderDpr(),
     viewportSize: `${css.width}x${css.height}`,
     canvasCss: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+    canvasRect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
     canvasStyle: `${canvas.style.width}x${canvas.style.height}`,
     canvasInternal: `${canvas.width}x${canvas.height}`,
     parentSize: parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none',
+    parentRect: parentRect ? `${Math.round(parentRect.x)},${Math.round(parentRect.y)} ${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none',
     phaserGameSize: `${Math.round(scale.gameSize.width)}x${Math.round(scale.gameSize.height)}`,
     phaserBaseSize: `${Math.round(scale.baseSize.width)}x${Math.round(scale.baseSize.height)}`,
     phaserDisplaySize: `${Math.round(scale.displaySize.width)}x${Math.round(scale.displaySize.height)}`,
     rendererSize: `${scene.game.renderer.width}x${scene.game.renderer.height}`,
     cameraZoom: camera.zoom.toFixed(2),
+    cameraScroll: `${Math.round(camera.scrollX)},${Math.round(camera.scrollY)}`,
     cameraViewport: `${Math.round(camera.x)},${Math.round(camera.y)} ${Math.round(camera.width)}x${Math.round(camera.height)}`,
     sceneKey: scene.scene.key,
   };
