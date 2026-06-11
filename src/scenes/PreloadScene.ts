@@ -4,7 +4,6 @@ import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/a
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
 import {
-  IS_TOUCH_DEVICE,
   SAFE_MODE,
   SAFE_SKIP_FOLDERS,
   SAFE_MAX_FRAMES,
@@ -42,32 +41,20 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    // Loading UI is handled by the #boot-overlay DOM element in index.html.
+    // Updating via DOM keeps the bar perfectly centred in any viewport/orientation —
+    // immune to Phaser coordinate-space timing during rotation.
+    const barEl    = document.getElementById('boot-bar')    as HTMLDivElement | null;
+    const statusEl = document.getElementById('boot-status') as HTMLDivElement | null;
 
-    // ── Loading bar ────────────────────────────────────────────────────────
-    this.add.rectangle(w / 2, h / 2, 300, 20, 0x222222);
-    const bar = this.add.rectangle(w / 2 - 150, h / 2, 0, 16, 0xff6600).setOrigin(0, 0.5);
-    this.add.text(w / 2, h / 2 - 40, 'MONARIUM', {
-      fontSize: '32px', color: '#ff6600', fontStyle: 'bold', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    // Status line — always visible so mobile users can see progress before crash
-    const statusText = this.add.text(w / 2, h / 2 + 30, 'Loading assets…', {
-      fontSize: '11px', color: '#888888', fontFamily: 'monospace',
-    }).setOrigin(0.5);
-
-    if (SAFE_MODE) {
-      this.add.text(w / 2, h / 2 + 50, `Safe mode — ${NORM_SIZE}px textures`, {
-        fontSize: '10px', color: '#446644', fontFamily: 'monospace',
-      }).setOrigin(0.5);
-    }
-
-    this.load.on('progress',     (v: number) => { bar.width = 296 * v; });
-    this.load.on('fileprogress', (f: Phaser.Loader.File) => {
-      statusText.setText(f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key);
+    this.load.on('progress', (v: number) => {
+      if (barEl) barEl.style.width = `${Math.round(v * 100)}%`;
     });
-    this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
+    this.load.on('fileprogress', (f: Phaser.Loader.File) => {
+      const label = f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key;
+      if (statusEl) statusEl.textContent = label;
+    });
+    this.load.on('loaderror', (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
     // ── Character sprites ──────────────────────────────────────────────────
     for (const [charId, manifest] of Object.entries(CHARACTERS_MANIFEST)) {
@@ -142,6 +129,17 @@ export class PreloadScene extends Phaser.Scene {
     for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
       this.createCharacter(charId);
     }
+
+    // Complete the DOM progress bar then fade-dismiss the boot overlay.
+    const barEl   = document.getElementById('boot-bar')     as HTMLDivElement | null;
+    const overlay = document.getElementById('boot-overlay') as HTMLDivElement | null;
+    if (barEl)   barEl.style.width = '100%';
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      // Remove from DOM after transition so it can't block pointer events in-game
+      this.time.delayedCall(400, () => overlay?.remove());
+    }
+
     this.scene.start('TitleScene');
   }
 
