@@ -23,19 +23,117 @@
       touch-action: none;
     }
     body { display: block; }
-    canvas {
+    #game, canvas {
       display: block;
       position: fixed;
       inset: 0;
       margin: 0;
       padding: 0;
+      width: 100vw;
+      height: 100dvh;
       max-width: none;
       max-height: none;
       transform: none;
       transform-origin: 0 0;
+      overflow: hidden;
       touch-action: none;
       outline: none;
+      background: #0a0a0f;
     }
+
+    #boot-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 8000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100dvh;
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      overflow: hidden;
+      color: #fff4d6;
+      background: radial-gradient(circle at 50% 38%, rgba(255, 102, 0, 0.18), rgba(10, 10, 15, 0.96) 54%, #05050a 100%);
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #boot-overlay[hidden] { display: none; }
+    .boot-card {
+      width: min(86vw, 520px);
+      text-align: center;
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+    }
+    .boot-title {
+      color: #ff7a1a;
+      font-size: clamp(34px, 9vw, 72px);
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 28px rgba(255, 78, 0, 0.72);
+    }
+    .boot-subtitle {
+      margin-top: 10px;
+      color: #ffbf72;
+      font-size: clamp(15px, 3.2vw, 28px);
+      font-weight: 700;
+      letter-spacing: 0.36em;
+    }
+    .boot-progress {
+      width: min(72vw, 360px);
+      height: 14px;
+      margin: 34px auto 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 138, 54, 0.45);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 18px rgba(255, 102, 0, 0.15);
+    }
+    #boot-progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ff5b1a, #ffb347);
+      transition: width 120ms linear;
+    }
+    #boot-status, #boot-hint {
+      font-family: Rajdhani, system-ui, sans-serif;
+      color: #b9b3d8;
+      font-size: clamp(13px, 2.6vw, 18px);
+      font-weight: 600;
+    }
+    #boot-hint { margin-top: 5px; color: #80799f; }
+    #boot-start-button {
+      margin-top: 28px;
+      min-width: 176px;
+      min-height: 48px;
+      border: 1px solid rgba(255, 190, 108, 0.72);
+      border-radius: 999px;
+      color: #fff3ce;
+      background: linear-gradient(180deg, rgba(255, 132, 48, 0.36), rgba(94, 34, 160, 0.38));
+      box-shadow: 0 0 24px rgba(255, 102, 0, 0.22);
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      touch-action: manipulation;
+    }
+    #mobile-debug-overlay {
+      position: fixed;
+      left: max(8px, env(safe-area-inset-left));
+      top: max(8px, env(safe-area-inset-top));
+      z-index: 10000;
+      max-width: calc(100vw - 16px);
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px;
+      color: #e8fff2;
+      background: rgba(0,0,0,0.68);
+      font: 10px/1.32 monospace;
+      white-space: pre-wrap;
+      pointer-events: none;
+    }
+    #mobile-debug-overlay[hidden] { display: none; }
 
     #rotate-overlay {
       display: none;
@@ -58,13 +156,21 @@
     #rotate-overlay h2   { font-size: 20px; letter-spacing: 3px; }
     #rotate-overlay p    { font-size: 13px; color: #555555; margin-top: 4px; }
 
-    /* Show only on touch devices in portrait */
-    @media (pointer: coarse) and (orientation: portrait) {
-      #rotate-overlay { display: flex; }
-    }
   </style>
 </head>
 <body>
+  <div id="game" aria-label="Monarium game canvas container"></div>
+  <div id="boot-overlay" role="dialog" aria-live="polite">
+    <div class="boot-card">
+      <div class="boot-title">MONARIUM</div>
+      <div class="boot-subtitle">SOUL DUEL</div>
+      <div class="boot-progress" aria-hidden="true"><div id="boot-progress-fill"></div></div>
+      <div id="boot-status">Loading assets…</div>
+      <div id="boot-hint">Preparing Soul Duel</div>
+      <button id="boot-start-button" type="button" hidden>START</button>
+    </div>
+  </div>
+  <pre id="mobile-debug-overlay" hidden></pre>
   <div id="rotate-overlay">
     <div class="icon">↺</div>
     <h2>ROTATE YOUR DEVICE</h2>

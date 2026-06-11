@@ -10,6 +10,7 @@ import {
   SAFE_MAX_FRAMES,
   NORM_SIZE,
 } from '../config/mobileConfig';
+import { setBootLoading } from '../ui/bootOverlay';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
@@ -74,15 +75,22 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     this.layoutLoadingScreen();
+    setBootLoading(this.progressValue, 'Loading assets…', SAFE_MODE);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
     });
 
-    this.load.on('progress',     (v: number) => { this.progressValue = v; this.layoutLoadingScreen(); });
-    this.load.on('fileprogress', (f: Phaser.Loader.File) => {
-      this.statusText.setText(f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key);
+    this.load.on('progress',     (v: number) => {
+      this.progressValue = v;
       this.layoutLoadingScreen();
+      setBootLoading(v, this.statusText.text, SAFE_MODE);
+    });
+    this.load.on('fileprogress', (f: Phaser.Loader.File) => {
+      const label = f.key.length > 48 ? `…${f.key.slice(-44)}` : f.key;
+      this.statusText.setText(label);
+      this.layoutLoadingScreen();
+      setBootLoading(this.progressValue, label, SAFE_MODE);
     });
     this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
@@ -184,6 +192,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
+    setBootLoading(1, 'Assets ready', SAFE_MODE);
     for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
       this.createCharacter(charId);
     }

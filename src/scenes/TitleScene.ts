@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
+import { hideBootOverlay, layoutDomOverlays, showStartOverlay } from '../ui/bootOverlay';
 
 interface Particle {
   x: number; y: number; vx: number; vy: number;
@@ -82,6 +83,7 @@ export class TitleScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(3);
     }
 
+    layoutDomOverlays();
     this.layoutStartScreen();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutStartScreen, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -93,7 +95,9 @@ export class TitleScene extends Phaser.Scene {
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
 
-    // Tap / click anywhere also advances (mobile and desktop)
+    showStartOverlay(() => this.startGame());
+
+    // Canvas tap / click is a fallback for desktop or if the DOM overlay is hidden.
     this.input.once('pointerup', () => this.startGame());
   }
 
@@ -140,6 +144,7 @@ export class TitleScene extends Phaser.Scene {
   private startGame(): void {
     if (this.starting) return;
     this.starting = true;
+    hideBootOverlay();
     this.cameras.main.fade(400, 0, 0, 0, false, (_cam: unknown, progress: number) => {
       if (progress === 1) this.scene.start('ModeSelectScene');
     });

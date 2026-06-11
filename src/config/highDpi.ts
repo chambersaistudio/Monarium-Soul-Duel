@@ -4,6 +4,7 @@ export const MAX_RENDER_DPR = 2;
 
 let lastAppliedKey = '';
 let lastLoggedKey = '';
+const DEBUG_ENABLED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 export function getRenderDpr(): number {
   if (typeof window === 'undefined') return 1;
@@ -78,6 +79,32 @@ function applyDomViewportStyles(canvas: HTMLCanvasElement, css: { width: number;
   canvas.style.transformOrigin = '0 0';
 }
 
+
+function updateDomDebug(game: Phaser.Game, reason: string, css: { width: number; height: number }, dpr: number): void {
+  if (!DEBUG_ENABLED || typeof document === 'undefined') return;
+  const overlay = document.getElementById('mobile-debug-overlay') as HTMLPreElement | null;
+  if (!overlay) return;
+  const canvas = game.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const parentRect = canvas.parentElement?.getBoundingClientRect();
+  const activeScenes = game.scene.getScenes(true);
+  const scene = activeScenes[activeScenes.length - 1];
+  const camera = scene?.cameras?.main;
+  overlay.hidden = false;
+  overlay.style.width = `${css.width}px`;
+  overlay.style.height = `${css.height}px`;
+  overlay.textContent = [
+    `[viewport-sync] ${reason}`,
+    `scene ${scene?.scene.key ?? 'n/a'} bootOverlay ${!(document.getElementById('boot-overlay') as HTMLElement | null)?.hidden}`,
+    `visualViewport ${css.width}x${css.height} window ${window.innerWidth}x${window.innerHeight} DPR ${dpr}`,
+    `parent ${parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none'}`,
+    `canvas css ${Math.round(rect.width)}x${Math.round(rect.height)} style ${canvas.style.width}x${canvas.style.height} internal ${canvas.width}x${canvas.height}`,
+    `renderer ${game.renderer.width}x${game.renderer.height}`,
+    `scale ${Math.round(game.scale.width)}x${Math.round(game.scale.height)} game ${Math.round(game.scale.gameSize.width)}x${Math.round(game.scale.gameSize.height)} base ${Math.round(game.scale.baseSize.width)}x${Math.round(game.scale.baseSize.height)} display ${Math.round(game.scale.displaySize.width)}x${Math.round(game.scale.displaySize.height)}`,
+    `camera z${camera?.zoom.toFixed(2) ?? 'n/a'} vp ${camera ? `${Math.round(camera.x)},${Math.round(camera.y)} ${Math.round(camera.width)}x${Math.round(camera.height)}` : 'n/a'}`,
+  ].join('\n');
+}
+
 export function applyHighDpiCanvas(game: Phaser.Game, reason = 'sync'): void {
   const canvas = game.canvas;
   if (!canvas) return;
@@ -110,6 +137,8 @@ export function applyHighDpiCanvas(game: Phaser.Game, reason = 'sync'): void {
   if (key !== lastAppliedKey) {
     lastAppliedKey = key;
   }
+
+  updateDomDebug(game, reason, css, dpr);
 
   const logKey = `${css.width}x${css.height}@${dpr}:${renderW}x${renderH}`;
   if (logKey !== lastLoggedKey) {

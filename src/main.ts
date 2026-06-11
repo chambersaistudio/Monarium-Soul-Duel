@@ -10,13 +10,14 @@ import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
 import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
+import { layoutDomOverlays } from './ui/bootOverlay';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 960,
   height: 600,
   backgroundColor: '#0a0a0f',
-  parent: document.body,
+  parent: 'game',
   physics: {
     default: 'arcade',
     arcade: {
@@ -40,7 +41,7 @@ const config: Phaser.Types.Core.GameConfig = {
     // RESIZE: canvas always matches the viewport exactly — no letterbox bars.
     // All scene positions are proportional to this.scale.width/height.
     mode: Phaser.Scale.RESIZE,
-    parent: document.body,
+    parent: 'game',
   },
   render: {
     antialias:   true,
@@ -61,6 +62,7 @@ const game = new Phaser.Game(config);
 // (clamped for mobile performance) and zoom cameras back to CSS-pixel world units.
 let viewportSyncTimer: number | undefined;
 function syncViewport(reason: string): void {
+  layoutDomOverlays();
   applyHighDpiCanvas(game, reason);
 }
 function scheduleViewportSync(reason: string): void {
