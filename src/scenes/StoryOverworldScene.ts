@@ -49,7 +49,7 @@ export class StoryOverworldScene extends Phaser.Scene {
 
   create(): void {
     applyHighDpiCanvas(this.game, 'story:create');
-    this.cameras.main.setViewport(0, 0, this.game.renderer.width, this.game.renderer.height).setZoom(getRenderDpr()).setScroll(0, 0);
+    this.syncStoryCamera();
     this.state = (this.registry.get('story_state') as StoryState | undefined) ?? { mapId: 'starter_village', spawn: 'default' };
     this.mapId = this.state.mapId;
     this.map = STORY_MAPS[this.mapId];
@@ -71,6 +71,19 @@ export class StoryOverworldScene extends Phaser.Scene {
   }
 
   private saveState(): void { this.registry.set('story_state', this.state); }
+  private worldSize(): { w: number; h: number; dpr: number } {
+    const dpr = getRenderDpr();
+    return {
+      w: Math.max(1, Math.round(this.game.renderer.width || this.scale.width * dpr)),
+      h: Math.max(1, Math.round(this.game.renderer.height || this.scale.height * dpr)),
+      dpr,
+    };
+  }
+  private syncStoryCamera(): void {
+    const { w, h } = this.worldSize();
+    this.cameras.main.setViewport(0, 0, w, h).setZoom(1).setScroll(0, 0);
+    this.cameras.main.setBounds(0, 0, w, h);
+  }
   private textureKey(keys: string[]): string { return keys.find(k => this.textures.exists(k)) ?? '__MISSING'; }
   private charTexture(id: keyof typeof STORY_CHARACTERS, purpose: 'portrait' | 'overworld' = 'overworld'): string {
     const order = purpose === 'portrait' ? [`story_char_${id}_portrait`, `story_char_${id}_full`, `story_char_${id}_overworld`] : [`story_char_${id}_overworld`, `story_char_${id}_full`, `story_char_${id}_portrait`];
@@ -83,7 +96,8 @@ export class StoryOverworldScene extends Phaser.Scene {
 
   private buildMap(): void {
     this.children.removeAll(true);
-    const { width: w, height: h } = this.scale;
+    this.syncStoryCamera();
+    const { w, h } = this.worldSize();
     this.map = STORY_MAPS[this.mapId];
     const bgKey = `story_bg_${this.map.id}`;
     const frame = this.textures.getFrame(bgKey);
@@ -104,43 +118,50 @@ export class StoryOverworldScene extends Phaser.Scene {
   }
 
   private relayout = (): void => {
+    const { w: oldW, h: oldH } = this.worldSize();
     applyHighDpiCanvas(this.game, 'story:resize');
-    const nx = this.player.x / Math.max(1, this.scale.width);
-    const ny = this.player.y / Math.max(1, this.scale.height);
+    const nx = this.player.x / Math.max(1, oldW);
+    const ny = this.player.y / Math.max(1, oldH);
     this.buildMap();
-    this.player.setPosition(nx * this.scale.width, ny * this.scale.height);
+    const { w, h } = this.worldSize();
+    this.player.setPosition(nx * w, ny * h);
   };
 
   private fitImageHeight(img: Phaser.GameObjects.Image, targetHeight: number): void {
     const frame = img.frame;
-    const h = Phaser.Math.Clamp(targetHeight, 90, Math.min(170, this.scale.height * 0.24));
+    const { h: worldH, dpr } = this.worldSize();
+    const h = Phaser.Math.Clamp(targetHeight * dpr, 90 * dpr, Math.min(170 * dpr, worldH * 0.24));
     img.setDisplaySize((frame.realWidth / frame.realHeight) * h, h);
   }
 
   private addInteraction(it: StoryInteraction): void {
-    const x = it.x * this.scale.width, y = it.y * this.scale.height;
+    const { w, h } = this.worldSize();
+    const x = it.x * w, y = it.y * h;
     let sprite: Phaser.GameObjects.Image | undefined;
     if (it.kind === 'professor') { sprite = this.add.image(x, y, this.charTexture('warren_ellis')).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS.warren_ellis.displayHeight); }
     if (it.kind === 'starter' && it.targetId) { sprite = this.add.image(x, y, this.monariTexture(it.targetId as StoryMonariDef['id'])).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, 108); }
-    const marker = this.add.circle(x, y, Math.max(22, it.radius * Math.min(this.scale.width, this.scale.height)), it.kind === 'lab' ? 0x8c5cff : 0xffbf72, 0.20).setStrokeStyle(2, 0xffffff, 0.34).setDepth(5);
-    this.actors.push({ id: it.id, kind: it.kind === 'starter' ? 'starter' : 'npc', targetId: it.targetId, label: it.label, sprite, marker, x, y, radius: it.radius * Math.min(this.scale.width, this.scale.height) });
+    const markerRadius = Math.max(22 * this.worldSize().dpr, it.radius * Math.min(w, h));
+    const marker = this.add.circle(x, y, markerRadius, it.kind === 'lab' ? 0x8c5cff : 0xffbf72, 0.20).setStrokeStyle(2 * this.worldSize().dpr, 0xffffff, 0.34).setDepth(5);
+    this.actors.push({ id: it.id, kind: it.kind === 'starter' ? 'starter' : 'npc', targetId: it.targetId, label: it.label, sprite, marker, x, y, radius: it.radius * Math.min(w, h) });
   }
 
   private addRenzoLab(): void { this.addActorSprite('renzo_lab', 'npc', 'Renzo', 'renzo', 0.76, 0.42); }
   private addRenzoTraining(): void { this.addActorSprite('renzo_training_live', 'npc', 'Renzo', 'renzo', 0.56, 0.42); }
   private addActorSprite(id: string, kind: Actor['kind'], label: string, charId: 'renzo', nx: number, ny: number): void {
-    const x = nx * this.scale.width, y = ny * this.scale.height;
+    const { w, h, dpr } = this.worldSize();
+    const x = nx * w, y = ny * h;
     const sprite = this.add.image(x, y, this.charTexture(charId)).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS[charId].displayHeight);
-    const marker = this.add.circle(x, y, 44, 0x8c5cff, 0.16).setStrokeStyle(2, 0xffbf72, 0.5).setDepth(5);
-    this.actors.push({ id, kind, label, sprite, marker, x, y, radius: 56 });
+    const marker = this.add.circle(x, y, 44 * dpr, 0x8c5cff, 0.16).setStrokeStyle(2 * dpr, 0xffbf72, 0.5).setDepth(5);
+    this.actors.push({ id, kind, label, sprite, marker, x, y, radius: 56 * dpr });
   }
   private addEncounterOrbs(): void {
     const colors = [0xe8e8ff, 0x4a9cff, 0xffd45a, 0xb46cff];
     [[0.34, 0.42], [0.58, 0.60], [0.72, 0.34]].forEach((p, i) => {
-      const x = p[0] * this.scale.width, y = p[1] * this.scale.height;
-      const marker = this.add.circle(x, y, 22, colors[i % colors.length], 0.35).setStrokeStyle(2, colors[i % colors.length], 0.9).setDepth(8);
+      const { w, h, dpr } = this.worldSize();
+      const x = p[0] * w, y = p[1] * h;
+      const marker = this.add.circle(x, y, 22 * dpr, colors[i % colors.length], 0.35).setStrokeStyle(2 * dpr, colors[i % colors.length], 0.9).setDepth(8);
       this.tweens.add({ targets: marker, scale: 1.25, alpha: 0.55, duration: 900, yoyo: true, repeat: -1 });
-      this.actors.push({ id: `orb_${i}`, kind: 'orb', label: 'Soul Orb', marker, x, y, radius: 34 });
+      this.actors.push({ id: `orb_${i}`, kind: 'orb', label: 'Soul Orb', marker, x, y, radius: 34 * dpr });
     });
   }
 
@@ -148,9 +169,10 @@ export class StoryOverworldScene extends Phaser.Scene {
     if (this.busy || this.ui.isDialogueOpen()) return;
     this.edgeCooldown = Math.max(0, this.edgeCooldown - delta);
     const vec = this.getMoveVector();
-    const speed = 185;
-    this.player.x = Phaser.Math.Clamp(this.player.x + vec.x * speed * delta / 1000, 18, this.scale.width - 18);
-    this.player.y = Phaser.Math.Clamp(this.player.y + vec.y * speed * delta / 1000, 70, this.scale.height - 18);
+    const { w, h, dpr } = this.worldSize();
+    const speed = 185 * dpr;
+    this.player.x = Phaser.Math.Clamp(this.player.x + vec.x * speed * delta / 1000, 18 * dpr, w - 18 * dpr);
+    this.player.y = Phaser.Math.Clamp(this.player.y + vec.y * speed * delta / 1000, 70 * dpr, h - 18 * dpr);
     this.updateNearest();
     this.checkEdges();
     if (this.interactKeys.some(k => Phaser.Input.Keyboard.JustDown(k))) this.interact();
@@ -175,7 +197,7 @@ export class StoryOverworldScene extends Phaser.Scene {
     else if (a.label === 'Renzo') this.handleRenzo();
     else if (a.kind === 'orb') this.showWildEncounter();
   }
-  private checkEdges(): void { if (this.edgeCooldown > 0) return; const x = this.player.x, y = this.player.y, w = this.scale.width, h = this.scale.height; const edge = y <= 24 ? 'north' : y >= h - 24 ? 'south' : x <= 24 ? 'west' : x >= w - 24 ? 'east' : null; const exit = edge && this.map.exits.find(e => e.edge === edge); if (exit) this.changeMap(exit.to, exit.spawn); }
+  private checkEdges(): void { if (this.edgeCooldown > 0) return; const x = this.player.x, y = this.player.y; const { w, h, dpr } = this.worldSize(); const edge = y <= 24 * dpr ? 'north' : y >= h - 24 * dpr ? 'south' : x <= 24 * dpr ? 'west' : x >= w - 24 * dpr ? 'east' : null; const exit = edge && this.map.exits.find(e => e.edge === edge); if (exit) this.changeMap(exit.to, exit.spawn); }
   private changeMap(mapId: StoryMapId, spawn: string): void { this.busy = true; this.state.mapId = mapId; this.state.spawn = spawn; this.saveState(); this.edgeCooldown = 400; this.cameras.main.fade(180, 0, 0, 0, false, (_: unknown, p: number) => { if (p === 1) { this.mapId = mapId; this.buildMap(); this.busy = false; this.cameras.main.fadeIn(180); if (mapId === 'bond_lab_interior' && !this.state.professorIntro) { this.state.professorIntro = true; this.saveState(); this.time.delayedCall(220, () => this.showProfessorIntro()); } } }); }
 
   private portrait(character: keyof typeof STORY_CHARACTERS): string | undefined { return STORY_CHARACTERS[character].assets.portrait ?? STORY_CHARACTERS[character].assets.fullBody; }
@@ -186,5 +208,5 @@ export class StoryOverworldScene extends Phaser.Scene {
   private startRivalBattle(): void { if (!this.state.starter || !this.state.renzoStarter) { this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Get a partner from the Bond Lab first.' }]); return; } const ctx: ClassicBattleContext = { returnMap: 'training_field', returnSpawn: 'south', playerMinariId: this.state.starter, enemyMinariId: this.state.renzoStarter, bondable: false, battleType: 'rival', playerLevel: 7, enemyLevel: 8 }; this.registry.set('classic_battle_context', ctx); this.scene.start('ClassicSoulDuelScene'); }
   private showWildEncounter(): void { const ids = Object.keys(STORY_MONARI) as StoryMonariDef['id'][]; const id = ids[Math.floor(Math.random() * ids.length)]; const level = Phaser.Math.Between(7, 10); this.ui.showDialogue([{ speaker: 'Soul Orb', text: `A wild ${STORY_MONARI[id].name} appeared! Lv.${level}. Battle bonding will unlock in the next story pass.` }]); }
   private showMenuStub(): void { this.ui.showDialogue([{ speaker: 'Bonder Menu', text: this.state.starter ? `Partner: ${STORY_MONARI[this.state.starter].name}. Full menu coming soon.` : 'Choose a partner in the Bond Lab. Full menu coming soon.' }]); }
-  private debugSpriteAudit(reason: string): void { const f = this.player?.frame; console.info('[story-overworld-sprites]', { reason, scene: this.scene.key, map: this.mapId, cameraZoom: this.cameras.main.zoom, playerTexture: this.player?.texture.key, playerTextureSize: f ? `${f.realWidth}x${f.realHeight}` : 'none', playerDisplay: this.player ? `${Math.round(this.player.displayWidth)}x${Math.round(this.player.displayHeight)}` : 'none', playerScale: this.player ? `${this.player.scaleX.toFixed(3)},${this.player.scaleY.toFixed(3)}` : 'none' }); }
+  private debugSpriteAudit(reason: string): void { const f = this.player?.frame; const bg = this.bg?.frame; const bounds = this.cameras.main.getBounds(); const diagnostics = { reason, scene: this.scene.key, map: this.mapId, viewport: `${this.worldSize().w}x${this.worldSize().h}`, camera: `vp ${this.cameras.main.x},${this.cameras.main.y} ${this.cameras.main.width}x${this.cameras.main.height} scroll ${this.cameras.main.scrollX},${this.cameras.main.scrollY} z${this.cameras.main.zoom}`, worldBounds: `${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}`, bgTexture: bg ? `${bg.realWidth}x${bg.realHeight}` : 'none', bgDisplay: this.bg ? `${Math.round(this.bg.displayWidth)}x${Math.round(this.bg.displayHeight)} @ ${Math.round(this.bg.x)},${Math.round(this.bg.y)} origin ${this.bg.originX},${this.bg.originY}` : 'none', playerTexture: this.player?.texture.key, playerTextureSize: f ? `${f.realWidth}x${f.realHeight}` : 'none', playerDisplay: this.player ? `${Math.round(this.player.displayWidth)}x${Math.round(this.player.displayHeight)} @ ${Math.round(this.player.x)},${Math.round(this.player.y)}` : 'none', playerScale: this.player ? `${this.player.scaleX.toFixed(3)},${this.player.scaleY.toFixed(3)}` : 'none' }; this.registry.set('story_layout_debug', [`story bg tex ${diagnostics.bgTexture} display ${diagnostics.bgDisplay}`, `story player ${diagnostics.playerTexture} tex ${diagnostics.playerTextureSize} display ${diagnostics.playerDisplay} scale ${diagnostics.playerScale}`, `story world ${diagnostics.worldBounds}`]); console.info('[story-overworld-layout]', diagnostics); }
 }

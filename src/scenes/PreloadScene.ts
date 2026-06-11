@@ -75,6 +75,7 @@ export class PreloadScene extends Phaser.Scene {
     }
 
     this.layoutLoadingScreen();
+    this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
     setBootLoading(this.progressValue, 'Loading assets…', SAFE_MODE);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutLoadingScreen, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

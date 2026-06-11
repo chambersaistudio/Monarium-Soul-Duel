@@ -96,6 +96,7 @@ export class TitleScene extends Phaser.Scene {
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
 
     showStartOverlay(() => this.startGame());
+    this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
 
     // Canvas tap / click is a fallback for desktop or if the DOM overlay is hidden.
     this.input.once('pointerup', () => this.startGame());
