@@ -7,6 +7,7 @@ import { StoryOverlayController, starterPreviewImage, type StoryDialogueLine } f
 import type { ClassicBattleContext } from '../types/overworld';
 
 const PLAYER_NAME = 'Corn';
+type StoryEdge = 'north' | 'south' | 'west' | 'east';
 type StoryState = { mapId: StoryMapId; spawn: string; starter?: StoryMonariDef['id']; starterGender?: StoryGender; renzoStarter?: StoryMonariDef['id']; professorIntro?: boolean; renzoIntro?: boolean };
 
 type Actor = { id: string; kind: 'npc' | 'starter' | 'orb'; targetId?: string; label: string; sprite?: Phaser.GameObjects.Image; marker: Phaser.GameObjects.Arc; x: number; y: number; radius: number };
@@ -26,6 +27,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   private nearest: Actor | null = null;
   private busy = false;
   private edgeCooldown = 0;
+  private edgeArmed: Record<StoryEdge, boolean> = { north: true, south: true, west: true, east: true };
 
   constructor() { super({ key: 'StoryOverworldScene' }); }
 
@@ -106,7 +108,7 @@ export class StoryOverworldScene extends Phaser.Scene {
 
     const spawn = this.map.spawns[this.state.spawn] ?? this.map.spawns.default;
     this.player = this.add.image(spawn.x * w, spawn.y * h, this.charTexture('player')).setDepth(20).setOrigin(0.5, 1);
-    this.fitImageHeight(this.player, STORY_CHARACTERS.player.displayHeight);
+    this.fitImageHeight(this.player, STORY_CHARACTERS.player.displayHeight, true);
 
     this.actors = [];
     for (const it of this.map.interactions) this.addInteraction(it);
@@ -127,10 +129,11 @@ export class StoryOverworldScene extends Phaser.Scene {
     this.player.setPosition(nx * w, ny * h);
   };
 
-  private fitImageHeight(img: Phaser.GameObjects.Image, targetHeight: number): void {
+  private fitImageHeight(img: Phaser.GameObjects.Image, targetHeight: number, human = false): void {
     const frame = img.frame;
     const { h: worldH, dpr } = this.worldSize();
-    const h = Phaser.Math.Clamp(targetHeight * dpr, 90 * dpr, Math.min(170 * dpr, worldH * 0.24));
+    const labHumanBoost = human && this.mapId === 'bond_lab_interior' ? 1.36 : 1;
+    const h = Phaser.Math.Clamp(targetHeight * labHumanBoost * dpr, 90 * dpr, Math.min(230 * dpr, worldH * 0.32));
     img.setDisplaySize((frame.realWidth / frame.realHeight) * h, h);
   }
 
@@ -138,7 +141,7 @@ export class StoryOverworldScene extends Phaser.Scene {
     const { w, h } = this.worldSize();
     const x = it.x * w, y = it.y * h;
     let sprite: Phaser.GameObjects.Image | undefined;
-    if (it.kind === 'professor') { sprite = this.add.image(x, y, this.charTexture('warren_ellis')).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS.warren_ellis.displayHeight); }
+    if (it.kind === 'professor') { sprite = this.add.image(x, y, this.charTexture('warren_ellis')).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS.warren_ellis.displayHeight, true); }
     if (it.kind === 'starter' && it.targetId) { sprite = this.add.image(x, y, this.monariTexture(it.targetId as StoryMonariDef['id'])).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, 108); }
     const markerRadius = Math.max(22 * this.worldSize().dpr, it.radius * Math.min(w, h));
     const marker = this.add.circle(x, y, markerRadius, it.kind === 'lab' ? 0x8c5cff : 0xffbf72, 0.20).setStrokeStyle(2 * this.worldSize().dpr, 0xffffff, 0.34).setDepth(5);
@@ -150,7 +153,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   private addActorSprite(id: string, kind: Actor['kind'], label: string, charId: 'renzo', nx: number, ny: number): void {
     const { w, h, dpr } = this.worldSize();
     const x = nx * w, y = ny * h;
-    const sprite = this.add.image(x, y, this.charTexture(charId)).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS[charId].displayHeight);
+    const sprite = this.add.image(x, y, this.charTexture(charId)).setOrigin(0.5, 1).setDepth(12); this.fitImageHeight(sprite, STORY_CHARACTERS[charId].displayHeight, true);
     const marker = this.add.circle(x, y, 44 * dpr, 0x8c5cff, 0.16).setStrokeStyle(2 * dpr, 0xffbf72, 0.5).setDepth(5);
     this.actors.push({ id, kind, label, sprite, marker, x, y, radius: 56 * dpr });
   }
@@ -197,13 +200,48 @@ export class StoryOverworldScene extends Phaser.Scene {
     else if (a.label === 'Renzo') this.handleRenzo();
     else if (a.kind === 'orb') this.showWildEncounter();
   }
-  private checkEdges(): void { if (this.edgeCooldown > 0) return; const x = this.player.x, y = this.player.y; const { w, h, dpr } = this.worldSize(); const edge = y <= 24 * dpr ? 'north' : y >= h - 24 * dpr ? 'south' : x <= 24 * dpr ? 'west' : x >= w - 24 * dpr ? 'east' : null; const exit = edge && this.map.exits.find(e => e.edge === edge); if (exit) this.changeMap(exit.to, exit.spawn); }
-  private changeMap(mapId: StoryMapId, spawn: string): void { this.busy = true; this.state.mapId = mapId; this.state.spawn = spawn; this.saveState(); this.edgeCooldown = 400; this.cameras.main.fade(180, 0, 0, 0, false, (_: unknown, p: number) => { if (p === 1) { this.mapId = mapId; this.buildMap(); this.busy = false; this.cameras.main.fadeIn(180); if (mapId === 'bond_lab_interior' && !this.state.professorIntro) { this.state.professorIntro = true; this.saveState(); this.time.delayedCall(220, () => this.showProfessorIntro()); } } }); }
+  private checkEdges(): void {
+    if (this.edgeCooldown > 0) return;
+    const { w, h, dpr } = this.worldSize();
+    const margin = 88 * dpr;
+    const active: Record<StoryEdge, boolean> = {
+      north: this.player.y <= margin,
+      south: this.player.y >= h - margin,
+      west: this.player.x <= margin,
+      east: this.player.x >= w - margin,
+    };
+    (Object.keys(active) as StoryEdge[]).forEach(edge => { if (!active[edge]) this.edgeArmed[edge] = true; });
+    const edge = (Object.keys(active) as StoryEdge[]).find(e => active[e] && this.edgeArmed[e]);
+    const exit = edge && this.map.exits.find(e => e.edge === edge);
+    if (edge && exit) { this.edgeArmed[edge] = false; this.changeMap(exit.to, exit.spawn); }
+  }
+  private changeMap(mapId: StoryMapId, spawn: string): void {
+    this.busy = true;
+    this.state.mapId = mapId;
+    this.state.spawn = spawn;
+    this.saveState();
+    this.edgeCooldown = 650;
+    this.edgeArmed = { north: false, south: false, west: false, east: false };
+    this.cameras.main.fade(180, 0, 0, 0, false, (_: unknown, p: number) => {
+      if (p === 1) {
+        this.mapId = mapId;
+        this.buildMap();
+        this.time.delayedCall(260, () => { this.edgeArmed = { north: true, south: true, west: true, east: true }; });
+        this.busy = false;
+        this.cameras.main.fadeIn(180);
+        if (mapId === 'bond_lab_interior' && !this.state.professorIntro) {
+          this.state.professorIntro = true;
+          this.saveState();
+          this.time.delayedCall(220, () => this.showProfessorIntro());
+        }
+      }
+    });
+  }
 
   private portrait(character: keyof typeof STORY_CHARACTERS): string | undefined { return STORY_CHARACTERS[character].assets.portrait ?? STORY_CHARACTERS[character].assets.fullBody; }
-  private showProfessorIntro(): void { this.ui.showDialogue([{ speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: `Welcome, ${PLAYER_NAME}. I’m Dr. Warren Ellis. This is the Bond Lab, where new Bonders meet their first partner.` }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Three Monari are waiting here. Each one carries a different element and a different path.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Walk up to a Monari and press A to learn about it. When you’re ready, choose your partner.' }]); }
+  private showProfessorIntro(): void { this.ui.showDialogue([{ speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: `Welcome, ${PLAYER_NAME}. I’m Dr. Warren Ellis. This is the Bond Lab, where new Bonders meet their first partner.` }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Three Monari are waiting here. Each one carries a different element and a different path.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Walk up to a Monari and tap to learn about it. When you’re ready, choose your partner.' }]); }
   private previewStarter(id: StoryMonariDef['id']): void { const gender = randomStoryGender(); this.ui.showStarterPreview({ monari: STORY_MONARI[id], gender, image: starterPreviewImage(id), onCancel: () => this.ui.hideStarterPreview(), onChoose: () => this.chooseStarter(id, gender) }); }
-  private chooseStarter(id: StoryMonariDef['id'], gender: StoryGender): void { this.ui.hideStarterPreview(); this.state.starter = id; this.state.starterGender = gender; this.state.renzoStarter = renzoCounterPick(id); this.saveState(); this.ui.setHud({ mapName: this.map.displayName, playerName: PLAYER_NAME, starter: STORY_MONARI[id].name }); const renzoPick = STORY_MONARI[this.state.renzoStarter].name; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Yo, so that’s your pick?' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: `Not bad. But if you’re choosing that one, I’m taking ${renzoPick}.` }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Meet me at the Training Field. Let’s see if your bond is real.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Renzo never waits long. Head north to the Training Field when you’re ready.' }], () => this.buildMap()); }
+  private chooseStarter(id: StoryMonariDef['id'], gender: StoryGender): void { this.ui.hideStarterPreview(); this.state.starter = id; this.state.starterGender = gender; this.state.renzoStarter = renzoCounterPick(id); this.state.renzoIntro = true; this.saveState(); this.ui.setHud({ mapName: this.map.displayName, playerName: PLAYER_NAME, starter: STORY_MONARI[id].name }); const renzoPick = STORY_MONARI[this.state.renzoStarter].name; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Yo, so that’s your pick?' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: `Not bad. But if you’re choosing that one, I’m taking ${renzoPick}.` }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Meet me at the Training Field. Let’s see if your bond is real.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Renzo never waits long. Head north to the Training Field when you’re ready.' }], () => this.buildMap()); }
   private handleRenzo(): void { if (this.mapId !== 'training_field') return; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'There you are. I was starting to think you got scared.' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Your first bond is new. Mine is already battle-ready.' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Let’s make this quick. Show me what your partner can do.' }], () => this.startRivalBattle()); }
   private startRivalBattle(): void { if (!this.state.starter || !this.state.renzoStarter) { this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Get a partner from the Bond Lab first.' }]); return; } const ctx: ClassicBattleContext = { returnMap: 'training_field', returnSpawn: 'south', playerMinariId: this.state.starter, enemyMinariId: this.state.renzoStarter, bondable: false, battleType: 'rival', playerLevel: 7, enemyLevel: 8 }; this.registry.set('classic_battle_context', ctx); this.scene.start('ClassicSoulDuelScene'); }
   private showWildEncounter(): void { const ids = Object.keys(STORY_MONARI) as StoryMonariDef['id'][]; const id = ids[Math.floor(Math.random() * ids.length)]; const level = Phaser.Math.Between(7, 10); this.ui.showDialogue([{ speaker: 'Soul Orb', text: `A wild ${STORY_MONARI[id].name} appeared! Lv.${level}. Battle bonding will unlock in the next story pass.` }]); }

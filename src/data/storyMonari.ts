@@ -15,7 +15,7 @@ export interface StoryMonariDef {
     overworld?: string;
     battleIdle: string;
   };
-  stats: { hp: number; aura: number; soulSync: number; level: number };
+  stats: { hp: number; attack: number; defense: number; specialAttack: number; specialDefense: number; speed: number; aura: number; soulSync: number; level: number };
 }
 
 export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
@@ -31,7 +31,7 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
       fullBody: 'assets/monari/flarepaw/reference/neutral.png',
       battleIdle: 'assets/monari/flarepaw/idle/frame_002.png',
     },
-    stats: { hp: 99, aura: 51, soulSync: 70, level: 7 },
+    stats: { hp: 99, attack: 62, defense: 44, specialAttack: 55, specialDefense: 42, speed: 68, aura: 51, soulSync: 70, level: 7 },
   },
   droplet: {
     id: 'droplet',
@@ -44,7 +44,7 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
     assets: {
       battleIdle: 'assets/monari/droplet/idle/frame_002.png',
     },
-    stats: { hp: 92, aura: 58, soulSync: 70, level: 7 },
+    stats: { hp: 92, attack: 48, defense: 50, specialAttack: 64, specialDefense: 57, speed: 54, aura: 58, soulSync: 70, level: 7 },
   },
   sproutodon: {
     id: 'sproutodon',
@@ -60,7 +60,7 @@ export const STORY_MONARI: Record<StoryMonariDef['id'], StoryMonariDef> = {
       fullBody: 'assets/monari/sproutodon/reference/fullbody.png',
       battleIdle: 'assets/monari/sproutodon/reference/battle_ref.png',
     },
-    stats: { hp: 112, aura: 44, soulSync: 70, level: 7 },
+    stats: { hp: 112, attack: 50, defense: 70, specialAttack: 42, specialDefense: 68, speed: 34, aura: 44, soulSync: 70, level: 7 },
   },
 };
 

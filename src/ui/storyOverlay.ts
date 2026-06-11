@@ -13,9 +13,9 @@ function ensureRoot(): HTMLElement {
     root.innerHTML = `
       <div class="story-hud"><div><b id="story-player">Corn</b><span id="story-partner">No partner</span></div><div id="story-map">Starter Village</div></div>
       <div id="story-prompt" class="story-prompt" hidden></div>
-      <div id="story-dialogue" class="story-dialogue" hidden><img id="story-dialogue-portrait" alt=""><div class="story-dialogue-copy"><b id="story-dialogue-speaker"></b><p id="story-dialogue-text"></p><small>Tap / A / Enter</small></div></div>
+      <div id="story-dialogue" class="story-dialogue" hidden><img id="story-dialogue-portrait" alt=""><div class="story-dialogue-copy"><b id="story-dialogue-speaker"></b><p id="story-dialogue-text"></p><small>Tap</small></div></div>
       <div id="story-starter-card" class="story-starter-card" hidden></div>
-      <div class="story-controls"><div id="story-joy" class="story-joy"><div id="story-joy-thumb"></div></div><div class="story-actions"><button id="story-a" type="button">A</button><button id="story-menu" type="button">MENU</button></div></div>
+      <button id="story-menu" class="story-menu-button" type="button">MENU</button><div class="story-controls"><div id="story-joy" class="story-joy"><div id="story-joy-thumb"></div></div><div class="story-actions"><button id="story-a" type="button">A</button></div></div>
     `;
     document.body.appendChild(root);
   }
@@ -75,6 +75,8 @@ export class StoryOverlayController {
     this.dialogueDone = done ?? null;
     const box = el('story-dialogue');
     box.hidden = false;
+    this.root.classList.add('story-dialogue-active');
+    this.releaseStick();
     box.onclick = this.dialogueAdvance;
     this.advanceDialogue();
   }
@@ -83,6 +85,7 @@ export class StoryOverlayController {
     const line = this.dialogueQueue.shift();
     if (!line) {
       el('story-dialogue').hidden = true;
+      this.root.classList.remove('story-dialogue-active');
       const done = this.dialogueDone;
       this.dialogueDone = null;
       done?.();
@@ -98,15 +101,31 @@ export class StoryOverlayController {
   showStarterPreview(state: StarterPreviewState): void {
     const card = el('story-starter-card');
     card.hidden = false;
+    this.root.classList.add('story-modal-active');
+    this.releaseStick();
     const genderIcon = state.gender === 'male' ? 'assets/ui/icons/gender_male.png' : 'assets/ui/icons/gender_female.png';
     card.innerHTML = `
       <div class="story-starter-art">${state.image ? `<img src="${state.image}" alt="${state.monari.name}">` : ''}</div>
-      <div class="story-starter-info"><h2>${state.monari.name}</h2><div class="story-starter-meta"><img src="${state.monari.elementIcon}" alt=""> ${state.monari.elementLabel} <img src="${genderIcon}" alt="${state.gender}"> Lv.${state.monari.stats.level}</div><p>${state.monari.description}</p><div class="story-stats"><span>HP ${state.monari.stats.hp}</span><span>Aura ${state.monari.stats.aura}</span><span>Sync ${state.monari.stats.soulSync}%</span></div><div class="story-starter-buttons"><button id="story-choose">Choose as partner?</button><button id="story-cancel">Back</button></div></div>`;
+      <div class="story-starter-info">
+        <h2>${state.monari.name}</h2>
+        <div class="story-starter-meta"><img src="${state.monari.elementIcon}" alt=""> ${state.monari.elementLabel} <span>•</span> Lv.${state.monari.stats.level} <img src="${genderIcon}" alt="${state.gender}"></div>
+        <p><strong>Role:</strong> ${state.monari.role}</p>
+        <p>${state.monari.description}</p>
+        <div class="story-stats">
+          <span><b>HP</b> ${state.monari.stats.hp}</span>
+          <span><b>Attack</b> ${state.monari.stats.attack}</span>
+          <span><b>Defense</b> ${state.monari.stats.defense}</span>
+          <span><b>Special Attack</b> ${state.monari.stats.specialAttack}</span>
+          <span><b>Special Defense</b> ${state.monari.stats.specialDefense}</span>
+          <span><b>Speed</b> ${state.monari.stats.speed}</span>
+        </div>
+        <div class="story-starter-buttons"><button id="story-choose">Choose as partner?</button><button id="story-cancel">Back</button></div>
+      </div>`;
     el<HTMLButtonElement>('story-choose').onclick = state.onChoose;
     el<HTMLButtonElement>('story-cancel').onclick = state.onCancel;
   }
 
-  hideStarterPreview(): void { el('story-starter-card').hidden = true; }
+  hideStarterPreview(): void { el('story-starter-card').hidden = true; this.root.classList.remove('story-modal-active'); }
   isDialogueOpen(): boolean { return !el('story-dialogue').hidden || !el('story-starter-card').hidden; }
   handleAdvance(): void { if (!el('story-dialogue').hidden) this.advanceDialogue(); else this.interactCb(); }
 
