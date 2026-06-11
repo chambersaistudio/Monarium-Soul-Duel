@@ -59,19 +59,26 @@ const game = new Phaser.Game(config);
 // ScaleManager `zoom` changes CSS sizing rather than the drawing-buffer DPR.
 // Keep scene/layout units in CSS pixels, but render into a DPR-sized canvas
 // (clamped for mobile performance) and zoom cameras back to CSS-pixel world units.
+let viewportSyncTimer: number | undefined;
+function syncViewport(reason: string): void {
+  applyHighDpiCanvas(game, reason);
+}
+function scheduleViewportSync(reason: string): void {
+  syncViewport(reason);
+  requestAnimationFrame(() => syncViewport(`${reason}:raf`));
+  window.clearTimeout(viewportSyncTimer);
+  viewportSyncTimer = window.setTimeout(() => syncViewport(`${reason}:settled`), 250);
+}
+
 game.events.on(Phaser.Core.Events.READY, () => {
-  applyHighDpiCanvas(game);
+  syncViewport('ready');
   console.info('[render-resolution]', { dpr: getRenderDpr(), canvas: `${game.canvas.width}x${game.canvas.height}` });
 });
-game.events.on(Phaser.Core.Events.POST_RENDER, () => applyHighDpiCanvas(game));
-window.addEventListener('resize', () => requestAnimationFrame(() => {
-  game.scale.refresh();
-  applyHighDpiCanvas(game);
-}), { passive: true });
-window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(() => {
-  game.scale.refresh();
-  applyHighDpiCanvas(game);
-}), { passive: true });
+game.events.on(Phaser.Core.Events.PRE_RENDER, () => syncViewport('pre-render'));
+window.addEventListener('resize', () => scheduleViewportSync('window-resize'), { passive: true });
+window.addEventListener('orientationchange', () => scheduleViewportSync('orientationchange'), { passive: true });
+window.visualViewport?.addEventListener('resize', () => scheduleViewportSync('visualViewport-resize'), { passive: true });
+window.visualViewport?.addEventListener('scroll', () => scheduleViewportSync('visualViewport-scroll'), { passive: true });
 
 // Unlock Web Audio API on first interaction (required by iOS Safari)
 function tryUnlockAudio(): void {

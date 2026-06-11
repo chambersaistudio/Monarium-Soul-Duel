@@ -1192,12 +1192,13 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     const diag = getRenderDiagnostics(this);
     const lines = [
-      `DPR ${diag.dpr}  CSS ${diag.canvasCss}  internal ${diag.canvasInternal}`,
-      `game ${diag.phaserGameSize}  base ${diag.phaserBaseSize}  display ${diag.phaserDisplaySize}  renderer ${diag.rendererSize}`,
+      `DPR ${diag.dpr} viewport ${diag.viewportSize} CSS ${diag.canvasCss} style ${diag.canvasStyle} internal ${diag.canvasInternal}`,
+      `parent ${diag.parentSize} game ${diag.phaserGameSize} renderer ${diag.rendererSize} camera z${diag.cameraZoom} vp ${diag.cameraViewport}`,
+      `base ${diag.phaserBaseSize} display ${diag.phaserDisplaySize}`,
       ...this.assetDiagnosticLines(),
       `[DEBUG] ${this.mapId}  |  D=toggle  R=reset`,
     ];
-    lines.forEach((line, i) => label(line, w / 2, h - 58 + i * 12, i < 3 ? '#ffffff' : '#ffff00'));
+    lines.forEach((line, i) => label(line, w / 2, h - 70 + i * 12, i < 4 ? '#ffffff' : '#ffff00'));
   }
 
   private assetDiagnosticLines(): string[] {
