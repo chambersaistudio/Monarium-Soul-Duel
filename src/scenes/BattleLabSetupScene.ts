@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHighDpiCanvas } from '../config/highDpi';
 import { MINARI_ROSTER } from '../data/minariData';
 import { UI_THEME, elementColor, elementLabel } from '../config/uiTheme';
 import { drawGlassPanel } from '../ui/phaserUi';
@@ -22,6 +23,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
   constructor() { super({ key: 'BattleLabSetupScene' }); }
 
   create(): void {
+    applyHighDpiCanvas(this.game, 'battle-lab-setup:create');
     this.playerIdx   = 0;
     this.enemyIdx    = 1;
     this.playerLevel = 7;
@@ -213,7 +215,15 @@ export class BattleLabSetupScene extends Phaser.Scene {
     };
     this.registry.set('classic_battle_context', ctx);
     this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
-      if (p === 1) this.scene.start('ClassicSoulDuelScene');
+      if (p !== 1) return;
+      applyHighDpiCanvas(this.game, 'battle-lab:start-battle:sync-now');
+      requestAnimationFrame(() => {
+        applyHighDpiCanvas(this.game, 'battle-lab:start-battle:sync-raf');
+        window.setTimeout(() => {
+          applyHighDpiCanvas(this.game, 'battle-lab:start-battle:sync-settled');
+          this.scene.start('ClassicSoulDuelScene');
+        }, 80);
+      });
     });
   }
 }
