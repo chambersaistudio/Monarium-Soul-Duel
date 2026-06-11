@@ -8,6 +8,7 @@ import { UI_THEME, elementColor, elementLabel, rarityLabel } from '../config/uiT
 import { getMonariVisualPaths, getCharacterVisualPaths, visualCandidates } from '../config/assetManifest';
 import { preloadVisualCandidates, bestLoadedVisualKey, drawGlassPanel } from '../ui/phaserUi';
 import { IS_TOUCH_DEVICE, SAFE_AREA_BOTTOM } from '../config/mobileConfig';
+import { getRenderDiagnostics } from '../config/highDpi';
 import { OVERWORLD_MAPS } from '../data/overworldMaps';
 import { CHALLENGERS } from '../data/challengerData';
 import { PLAYER_PROFILE, renzoCounterPick } from '../data/playerProfile';
@@ -41,6 +42,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private walkSpeed: number = PLAYER_PROFILE.walkSpeed;
   private scl        = 1;
   private playerImg: Phaser.GameObjects.Image | null = null;
+  private bgImg: Phaser.GameObjects.Image | null = null;
 
   // Interact prompt — can target an NPC or a requiresInteract exit
   private interactPrompt!: Phaser.GameObjects.Text;
@@ -107,7 +109,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
 
-    this.scl     = w / 960;
+    this.scl     = IS_TOUCH_DEVICE
+      ? Phaser.Math.Clamp(Math.min(w / 520, h / 360), 0.72, 1.05)
+      : w / 960;
     this.playerW = Math.round(PLAYER_W_REF * this.scl);
     this.playerH = Math.round(PLAYER_H_REF * this.scl);
     this.walkSpeed = PLAYER_PROFILE.walkSpeed * this.scl;
@@ -190,6 +194,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
       .on('down', () => { this.debugMode = !this.debugMode; this.updateDebugOverlay(w, h); });
 
     if (this.debugMode) this.updateDebugOverlay(w, h);
+    this.logRenderDiagnostics('create');
 
     // ── Audio ─────────────────────────────────────────────────────────────────
     this.audio = new AudioManager(this);
@@ -251,7 +256,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
     if (this.textures.exists(this.mapDef.bgKey)) {
       const frame = this.textures.getFrame(this.mapDef.bgKey);
       const scale = Math.max(w / frame.realWidth, h / frame.realHeight);
-      this.add.image(w / 2, h / 2, this.mapDef.bgKey).setDepth(0).setScale(scale);
+      this.bgImg = this.add.image(w / 2, h / 2, this.mapDef.bgKey)
+        .setDepth(0)
+        .setScale(scale);
     } else {
       const bg = this.add.graphics().setDepth(0);
       for (let i = 0; i < h; i += 4) {
@@ -284,18 +291,16 @@ export class ClassicOverworldScene extends Phaser.Scene {
         if (this.textures.exists(owKey)) {
           imgKey = owKey;
         } else {
-          for (const k of [`monari_${monariId}_portrait`, `monari_${monariId}_reference`]) {
-            if (this.textures.exists(k)) { imgKey = k; break; }
-          }
+          const fallback = bestLoadedVisualKey(this, 'monari', monariId, npc.color);
+          if (!fallback.startsWith('generated_')) imgKey = fallback;
         }
       } else {
         const owKey = `ow_char_${npc.id}`;
         if (this.textures.exists(owKey)) {
           imgKey = owKey;
         } else {
-          for (const k of [`character_${npc.id}_reference`, `character_${npc.id}_portrait`]) {
-            if (this.textures.exists(k)) { imgKey = k; break; }
-          }
+          const fallback = bestLoadedVisualKey(this, 'character', npc.id, npc.color);
+          if (!fallback.startsWith('generated_')) imgKey = fallback;
         }
       }
 
@@ -507,9 +512,37 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── Modern HUD / Start Menu ────────────────────────────────────────────────
 
   private buildOverworldHud(w: number): void {
+    const { height: h } = this.scale;
+    const mob = IS_TOUCH_DEVICE;
     const starterId = (this.registry.get('classic_player_starter') as string | null) ?? 'No starter';
     const starterName = starterId === 'No starter' ? 'Choose a starter' : (MINARI_ROSTER[starterId]?.name ?? starterId);
     const playerKey = bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
+
+    if (mob) {
+      const top = 8;
+      const avatarSize = 32;
+      const menuW = 68;
+      const profileW = Math.min(210, Math.max(154, w - menuW - 34));
+      const g = this.add.graphics().setDepth(50);
+      drawGlassPanel(g, 10, top, profileW, 46, { radius: 15, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.72 });
+      this.add.image(30, top + 23, playerKey).setDisplaySize(avatarSize, avatarSize).setDepth(51);
+      this.add.text(52, top + 14, this.getPlayerName(), { fontSize: '12px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(51);
+      this.add.text(52, top + 31, starterName, { fontSize: '9px', color: '#ffdf91', fontFamily: UI_THEME.fonts.family }).setDepth(51);
+
+      const menuX = w - menuW - 10;
+      const menu = this.add.graphics().setDepth(50);
+      drawGlassPanel(menu, menuX, top, menuW, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.72 });
+      menu.setInteractive(new Phaser.Geom.Rectangle(menuX, top, menuW, 34), Phaser.Geom.Rectangle.Contains);
+      menu.on('pointerdown', () => this.startMenuActive ? this.closeStartMenu() : this.openStartMenu());
+      this.menuBtnText = this.add.text(menuX + menuW / 2, top + 17, 'MENU', { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+
+      const locW = Math.min(220, w - 28);
+      const loc = this.add.graphics().setDepth(50);
+      drawGlassPanel(loc, (w - locW) / 2, h - SAFE_AREA_BOTTOM - 42, locW, 30, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.58 });
+      this.add.text(w / 2, h - SAFE_AREA_BOTTOM - 27, this.mapDef.displayName, { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+      return;
+    }
+
     const g = this.add.graphics().setDepth(50);
     drawGlassPanel(g, 12, 10, 236, 56, { radius: 16, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.72 });
     this.add.image(39, 38, playerKey).setDisplaySize(38, 38).setDepth(51);
@@ -518,7 +551,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
     const loc = this.add.graphics().setDepth(50);
     drawGlassPanel(loc, w / 2 - 112, 12, 224, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.66 });
-    this.add.text(w / 2, 29, this.mapDef.displayName, { fontSize: IS_TOUCH_DEVICE ? '13px' : '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+    this.add.text(w / 2, 29, this.mapDef.displayName, { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
 
     const menu = this.add.graphics().setDepth(50);
     drawGlassPanel(menu, w - 82, 12, 70, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.68 });
@@ -558,28 +591,28 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.58).setDepth(110));
 
     // Mobile: centred panel fitted to viewport; Desktop: right-aligned panel
-    const panW = mob ? Math.min(280, w - 40) : 260;
-    const panH = mob ? h - 56 : h - 112;
+    const panW = mob ? Math.min(300, w - 28) : 260;
+    const panY = mob ? 16 : 56;
+    const panH = mob ? Math.max(244, h - panY - SAFE_AREA_BOTTOM - 14) : h - 112;
     const panX = mob ? (w - panW) / 2 : w - panW - 32;
-    const panY = mob ? 28 : 56;
 
     const panel = this.startObj(this.add.graphics().setDepth(111));
     drawGlassPanel(panel, panX, panY, panW, panH, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
 
     const titleFontSize = mob ? '17px' : '20px';
-    const titleH = mob ? 46 : 66;
+    const titleH = mob ? 40 : 66;
     this.startObj(this.add.text(panX + panW / 2, panY + (mob ? 20 : 24), 'Bonder Menu', {
       fontSize: titleFontSize, color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(112));
 
     const opts = ['Monari', 'Bag', 'Codex', 'Player', 'Settings', 'Save', 'Mode Select', 'Back / Close'];
     const n = opts.length;
-    const bottomPad = 10;
+    const bottomPad = mob ? 8 : 10;
     const availH = panH - titleH - bottomPad;
-    const itemGap = 4;
-    const itemH = Math.max(mob ? 26 : 30, Math.min(mob ? 36 : 40, Math.floor((availH - (n - 1) * itemGap) / n)));
-    const itemW = panW - 32;
-    const itemX = panX + 16;
+    const itemGap = mob ? 3 : 4;
+    const itemH = Math.max(mob ? 23 : 30, Math.min(mob ? 34 : 40, Math.floor((availH - (n - 1) * itemGap) / n)));
+    const itemW = panW - (mob ? 24 : 32);
+    const itemX = panX + (mob ? 12 : 16);
     const firstY = panY + titleH;
 
     opts.forEach((label, i) => {
@@ -610,10 +643,14 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private showMenuPlaceholder(label: string): void {
     this.showStartRoot();
     const { width: w, height: h } = this.scale;
+    const mob = IS_TOUCH_DEVICE;
+    const panW = mob ? Math.min(w - 32, 310) : 390;
+    const panX = mob ? (w - panW) / 2 : 54;
+    const panY = mob ? Math.max(72, h / 2 - 50) : h / 2 - 54;
     const g = this.startObj(this.add.graphics().setDepth(114));
-    drawGlassPanel(g, 54, h / 2 - 54, 390, 108, { radius: 20, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.88 });
-    this.startObj(this.add.text(249, h / 2 - 18, `${label} coming soon`, { fontSize: '18px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(115));
-    this.startObj(this.add.text(249, h / 2 + 16, 'Prototype menu panel is reserved for a future UI pass.', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setOrigin(0.5).setDepth(115));
+    drawGlassPanel(g, panX, panY, panW, 100, { radius: 20, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.88 });
+    this.startObj(this.add.text(panX + panW / 2, panY + 34, `${label} coming soon`, { fontSize: mob ? '15px' : '18px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(115));
+    this.startObj(this.add.text(panX + panW / 2, panY + 64, 'Prototype panel reserved for a future UI pass.', { fontSize: mob ? '10px' : '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setOrigin(0.5).setDepth(115));
   }
 
   private getTeamIds(): string[] {
@@ -625,35 +662,47 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private showTeamScreen(): void {
     this.clearStartMenu();
     const { width: w, height: h } = this.scale;
+    const mob = IS_TOUCH_DEVICE;
     this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.62).setDepth(110));
     const bg = this.startObj(this.add.graphics().setDepth(111));
-    drawGlassPanel(bg, 36, 36, w - 72, h - 72, { radius: 24, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
-    this.startObj(this.add.text(62, 58, 'Monari Team', { fontSize: '23px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
-    this.makeStartButton(w - 150, 54, 92, 32, 'Back', () => this.showStartRoot());
-    this.makeStartButton(w - 252, 54, 92, 32, 'Close', () => this.closeStartMenu());
+    const pad = mob ? 14 : 36;
+    drawGlassPanel(bg, pad, pad, w - pad * 2, h - pad * 2 - (mob ? SAFE_AREA_BOTTOM : 0), { radius: mob ? 20 : 24, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
+    this.startObj(this.add.text(pad + 18, pad + 22, 'Monari Team', { fontSize: mob ? '18px' : '23px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+    this.makeStartButton(w - pad - 86, pad + 16, 72, 30, 'Back', () => this.showStartRoot());
+    if (!mob) this.makeStartButton(w - 252, 54, 92, 32, 'Close', () => this.closeStartMenu());
     const team = this.getTeamIds();
     const ids = team.length ? team : ['flarepaw'];
-    ids.forEach((id, i) => this.drawTeamCard(id, 64 + (i % 2) * ((w - 160) / 2), 108 + Math.floor(i / 2) * 126, (w - 190) / 2));
+    if (mob) {
+      const cardW = w - pad * 2 - 24;
+      const cardH = Math.min(102, Math.max(86, (h - pad * 2 - SAFE_AREA_BOTTOM - 72) / Math.max(1, ids.length)));
+      ids.forEach((id, i) => this.drawTeamCard(id, pad + 12, pad + 60 + i * (cardH + 8), cardW, cardH));
+    } else {
+      ids.forEach((id, i) => this.drawTeamCard(id, 64 + (i % 2) * ((w - 160) / 2), 108 + Math.floor(i / 2) * 126, (w - 190) / 2));
+    }
   }
 
-  private drawTeamCard(id: string, x: number, y: number, cw: number): void {
+  private drawTeamCard(id: string, x: number, y: number, cw: number, ch = 104): void {
     const data = MINARI_ROSTER[id] ?? MINARI_ROSTER.flarepaw;
     const color = elementColor(data.element);
+    const mob = IS_TOUCH_DEVICE;
     const g = this.startObj(this.add.graphics().setDepth(112));
-    drawGlassPanel(g, x, y, cw, 104, { radius: 18, fill: UI_THEME.colors.glass, stroke: color, glow: color, alpha: 0.76 });
-    g.setInteractive(new Phaser.Geom.Rectangle(x, y, cw, 104), Phaser.Geom.Rectangle.Contains);
+    drawGlassPanel(g, x, y, cw, ch, { radius: 18, fill: UI_THEME.colors.glass, stroke: color, glow: color, alpha: 0.76 });
+    g.setInteractive(new Phaser.Geom.Rectangle(x, y, cw, ch), Phaser.Geom.Rectangle.Contains);
     g.on('pointerdown', () => this.showMonariDetail(id));
     const key = bestLoadedVisualKey(this, 'monari', id, color);
-    this.startObj(this.add.image(x + 44, y + 52, key).setDisplaySize(70, 70).setDepth(113));
-    this.startObj(this.add.text(x + 86, y + 14, `${data.name}  Lv. 7`, { fontSize: '15px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(113));
-    this.startObj(this.add.text(x + 86, y + 35, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • Bond Lv. 1`, { fontSize: '10px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
+    const imgSize = mob ? Math.min(62, ch - 20) : 70;
+    this.startObj(this.add.image(x + imgSize / 2 + 12, y + ch / 2, key).setDisplaySize(imgSize, imgSize).setDepth(113));
+    const textX = x + imgSize + 28;
+    this.startObj(this.add.text(textX, y + 14, `${data.name}  Lv. 7`, { fontSize: mob ? '14px' : '15px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(113));
+    this.startObj(this.add.text(textX, y + 34, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • Bond Lv. 1`, { fontSize: mob ? '9px' : '10px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
     const meters = [['HP', data.stats.maxHp, data.stats.maxHp, UI_THEME.bars.hp], ['Aura', data.stats.maxAura, data.stats.maxAura, UI_THEME.bars.aura], ['Soul Sync', 70, 100, UI_THEME.bars.soulSync]] as const;
+    const barX = textX + (mob ? 56 : 56);
+    const barW = Math.max(48, cw - (barX - x) - 14);
     meters.forEach((m, idx) => {
-      const yy = y + 56 + idx * 14;
-      this.startObj(this.add.text(x + 86, yy - 2, m[0], { fontSize: '8px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
-      const bar = this.startObj(this.add.rectangle(x + 142, yy, cw - 160, 7, UI_THEME.bars.track, 0.85).setOrigin(0, 0).setDepth(113));
-      void bar;
-      this.startObj(this.add.rectangle(x + 142, yy, (cw - 160) * (m[1] / m[2]), 7, m[3], 0.95).setOrigin(0, 0).setDepth(114));
+      const yy = y + 54 + idx * (mob ? 12 : 14);
+      this.startObj(this.add.text(textX, yy - 2, m[0], { fontSize: '8px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(113));
+      this.startObj(this.add.rectangle(barX, yy, barW, 7, UI_THEME.bars.track, 0.85).setOrigin(0, 0).setDepth(113));
+      this.startObj(this.add.rectangle(barX, yy, barW * (m[1] / m[2]), 7, m[3], 0.95).setOrigin(0, 0).setDepth(114));
     });
   }
 
@@ -662,15 +711,49 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const { width: w, height: h } = this.scale;
     const data = MINARI_ROSTER[id] ?? MINARI_ROSTER.flarepaw;
     const color = elementColor(data.element);
+    const mob = IS_TOUCH_DEVICE;
     this.startObj(this.add.rectangle(w / 2, h / 2, w, h, 0x02020a, 0.66).setDepth(110));
     const g = this.startObj(this.add.graphics().setDepth(111));
-    drawGlassPanel(g, 46, 34, w - 92, h - 68, { radius: 26, fill: UI_THEME.colors.panelDeep, stroke: color, glow: color, alpha: 0.92 });
+    const pad = mob ? 14 : 46;
+    drawGlassPanel(g, pad, pad, w - pad * 2, h - pad * 2 - (mob ? SAFE_AREA_BOTTOM : 0), { radius: mob ? 20 : 26, fill: UI_THEME.colors.panelDeep, stroke: color, glow: color, alpha: 0.92 });
     const key = bestLoadedVisualKey(this, 'monari', id, color);
+
+    if (mob) {
+      const imageSize = Math.min(108, Math.max(82, w * 0.28));
+      this.startObj(this.add.image(pad + 58, pad + 82, key).setDisplaySize(imageSize, imageSize).setDepth(112));
+      const textX = pad + 116;
+      this.startObj(this.add.text(textX, pad + 26, `${data.name}  Lv. 7`, { fontSize: '18px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+      this.startObj(this.add.text(textX, pad + 51, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)}`, { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.startObj(this.add.text(textX, pad + 70, this.starterRole(id), { fontSize: '10px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      const metricY = pad + 124;
+      const metricW = (w - pad * 2 - 28) / 4;
+      [['HP', data.stats.maxHp], ['Aura', data.stats.maxAura], ['Sync', '70%'], ['Bond', 1]].forEach((m, i) => {
+        const cx = pad + 14 + i * metricW;
+        this.startObj(this.add.text(cx, metricY, `${m[0]}`, { fontSize: '9px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+        this.startObj(this.add.text(cx, metricY + 14, `${m[1]}`, { fontSize: '13px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+      });
+      this.drawDetailStats(id, pad + 16, metricY + 42, w - pad * 2 - 32, color, true);
+      this.startObj(this.add.text(pad + 16, h - SAFE_AREA_BOTTOM - 72, 'Moves: basic technique, signature art, guard stance', { fontSize: '10px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.startObj(this.add.text(pad + 16, h - SAFE_AREA_BOTTOM - 54, 'Ability / Evolution / Ascension: coming soon', { fontSize: '10px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.makeStartButton(w - pad - 82, h - SAFE_AREA_BOTTOM - 42, 68, 28, 'Back', () => this.showTeamScreen());
+      return;
+    }
+
     this.startObj(this.add.image(168, h / 2, key).setDisplaySize(190, 190).setDepth(112));
     this.startObj(this.add.text(292, 62, `${data.name}  Lv. 7`, { fontSize: '25px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
     this.startObj(this.add.text(292, 96, `${elementLabel(data.element)} • ${rarityLabel(data.rarity)} • ${this.starterRole(id)}`, { fontSize: '13px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
     this.startObj(this.add.text(292, 126, 'HP     Aura     Soul Sync     Bond Level', { fontSize: '11px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
     this.startObj(this.add.text(292, 144, `${data.stats.maxHp}     ${data.stats.maxAura}       70%           1`, { fontSize: '16px', color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
+    const statsEndY = this.drawDetailStats(id, 292, 188, Math.min(430, w - 330), color, false);
+    const movesY = Math.max(statsEndY + 8, h - 124);
+    const abilityY = movesY + 22;
+    this.startObj(this.add.text(292, movesY,  'Moves: basic technique, signature art, guard stance', { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.startObj(this.add.text(292, abilityY, 'Ability: Prototype slot  •  Evolution/Ascension: coming soon', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+    this.makeStartButton(w - 158, h - 76, 96, 34, 'Back', () => this.showTeamScreen());
+  }
+
+  private drawDetailStats(id: string, x: number, y: number, width: number, color: number, mobile: boolean): number {
+    const data = MINARI_ROSTER[id] ?? MINARI_ROSTER.flarepaw;
     const stats = [
       ['HP', data.stats.maxHp],
       ['Attack', data.stats.power],
@@ -679,29 +762,24 @@ export class ClassicOverworldScene extends Phaser.Scene {
       ['Sp. Def', Math.round(data.stats.defense * 0.95)],
       ['Speed', data.stats.speed],
       ['Aura', data.stats.maxAura],
-    ];
-    const statStartY = 188;
-    const statRowH   = 34;
-    const statColW   = 200;
-    const barW       = 80;
+    ] as const;
+    const cols = mobile ? 1 : 2;
+    const colW = width / cols;
+    const rowH = mobile ? 24 : 34;
+    const labelW = mobile ? 62 : 58;
+    const valueW = mobile ? 34 : 36;
+    const barW = Math.max(48, colW - labelW - valueW - 18);
     stats.forEach((st, i) => {
-      const sx = 292 + (i % 2) * statColW;
-      const sy = statStartY + Math.floor(i / 2) * statRowH;
-      // Label + value on the top line of each row
-      this.startObj(this.add.text(sx, sy, `${st[0]}`, { fontSize: '9px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
-      this.startObj(this.add.text(sx + barW + 4, sy, `${st[1]}`, { fontSize: '11px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0, 0).setDepth(112));
-      // Bar on second line — clear visual separation from label
-      const barY = sy + 14;
-      this.startObj(this.add.rectangle(sx, barY, barW, 6, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(112));
-      this.startObj(this.add.rectangle(sx, barY, Math.min(barW, Number(st[1]) / 3.5), 6, color, 0.95).setOrigin(0, 0).setDepth(113));
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const sx = x + col * colW;
+      const sy = y + row * rowH;
+      this.startObj(this.add.text(sx, sy, st[0], { fontSize: mobile ? '10px' : '9px', color: '#aaa6c8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
+      this.startObj(this.add.rectangle(sx + labelW, sy + (mobile ? 4 : 14), barW, mobile ? 7 : 6, UI_THEME.bars.track, 0.8).setOrigin(0, 0).setDepth(112));
+      this.startObj(this.add.rectangle(sx + labelW, sy + (mobile ? 4 : 14), Math.min(barW, (Number(st[1]) / 180) * barW), mobile ? 7 : 6, color, 0.95).setOrigin(0, 0).setDepth(113));
+      this.startObj(this.add.text(sx + labelW + barW + 8, sy - (mobile ? 1 : 0), `${st[1]}`, { fontSize: mobile ? '10px' : '11px', color: '#d8d3ff', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setDepth(112));
     });
-    const lastRow    = Math.floor((stats.length - 1) / 2);
-    const statsEndY  = statStartY + (lastRow + 1) * statRowH + 4;
-    const movesY     = Math.max(statsEndY + 8, h - 124);
-    const abilityY   = movesY + 22;
-    this.startObj(this.add.text(292, movesY,  'Moves: basic technique, signature art, guard stance', { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family }).setDepth(112));
-    this.startObj(this.add.text(292, abilityY, 'Ability: Prototype slot  •  Evolution/Ascension: coming soon', { fontSize: '12px', color: '#b8b2dc', fontFamily: UI_THEME.fonts.family }).setDepth(112));
-    this.makeStartButton(w - 158, h - 76, 96, 34, 'Back', () => this.showTeamScreen());
+    return y + Math.ceil(stats.length / cols) * rowH;
   }
 
   private makeStartButton(x: number, y: number, bw: number, bh: number, label: string, cb: () => void): void {
@@ -1112,8 +1190,38 @@ export class ClassicOverworldScene extends Phaser.Scene {
       this.playerH,
     );
 
-    // Map title + debug hint
-    label(`[DEBUG] ${this.mapId}  |  D=toggle  R=reset`, w / 2, h - 16, '#ffff00');
+    const diag = getRenderDiagnostics(this);
+    const lines = [
+      `DPR ${diag.dpr}  CSS ${diag.canvasCss}  internal ${diag.canvasInternal}`,
+      `game ${diag.phaserGameSize}  base ${diag.phaserBaseSize}  display ${diag.phaserDisplaySize}  renderer ${diag.rendererSize}`,
+      ...this.assetDiagnosticLines(),
+      `[DEBUG] ${this.mapId}  |  D=toggle  R=reset`,
+    ];
+    lines.forEach((line, i) => label(line, w / 2, h - 58 + i * 12, i < 3 ? '#ffffff' : '#ffff00'));
+  }
+
+  private assetDiagnosticLines(): string[] {
+    const frameLine = (label: string, key: string | null, display?: { width: number; height: number; scaleX: number; scaleY: number }): string => {
+      if (!key || !this.textures.exists(key)) return `${label}: missing`;
+      const frame = this.textures.getFrame(key);
+      const disp = display ? ` display ${Math.round(display.width)}x${Math.round(display.height)} scale ${display.scaleX.toFixed(3)},${display.scaleY.toFixed(3)}` : '';
+      return `${label}: ${key} tex ${frame.realWidth}x${frame.realHeight}${disp}`;
+    };
+    const starter = (this.registry.get('classic_player_starter') as string | null) ?? 'flarepaw';
+    const selectedKey = bestLoadedVisualKey(this, 'monari', starter, UI_THEME.colors.gold);
+    return [
+      frameLine('bg', this.mapDef?.bgKey ?? null, this.bgImg ?? undefined),
+      frameLine('player', this.playerImg?.texture.key ?? null, this.playerImg ?? undefined),
+      frameLine('monari', selectedKey),
+    ];
+  }
+
+  private logRenderDiagnostics(phase: string): void {
+    const diag = getRenderDiagnostics(this);
+    console.info('[overworld-render-diagnostics]', phase, {
+      ...diag,
+      assets: this.assetDiagnosticLines(),
+    });
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────

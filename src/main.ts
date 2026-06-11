@@ -9,6 +9,7 @@ import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
+import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -40,11 +41,6 @@ const config: Phaser.Types.Core.GameConfig = {
     // All scene positions are proportional to this.scale.width/height.
     mode: Phaser.Scale.RESIZE,
     parent: document.body,
-    // Match canvas buffer to physical pixels so HiDPI screens (3× iPhone etc.)
-    // render at native resolution rather than being scaled up by the browser.
-    // this.scale.width/height still return CSS-pixel dimensions; only the
-    // canvas drawing buffer is enlarged.
-    zoom: window.devicePixelRatio || 1,
   },
   render: {
     antialias:   true,
@@ -58,6 +54,17 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+
+// Phaser 3.80 has no top-level renderer `resolution` GameConfig field, and
+// ScaleManager `zoom` changes CSS sizing rather than the drawing-buffer DPR.
+// Keep scene/layout units in CSS pixels, but render into a DPR-sized canvas
+// (clamped for mobile performance) and zoom cameras back to CSS-pixel world units.
+game.events.on(Phaser.Core.Events.READY, () => {
+  applyHighDpiCanvas(game);
+  console.info('[render-resolution]', { dpr: getRenderDpr(), canvas: `${game.canvas.width}x${game.canvas.height}` });
+});
+game.events.on(Phaser.Core.Events.POST_RENDER, () => applyHighDpiCanvas(game));
+window.addEventListener('resize', () => requestAnimationFrame(() => applyHighDpiCanvas(game)), { passive: true });
 
 // Unlock Web Audio API on first interaction (required by iOS Safari)
 function tryUnlockAudio(): void {
