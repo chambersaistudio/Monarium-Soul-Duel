@@ -42,6 +42,9 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     // RESIZE: canvas always matches the viewport exactly — no letterbox bars.
     // All scene positions are proportional to this.scale.width/height.
+    // NOTE: Do NOT set scale.zoom to devicePixelRatio here — that divides the
+    // game coordinate space by DPR (so this.scale.width becomes cssWidth/dpr),
+    // breaking all hardcoded pixel values throughout the codebase.
     mode: Phaser.Scale.RESIZE,
     parent: 'game',
   },
@@ -95,3 +98,36 @@ function tryUnlockAudio(): void {
 }
 document.addEventListener('touchstart', tryUnlockAudio, { once: true, passive: true });
 document.addEventListener('pointerdown', tryUnlockAudio, { once: true, passive: true });
+
+// ── Viewport debug overlay (?debug=1) ──────────────────────────────────────────
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug')) {
+  const dbg = document.createElement('div');
+  dbg.id = 'debug-overlay';
+  document.body.appendChild(dbg);
+
+  const updateDebug = () => {
+    const canvas  = game.canvas;
+    const vv      = window.visualViewport;
+    const body    = document.body;
+    const scenes  = game.scene.scenes
+      .filter(s => s.scene.isActive())
+      .map(s => s.scene.key)
+      .join(', ') || 'none';
+    const orient  = screen.orientation?.type ?? 'n/a';
+
+    dbg.textContent = [
+      `win      ${window.innerWidth}×${window.innerHeight}`,
+      `vvp      ${vv ? `${Math.round(vv.width)}×${Math.round(vv.height)}` : 'n/a'}`,
+      `body     ${body.offsetWidth}×${body.offsetHeight}`,
+      `canvas   ${canvas.style.width}×${canvas.style.height}  (CSS)`,
+      `canvas   ${canvas.width}×${canvas.height}  (buf)`,
+      `phaser   ${Math.round(game.scale.width)}×${Math.round(game.scale.height)}`,
+      `dpr      ${window.devicePixelRatio}`,
+      `orient   ${orient}`,
+      `scenes   ${scenes}`,
+      `boot     ${!!document.getElementById('boot-overlay')}`,
+    ].join('\n');
+  };
+
+  game.events.once('ready', () => setInterval(updateDebug, 400));
+}

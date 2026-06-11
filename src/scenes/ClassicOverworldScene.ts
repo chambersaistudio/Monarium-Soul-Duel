@@ -14,6 +14,9 @@ import { CHALLENGERS } from '../data/challengerData';
 import { PLAYER_PROFILE, renzoCounterPick } from '../data/playerProfile';
 import { MINARI_ROSTER } from '../data/minariData';
 import type { MapDef, NpcDef, MapExit, EncounterOrb, ClassicBattleContext } from '../types/overworld';
+import { OverworldHudOverlay } from '../ui/OverworldHudOverlay';
+import { OverworldDialogueOverlay } from '../ui/OverworldDialogueOverlay';
+import { OverworldMenuOverlay } from '../ui/OverworldMenuOverlay';
 
 // Player visual dimensions at reference viewport width (960 px)
 const PLAYER_W_REF = 28;
@@ -49,20 +52,20 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private promptTarget:    NpcDef | null = null;
   private promptExit:      MapExit | null = null;
 
-  // Dialogue overlay
+  // Dialogue state
   private dialogActive    = false;
   private dialogLines:    string[] = [];
   private dialogIndex     = 0;
-  private dialogPanel:    Phaser.GameObjects.GameObject[] = [];
-  private dialogBodyText!: Phaser.GameObjects.Text;
-  private dialogNameText!: Phaser.GameObjects.Text;
   private dialogOnEnd:    (() => void) | null = null;
 
   // Starter confirm overlay
   private starterPanelActive = false;
-  private startMenuActive = false;
-  private startMenuObjects: Phaser.GameObjects.GameObject[] = [];
-  private menuBtnText: Phaser.GameObjects.Text | null = null;
+  private startMenuActive    = false;
+
+  // DOM overlays
+  private hudOverlay!:      OverworldHudOverlay;
+  private dialogueOverlay!: OverworldDialogueOverlay;
+  private menuOverlay!:     OverworldMenuOverlay;
 
   // Cooldown: prevents the same input that closes dialogue from instantly re-opening it
   private interactLockUntil = 0;
@@ -110,12 +113,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.dialogActive       = false;
     this.starterPanelActive = false;
     this.startMenuActive    = false;
-    this.dialogPanel        = [];
     this.dialogOnEnd        = null;
     this.promptTarget       = null;
     this.promptExit         = null;
-    this.startMenuObjects   = [];
-    this.menuBtnText        = null;
 
     this.mapId  = (this.registry.get('classic_current_map') as string) ?? 'starter_village';
     this.mapDef = OVERWORLD_MAPS[this.mapId] ?? OVERWORLD_MAPS['starter_village'];
@@ -162,8 +162,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
     const playerTexKey = this.textures.exists('ow_char_player') ? 'ow_char_player'
       : bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold);
     if (!playerTexKey.startsWith('generated_')) {
+      const dispSize = this.playerH * 2;
       this.playerImg = this.add.image(this.playerX, this.playerY - this.playerH / 2, playerTexKey)
-        .setDisplaySize(this.playerW * 2, this.playerH * 2)
+        .setDisplaySize(dispSize, dispSize)
         .setDepth(20);
     }
     this.playerGfx = this.add.graphics().setDepth(20);
@@ -183,7 +184,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
       padding: { x: 6, y: 3 },
     }).setOrigin(0.5, 1).setDepth(22).setVisible(false);
 
-    this.buildOverworldHud(w);
+    this.createOverlays();
 
     // ── Input ─────────────────────────────────────────────────────────────────
     this.inputSys = new InputSystem(this);
@@ -224,6 +225,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
       this.resizeRestartEvent = null;
       this.inputSys?.destroy();
       this.dpad?.destroy();
+      this.hudOverlay?.destroy();
+      this.dialogueOverlay?.destroy();
+      this.menuOverlay?.destroy();
     });
 
     this.cameras.main.fadeIn(400);
@@ -347,10 +351,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
       }
 
       if (imgKey) {
-        const npcH = Math.round(44 * this.scl);
-        const npcW = Math.round(28 * this.scl);
+        const npcH    = Math.round(44 * this.scl);
+        const npcDisp = npcH * 2;
         this.add.image(nx, ny - npcH / 2, imgKey)
-          .setDisplaySize(npcW * 2, npcH * 2)
+          .setDisplaySize(npcDisp, npcDisp)
           .setDepth(12);
       } else {
         const g = this.add.graphics().setDepth(12);
@@ -551,7 +555,11 @@ export class ClassicOverworldScene extends Phaser.Scene {
   // ── NPC interaction ───────────────────────────────────────────────────────────
 
 
-  // ── Modern HUD / Start Menu ────────────────────────────────────────────────
+  // ── DOM Overlays ───────────────────────────────────────────────────────────
+
+  private createOverlays(): void {
+    const starterId  = (this.registry.get('classic_player_starter') as string | null) ?? null;
+    const starterName = starterId ? (MINARI_ROSTER[starterId]?.name ?? starterId) : 'Choose a starter';
 
   private buildOverworldHud(w: number): void {
     const { height: h } = this.scale;
@@ -595,31 +603,25 @@ export class ClassicOverworldScene extends Phaser.Scene {
     drawGlassPanel(loc, w / 2 - 112, 12, 224, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.purple, glow: UI_THEME.colors.purple, alpha: 0.66 });
     this.add.text(w / 2, 29, this.mapDef.displayName, { fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
 
-    const menu = this.add.graphics().setDepth(50);
-    drawGlassPanel(menu, w - 82, 12, 70, 34, { radius: 14, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.gold, alpha: 0.68 });
-    menu.setInteractive(new Phaser.Geom.Rectangle(w - 82, 12, 70, 34), Phaser.Geom.Rectangle.Contains);
-    menu.on('pointerdown', () => this.openStartMenu());
-    this.menuBtnText = this.add.text(w - 47, 29, 'MENU', { fontSize: '11px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold' }).setOrigin(0.5).setDepth(51);
+    this.menuOverlay = new OverworldMenuOverlay({
+      onClose:      () => this.closeStartMenu(),
+      onModeSelect: () => { this.closeStartMenu(); this.returnToModeSelect(); },
+    });
   }
 
   public openStartMenu(): void {
     if (this.dialogActive || this.starterPanelActive || this.startMenuActive) return;
     this.startMenuActive = true;
     this.dpad?.setVisible(false);
-    this.menuBtnText?.setText('CLOSE');
-    this.showStartRoot();
-  }
-
-  private clearStartMenu(): void {
-    this.startMenuObjects.forEach(o => o.destroy());
-    this.startMenuObjects = [];
+    this.hudOverlay.setMenuOpen(true);
+    this.menuOverlay.showBonderMenu();
   }
 
   private closeStartMenu(): void {
-    this.clearStartMenu();
+    this.menuOverlay.close();
     this.startMenuActive = false;
     this.dpad?.setVisible(IS_TOUCH_DEVICE);
-    this.menuBtnText?.setText('MENU');
+    this.hudOverlay.setMenuOpen(false);
     this.interactLockUntil = this.time.now + 250;
   }
 
@@ -1020,7 +1022,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     ]);
   }
 
-  // ── Dialog overlay ────────────────────────────────────────────────────────────
+  // ── Dialogue (DOM overlay) ────────────────────────────────────────────────────
 
   private showDialog(lines: string[], onEnd?: () => void): void {
     if (this.dialogActive) return;
@@ -1028,70 +1030,20 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.dialogLines  = lines;
     this.dialogIndex  = 0;
     this.dialogOnEnd  = onEnd ?? null;
-    this.dialogPanel  = [];
     this.dpad?.setVisible(false);
-    this.buildDialogPanel();
-    this.renderDialogLine();
+    this.renderDialogueLine();
   }
 
-  private buildDialogPanel(): void {
-    const { width: w, height: h } = this.scale;
-    const mob  = IS_TOUCH_DEVICE;
-    const panH = mob ? 108 : 104;
-    const panY = h - panH - (mob ? SAFE_AREA_BOTTOM : 0) - 8;
-    const panX = 18;
-    const panW = w - 36;
-
-    const bg = this.add.graphics().setDepth(105);
-    drawGlassPanel(bg, panX, panY, panW, panH, { radius: 22, fill: UI_THEME.colors.panelDeep, stroke: UI_THEME.colors.gold, glow: UI_THEME.colors.purple, alpha: 0.9 });
-
-    const portraitBg = this.add.graphics().setDepth(106);
-    portraitBg.fillStyle(UI_THEME.colors.gold, 0.14).fillRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
-    portraitBg.lineStyle(1.5, UI_THEME.colors.gold, 0.5).strokeRoundedRect(panX + 14, panY - 18, 84, panH + 4, 18);
-
-    const portrait = this.add.image(panX + 56, panY + 36, bestLoadedVisualKey(this, 'character', 'player', UI_THEME.colors.gold)).setDisplaySize(72, 72).setDepth(107);
-    portrait.setName('dialogPortrait');
-
-    const nameplate = this.add.graphics().setDepth(107);
-    nameplate.fillStyle(UI_THEME.colors.gold, 0.2).fillRoundedRect(panX + 112, panY + 12, 160, 24, 12);
-    nameplate.lineStyle(1, UI_THEME.colors.gold, 0.42).strokeRoundedRect(panX + 112, panY + 12, 160, 24, 12);
-    this.dialogNameText = this.add.text(panX + 126, panY + 24, 'Amari', {
-      fontSize: '12px', color: '#fff0b8', fontFamily: UI_THEME.fonts.family, fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(108);
-
-    this.dialogBodyText = this.add.text(panX + 118, panY + 48, '', {
-      fontSize: mob ? '14px' : '13px',
-      color: UI_THEME.colors.text, fontFamily: UI_THEME.fonts.family,
-      wordWrap: { width: panW - 148 }, align: 'left',
-    }).setOrigin(0, 0).setDepth(108);
-
-    const hint = this.add.text(panX + panW - 16, panY + panH - 12, mob ? 'tap • A / ENTER' : 'ENTER / SPACE / tap', {
-      fontSize: '10px', color: '#9f98c6', fontFamily: UI_THEME.fonts.family,
-    }).setOrigin(1, 1).setDepth(108);
-
-    this.dialogPanel.push(bg, portraitBg, portrait, nameplate, this.dialogNameText, this.dialogBodyText, hint);
-
-    this.time.delayedCall(180, () => {
-      if (!this.dialogActive) return;
-      this.input.on('pointerdown', this.onDialogAdvance, this);
-      this.input.keyboard!.on('keydown-ENTER', this.onDialogAdvance, this);
-      this.input.keyboard!.on('keydown-SPACE', this.onDialogAdvance, this);
-    });
-  }
-
-  private readonly onDialogAdvance = (): void => { this.advanceDialog(); };
-
-  private renderDialogLine(): void {
-    if (this.dialogIndex < this.dialogLines.length) {
-      const parsed = this.parseDialogLine(this.dialogLines[this.dialogIndex]);
-      this.dialogNameText.setText(parsed.speaker);
-      this.dialogBodyText.setText(parsed.text);
-      const portrait = this.dialogPanel.find(o => o.name === 'dialogPortrait') as Phaser.GameObjects.Image | undefined;
-      portrait?.setTexture(bestLoadedVisualKey(this, 'character', parsed.characterId, parsed.characterId === 'renzo' ? UI_THEME.colors.purple : UI_THEME.colors.gold));
-      this.dialogIndex++;
-    } else {
-      this.closeDialog();
+  private renderDialogueLine(): void {
+    if (this.dialogIndex >= this.dialogLines.length) {
+      this.closeDialogue();
+      return;
     }
+    const parsed  = this.parseDialogLine(this.dialogLines[this.dialogIndex]);
+    const hasMore = this.dialogIndex + 1 < this.dialogLines.length;
+    this.dialogIndex++;
+    this.dialogueOverlay.show(parsed.characterId, parsed.speaker, parsed.text, hasMore);
+    this.dialogueOverlay.setOnAdvance(() => this.renderDialogueLine());
   }
 
   private parseDialogLine(line: string): { speaker: string; text: string; characterId: string } {
@@ -1106,25 +1058,12 @@ export class ClassicOverworldScene extends Phaser.Scene {
     return { speaker: display, text, characterId };
   }
 
-  private advanceDialog(): void {
-    if (!this.dialogActive) return;
-    this.renderDialogLine();
-  }
-
-  private closeDialog(): void {
-    this.input.off('pointerdown', this.onDialogAdvance, this);
-    this.input.keyboard!.off('keydown-ENTER', this.onDialogAdvance, this);
-    this.input.keyboard!.off('keydown-SPACE', this.onDialogAdvance, this);
-
-    this.dialogPanel.forEach(o => o.destroy());
-    this.dialogPanel  = [];
+  private closeDialogue(): void {
+    this.dialogueOverlay.hide();
+    this.dialogueOverlay.clearOnAdvance();
     this.dialogActive = false;
     this.dpad?.setVisible(IS_TOUCH_DEVICE);
-
-    // Lock interact input briefly so the key that closed dialogue
-    // doesn't instantly reopen it in the same frame.
     this.interactLockUntil = this.time.now + 400;
-
     const cb = this.dialogOnEnd;
     this.dialogOnEnd = null;
     cb?.();

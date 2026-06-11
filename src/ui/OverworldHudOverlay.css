@@ -1,0 +1,260 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MONARIUM Overworld HUD DOM Overlay
+   Top bar: player card | location | menu button
+   Orbitron = names/labels   Rajdhani = sub-labels/stats
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.owh {
+  --owh-font-hud:   "Orbitron", "Rajdhani", monospace;
+  --owh-font-stat:  "Rajdhani", "Orbitron", monospace;
+  --owh-c-bg:       rgba(7, 8, 20, 0.88);
+  --owh-c-border:   rgba(68, 78, 168, 0.50);
+  --owh-c-gold:     #ffe39a;
+  --owh-c-purple:   #8b5cff;
+  --owh-c-text:     #f0ecff;
+  --owh-c-muted:    #7a7498;
+  --owh-c-stroke:   rgba(200, 190, 255, 0.28);
+  --owh-radius:     10px;
+  --owh-bar-h:      5px;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  pointer-events: none;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 7px 10px 6px;
+  box-sizing: border-box;
+  font-family: var(--owh-font-stat);
+  /* Subtle top gradient shadow so the bar reads over any background */
+  background: linear-gradient(
+    to bottom,
+    rgba(4, 5, 16, 0.72) 0%,
+    rgba(4, 5, 16, 0.00) 100%
+  );
+}
+
+/* ── Player card (left) ───────────────────────────────────────────────────── */
+
+.owh__player-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--owh-c-bg);
+  border: 1px solid rgba(255, 160, 40, 0.42);
+  border-radius: var(--owh-radius);
+  padding: 5px 10px 5px 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+  max-width: 220px;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.owh__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(30, 20, 60, 0.70);
+  border: 2px solid rgba(255, 200, 80, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.owh__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.owh__player-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 1px;
+}
+
+.owh__player-name {
+  font-family: var(--owh-font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.owh__player-sub {
+  font-family: var(--owh-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--owh-c-gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  opacity: 0.82;
+  letter-spacing: 0.03em;
+}
+
+/* ── Location label (center) ─────────────────────────────────────────────── */
+
+.owh__location {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--owh-font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--owh-c-text);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 12px rgba(139, 92, 255, 0.55), 0 1px 4px rgba(0,0,0,0.70);
+  pointer-events: none;
+  padding: 0 8px;
+}
+
+/* ── Menu button (right) ──────────────────────────────────────────────────── */
+
+.owh__menu-btn {
+  flex-shrink: 0;
+  background: rgba(10, 12, 30, 0.88);
+  border: 1px solid rgba(139, 92, 255, 0.50);
+  border-radius: var(--owh-radius);
+  padding: 0 16px;
+  font-family: var(--owh-font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--owh-c-purple);
+  letter-spacing: 0.10em;
+  cursor: pointer;
+  pointer-events: auto;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 38px;
+  min-width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.owh__menu-btn:hover,
+.owh__menu-btn:focus-visible {
+  background: rgba(20, 18, 50, 0.95);
+  border-color: rgba(139, 92, 255, 0.80);
+  color: #c8aaff;
+  box-shadow: 0 0 10px rgba(139, 92, 255, 0.30);
+}
+
+.owh__menu-btn:active {
+  background: rgba(30, 20, 70, 0.98);
+  box-shadow: 0 0 16px rgba(139, 92, 255, 0.45);
+}
+
+/* When the menu is open, style the button as CLOSE (gold accent) */
+.owh--menu-open .owh__menu-btn {
+  color: var(--owh-c-gold);
+  border-color: rgba(255, 200, 80, 0.55);
+  background: rgba(30, 20, 8, 0.92);
+}
+
+.owh--menu-open .owh__menu-btn:hover,
+.owh--menu-open .owh__menu-btn:focus-visible {
+  border-color: rgba(255, 200, 80, 0.85);
+  box-shadow: 0 0 10px rgba(255, 200, 80, 0.28);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mobile landscape — short screens (max-height ≤ 480px landscape)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .owh {
+    padding: 4px 7px 4px;
+    gap: 4px;
+  }
+
+  .owh__player-card {
+    padding: 3px 8px 3px 5px;
+    gap: 5px;
+    max-width: 170px;
+    border-radius: 7px;
+  }
+
+  .owh__avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .owh__player-name {
+    font-size: 10px;
+  }
+
+  .owh__player-sub {
+    font-size: 8px;
+  }
+
+  .owh__location {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .owh__menu-btn {
+    font-size: 9px;
+    min-height: 30px;
+    min-width: 58px;
+    padding: 0 10px;
+    border-radius: 7px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Very small screens  (max-height ≤ 380px)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-height: 380px) {
+  .owh {
+    padding: 3px 6px 3px;
+  }
+
+  .owh__avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .owh__player-name {
+    font-size: 9px;
+  }
+
+  .owh__location {
+    font-size: 8px;
+  }
+
+  .owh__menu-btn {
+    font-size: 8px;
+    min-height: 26px;
+    min-width: 50px;
+  }
+}

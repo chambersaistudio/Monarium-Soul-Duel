@@ -3,14 +3,24 @@ import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { hideBootOverlay, layoutDomOverlays, showStartOverlay } from '../ui/bootOverlay';
 
+// TitleScene layout strategy:
+// • Phaser canvas = animated particle background only.  The particle update loop
+//   reads this.scale.width/height every frame, so it always fills the viewport.
+//   drawBackground() is called again on any Phaser resize event.
+// • Title text, subtitle, and "tap to start" prompt live in a #title-overlay DOM
+//   div that is position:fixed + CSS flexbox.  It recentres automatically on any
+//   orientation change — no Phaser coordinate dependency.
+// • ENTER key and a DOM pointerdown listener both trigger the scene transition.
+// • The DOM overlay is removed on scene shutdown so it cannot leak into other scenes.
+
 interface Particle {
   x: number; y: number; vx: number; vy: number;
   r: number; color: number; alpha: number;
 }
 
 export class TitleScene extends Phaser.Scene {
-  private particles: Particle[] = [];
-  private bgGfx!: Phaser.GameObjects.Graphics;
+  private particles:   Particle[] = [];
+  private bgGfx!:      Phaser.GameObjects.Graphics;
   private particleGfx!: Phaser.GameObjects.Graphics;
   private enterKey!: Phaser.Input.Keyboard.Key;
   private audio!: AudioManager;
@@ -23,9 +33,9 @@ export class TitleScene extends Phaser.Scene {
   private debugText: Phaser.GameObjects.Text | null = null;
   private starting = false;
 
-  constructor() {
-    super({ key: 'TitleScene' });
-  }
+  private titleOverlay: HTMLDivElement | null = null;
+  private blinkTimer:   ReturnType<typeof setInterval> | null = null;
+  private started = false;
 
   create(): void {
     this.particles = [];
@@ -35,14 +45,15 @@ export class TitleScene extends Phaser.Scene {
 
     this.bgGfx = this.add.graphics().setDepth(0);
     this.particleGfx = this.add.graphics().setDepth(1);
+    this.drawBackground();
 
     for (let i = 0; i < 30; i++) {
       this.particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 20,
-        vy: -(Math.random() * 15 + 5),
-        r: Math.random() * 3 + 1,
+        x:     Math.random() * w,
+        y:     Math.random() * h,
+        vx:    (Math.random() - 0.5) * 20,
+        vy:   -(Math.random() * 15 + 5),
+        r:     Math.random() * 2 + 1,
         color: [0xff6600, 0xff4400, 0xffaa00, 0xcc88ff][Math.floor(Math.random() * 4)],
         alpha: Math.random() * 0.6 + 0.2,
       });
@@ -92,8 +103,9 @@ export class TitleScene extends Phaser.Scene {
 
     this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
-    this.audio = new AudioManager(this);
-    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+  private onResize(): void {
+    this.drawBackground();
+  }
 
     showStartOverlay(() => this.startGame());
     this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
@@ -152,15 +164,14 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private drawBackground(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    const { width: w, height: h } = this.scale;
     const g = this.bgGfx;
     g.clear();
     for (let i = 0; i < h; i += 4) {
-      const t = i / h;
-      const r = Math.floor(Phaser.Math.Linear(8, 20, t));
-      const gv = Math.floor(Phaser.Math.Linear(4, 8, t));
-      const b = Math.floor(Phaser.Math.Linear(18, 6, t));
+      const t  = i / h;
+      const r  = Math.floor(Phaser.Math.Linear(8,  20, t));
+      const gv = Math.floor(Phaser.Math.Linear(4,  8,  t));
+      const b  = Math.floor(Phaser.Math.Linear(18, 6,  t));
       g.fillStyle(Phaser.Display.Color.GetColor(r, gv, b), 1);
       g.fillRect(0, i, w, 4);
     }
@@ -169,8 +180,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    const { width: w, height: h } = this.scale;
 
     if (Phaser.Input.Keyboard.JustDown(this.enterKey)) this.startGame();
 

@@ -4,7 +4,6 @@ import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/a
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
 import {
-  IS_TOUCH_DEVICE,
   SAFE_MODE,
   SAFE_SKIP_FOLDERS,
   SAFE_MAX_FRAMES,
@@ -93,7 +92,7 @@ export class PreloadScene extends Phaser.Scene {
       this.layoutLoadingScreen();
       setBootLoading(this.progressValue, label, SAFE_MODE);
     });
-    this.load.on('loaderror',    (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
+    this.load.on('loaderror', (f: Phaser.Loader.File) => { this.loadErrors.add(f.key); });
 
     // ── Character sprites ──────────────────────────────────────────────────
     for (const [charId, manifest] of Object.entries(CHARACTERS_MANIFEST)) {
@@ -197,6 +196,17 @@ export class PreloadScene extends Phaser.Scene {
     for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
       this.createCharacter(charId);
     }
+
+    // Complete the DOM progress bar then fade-dismiss the boot overlay.
+    const barEl   = document.getElementById('boot-bar')     as HTMLDivElement | null;
+    const overlay = document.getElementById('boot-overlay') as HTMLDivElement | null;
+    if (barEl)   barEl.style.width = '100%';
+    if (overlay) {
+      overlay.classList.add('fade-out');
+      // Remove from DOM after transition so it can't block pointer events in-game
+      this.time.delayedCall(400, () => overlay?.remove());
+    }
+
     this.scene.start('TitleScene');
   }
 

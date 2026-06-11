@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- viewport-fit=cover extends under iPhone notch; initial-scale=1 prevents auto-zoom -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -281,6 +282,66 @@
     @media (max-height: 480px) and (orientation: landscape) { .story-dialogue { bottom: max(12px, env(safe-area-inset-bottom)); width:min(70vw,760px); } .story-controls { height:118px; } .story-joy { width:92px; height:92px; } #story-a { width:62px; height:62px; } .story-starter-card { width:min(90vw,920px); grid-template-columns:minmax(150px, 28%) 1fr; gap:8px 18px; padding:12px; } .story-starter-art { min-height:210px; } .story-starter-art img { max-height:54vh; } .story-stats { grid-template-columns:repeat(3,minmax(96px,1fr)); gap:6px; } .story-stats span { padding:6px 8px; } }
     @media (max-width: 520px) { .story-starter-card { max-height:88vh; grid-template-columns:1fr; grid-template-areas:'info' 'art' 'stats' 'buttons'; text-align:center; } .story-starter-meta { justify-content:center; } .story-starter-art { min-height:180px; } .story-starter-art img { max-height:230px; } .story-stats { grid-template-columns:1fr 1fr; } }
 
+    /* ── Boot / loading DOM overlay ─────────────────────────────────────────────
+       Lives in front of the Phaser canvas. CSS flexbox keeps it perfectly centred
+       on any viewport size or orientation — immune to Phaser coordinate-space
+       timing issues and the iOS 100vh bug.  PreloadScene updates the bar via JS
+       and removes the overlay when loading completes.                            */
+    #boot-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0f;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      z-index: 9999;
+      pointer-events: auto;
+      font-family: monospace;
+      transition: opacity 0.35s ease;
+    }
+    #boot-overlay.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #boot-logo {
+      font-size: clamp(32px, 9vw, 68px);
+      font-weight: bold;
+      color: #ff6600;
+      letter-spacing: 4px;
+      text-shadow: 0 0 28px #ff3300, 0 0 56px #ff330044;
+      text-align: center;
+    }
+    #boot-tagline {
+      font-size: clamp(12px, 3vw, 20px);
+      color: #ffaa44;
+      letter-spacing: 8px;
+      text-align: center;
+    }
+    #boot-bar-wrap {
+      width: min(300px, 64vw);
+      height: 10px;
+      background: #1e1e28;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    #boot-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #cc4400, #ff6600);
+      border-radius: 5px;
+      transition: width 0.08s linear;
+    }
+    #boot-status {
+      font-size: 10px;
+      color: #555566;
+      min-height: 14px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Rotate prompt (portrait-only on touch devices) ────────────────────── */
     #rotate-overlay {
       display: none;
       position: fixed;
@@ -292,7 +353,7 @@
       align-items: center;
       justify-content: center;
       gap: 20px;
-      z-index: 9999;
+      z-index: 9998;
       text-align: center;
       padding: 24px;
       user-select: none;
@@ -333,6 +394,7 @@
     <h2>ROTATE YOUR DEVICE</h2>
     <p>MONARIUM plays best in landscape mode</p>
   </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
