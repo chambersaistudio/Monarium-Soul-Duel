@@ -16,6 +16,7 @@ function applyViewportBox(node: HTMLElement | null): void {
 export function layoutDomOverlays(): void {
   applyViewportBox(el('game'));
   applyViewportBox(el('boot-overlay'));
+  applyViewportBox(el('mode-select-overlay'));
   applyViewportBox(el('mobile-debug-overlay'));
 }
 
@@ -56,6 +57,65 @@ export function showStartOverlay(onStart: () => void): void {
     };
     window.setTimeout(() => startBtn.focus({ preventScroll: true }), 0);
   }
+}
+
+
+export interface ModeOverlayOption {
+  key: string;
+  name: string;
+  desc: string;
+}
+
+export function showModeSelectOverlay(options: ModeOverlayOption[], onSelect: (key: string) => void, onBack: () => void): void {
+  const overlay = el<HTMLDivElement>('mode-select-overlay');
+  const optionsRoot = el<HTMLDivElement>('mode-options');
+  if (!overlay || !optionsRoot) return;
+  hideBootOverlay();
+  layoutDomOverlays();
+  optionsRoot.replaceChildren();
+  for (const opt of options) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mode-option';
+    btn.dataset.modeKey = opt.key;
+    btn.innerHTML = `<span class="mode-option-title"></span><span class="mode-option-desc"></span>`;
+    const title = btn.querySelector('.mode-option-title');
+    const desc = btn.querySelector('.mode-option-desc');
+    if (title) title.textContent = opt.name;
+    if (desc) desc.textContent = opt.desc;
+    btn.onclick = (event) => {
+      event.preventDefault();
+      onSelect(opt.key);
+    };
+    optionsRoot.appendChild(btn);
+  }
+
+  const back = el<HTMLButtonElement>('mode-back-button');
+  if (back) {
+    back.onclick = (event) => {
+      event.preventDefault();
+      onBack();
+    };
+  }
+
+  overlay.hidden = false;
+  overlay.style.pointerEvents = 'auto';
+  window.setTimeout(() => (optionsRoot.querySelector('button') as HTMLButtonElement | null)?.focus({ preventScroll: true }), 0);
+}
+
+export function hideModeSelectOverlay(): void {
+  const overlay = el<HTMLDivElement>('mode-select-overlay');
+  if (!overlay) return;
+  overlay.hidden = true;
+  overlay.style.pointerEvents = 'none';
+  el<HTMLDivElement>('mode-options')?.replaceChildren();
+  const back = el<HTMLButtonElement>('mode-back-button');
+  if (back) back.onclick = null;
+}
+
+export function isModeSelectOverlayActive(): boolean {
+  const overlay = el<HTMLDivElement>('mode-select-overlay');
+  return !!overlay && !overlay.hidden;
 }
 
 export function hideBootOverlay(): void {
@@ -99,7 +159,7 @@ export function updateMobileDebugOverlay(values: DomDebugValues): void {
   overlay.hidden = false;
   overlay.textContent = [
     `[viewport-sync] ${values.reason}`,
-    `scene ${values.scene ?? 'n/a'} bootOverlay ${isBootOverlayActive()}`,
+    `scene ${values.scene ?? 'n/a'} bootOverlay ${isBootOverlayActive()} modeOverlay ${isModeSelectOverlayActive()}`,
     `visualViewport ${values.viewport} window ${values.windowSize} DPR ${values.dpr}`,
     `parent ${values.parentSize}`,
     `canvas css ${values.canvasCss} style ${values.canvasStyle} internal ${values.canvasInternal}`,
