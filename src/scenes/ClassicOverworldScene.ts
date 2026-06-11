@@ -71,6 +71,9 @@ export class ClassicOverworldScene extends Phaser.Scene {
   private debugMode    = false;
   private debugOverlay: Phaser.GameObjects.Graphics | null = null;
   private debugLabels: Phaser.GameObjects.Text[] = [];
+  private viewportW = 0;
+  private viewportH = 0;
+  private resizeRestartEvent: Phaser.Time.TimerEvent | null = null;
 
   constructor() { super({ key: 'ClassicOverworldScene' }); }
 
@@ -94,6 +97,10 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
   create(): void {
     const { width: w, height: h } = this.scale;
+    this.viewportW = w;
+    this.viewportH = h;
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
 
     // Reset flags that persist across scene restarts (Phaser reuses scene instances)
     this.dialogActive       = false;
@@ -126,17 +133,24 @@ export class ClassicOverworldScene extends Phaser.Scene {
       if (!this.maskSys.load(this, this.mapDef.maskKey)) this.maskSys = null;
     }
 
-    const spawnName = (this.registry.get('classic_spawn_name') as string) ?? this.mapDef.defaultSpawn;
-    const spawn     = this.mapDef.spawns[spawnName] ?? this.mapDef.spawns[this.mapDef.defaultSpawn];
-    this.playerX    = spawn.x * w;
-    this.playerY    = spawn.y * h;
+    const resizePos = this.registry.get('classic_resize_norm_pos') as { mapId?: string; x?: number; y?: number } | null;
+    if (resizePos?.mapId === this.mapId && typeof resizePos.x === 'number' && typeof resizePos.y === 'number') {
+      this.playerX = Phaser.Math.Clamp(resizePos.x, 0, 1) * w;
+      this.playerY = Phaser.Math.Clamp(resizePos.y, 0, 1) * h;
+      this.registry.remove('classic_resize_norm_pos');
+    } else {
+      const spawnName = (this.registry.get('classic_spawn_name') as string) ?? this.mapDef.defaultSpawn;
+      const spawn     = this.mapDef.spawns[spawnName] ?? this.mapDef.spawns[this.mapDef.defaultSpawn];
+      this.playerX    = spawn.x * w;
+      this.playerY    = spawn.y * h;
+    }
     this.prevX      = this.playerX;
     this.prevY      = this.playerY;
 
     // Brief interact lock after returning from battle so Renzo dialogue
     // doesn't immediately retrigger (the Enter press that closed the
     // victory screen should not be treated as an interact in the overworld).
-    if (spawnName === 'from_battle') {
+    if (((this.registry.get('classic_spawn_name') as string) ?? this.mapDef.defaultSpawn) === 'from_battle') {
       this.interactLockUntil = this.time.now + 600;
     }
 
@@ -201,12 +215,36 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.audio.playBgm(AUDIO_KEYS.bgm.menu);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
+      this.resizeRestartEvent?.remove(false);
+      this.resizeRestartEvent = null;
       this.inputSys?.destroy();
       this.dpad?.destroy();
     });
 
     this.cameras.main.fadeIn(400);
   }
+
+  private readonly onScaleResize = (): void => {
+    const w = Math.max(1, this.scale.width);
+    const h = Math.max(1, this.scale.height);
+    if (Math.abs(w - this.viewportW) < 2 && Math.abs(h - this.viewportH) < 2) return;
+
+    const oldW = Math.max(1, this.viewportW || w);
+    const oldH = Math.max(1, this.viewportH || h);
+    this.registry.set('classic_resize_norm_pos', {
+      mapId: this.mapId,
+      x: Phaser.Math.Clamp(this.playerX / oldW, 0, 1),
+      y: Phaser.Math.Clamp(this.playerY / oldH, 0, 1),
+    });
+    this.viewportW = w;
+    this.viewportH = h;
+
+    this.resizeRestartEvent?.remove(false);
+    this.resizeRestartEvent = this.time.delayedCall(90, () => {
+      if (this.scene.isActive()) this.scene.restart();
+    });
+  };
 
   update(_time: number, delta: number): void {
     if (this.dialogActive || this.starterPanelActive || this.startMenuActive) {
