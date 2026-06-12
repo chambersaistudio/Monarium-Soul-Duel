@@ -203,8 +203,6 @@ export class PreloadScene extends Phaser.Scene {
     if (barEl)   barEl.style.width = '100%';
     if (overlay) {
       overlay.classList.add('fade-out');
-      // Remove from DOM after transition so it can't block pointer events in-game
-      this.time.delayedCall(400, () => overlay?.remove());
     }
 
     this.scene.start('TitleScene');

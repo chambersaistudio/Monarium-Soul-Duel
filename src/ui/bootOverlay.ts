@@ -40,6 +40,7 @@ export function showStartOverlay(onStart: () => void): void {
   const overlay = el<HTMLDivElement>('boot-overlay');
   if (!overlay) return;
   layoutDomOverlays();
+  overlay.classList.remove('fade-out');
   overlay.hidden = false;
   overlay.dataset.state = 'start';
   overlay.style.pointerEvents = 'auto';
