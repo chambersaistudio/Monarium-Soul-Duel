@@ -219,6 +219,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.audio.playBgm(AUDIO_KEYS.bgm.overworld);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.audio?.stopBgm();
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onScaleResize, this);
       this.resizeRestartEvent?.remove(false);
       this.resizeRestartEvent = null;

@@ -190,6 +190,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
   shutdown(): void {
+    this.audio?.stopBgm();
     this.domHud?.destroy();
   }
 
