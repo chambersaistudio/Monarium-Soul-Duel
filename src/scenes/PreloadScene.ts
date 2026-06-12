@@ -83,6 +83,7 @@ export class PreloadScene extends Phaser.Scene {
 
     this.load.on('progress',     (v: number) => {
       this.progressValue = v;
+      this.registry.set('preload_progress', v);
       this.layoutLoadingScreen();
       setBootLoading(v, this.statusText.text, SAFE_MODE);
     });
@@ -209,20 +210,18 @@ export class PreloadScene extends Phaser.Scene {
       this.registry.set('sproutodon_anim_mode',  'none');
     }
 
-    // Complete the DOM progress bar then fade-dismiss the boot overlay.
+    // Mark loading as complete — SplashScene / TitleScene listen to this flag.
+    this.registry.set('preload_progress', 1);
+    this.registry.set('preload_complete', true);
+
+    // Fade out the boot DOM overlay.
     const barEl   = document.getElementById('boot-bar')     as HTMLDivElement | null;
     const overlay = document.getElementById('boot-overlay') as HTMLDivElement | null;
     if (barEl)   barEl.style.width = '100%';
-    if (overlay) {
-      overlay.classList.add('fade-out');
-    }
+    if (overlay) overlay.classList.add('fade-out');
 
-    // Stop the opening cinematic overlay (removes the video DOM element via its
-    // SHUTDOWN handler) and transition to the title screen.
-    if (this.scene.isActive('SplashScene')) {
-      this.scene.stop('SplashScene');
-    }
-    this.scene.start('TitleScene');
+    // Stop self — navigation is driven by SplashScene (opening video) and TitleScene.
+    this.scene.stop();
   }
 
   private createCharacter(charId: string): void {
