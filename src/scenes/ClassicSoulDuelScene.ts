@@ -1394,6 +1394,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
           this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
             if (p === 1) this.scene.start('BattleLabSetupScene');
           });
+        } else if (ctx?.returnMap === 'OverworldScene') {
+          if (isWin && ctx.battleType === 'wild') {
+            this.registry.set('arena_battle_result', { won: true, enemyLevel: ctx.enemyLevel ?? 5 });
+          }
+          this.registry.remove('classic_battle_context');
+          this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
+            if (p === 1) this.scene.start('OverworldScene');
+          });
         } else if (ctx?.returnMap) {
           this.registry.set('classic_current_map', ctx.returnMap);
           this.registry.set('classic_spawn_name',  ctx.returnSpawn ?? 'default');

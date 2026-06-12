@@ -5,6 +5,13 @@ import { SoulSpriteOrb } from '../entities/SoulSpriteOrb';
 import { InputSystem } from '../systems/InputSystem';
 import { VirtualDpad } from '../systems/VirtualDpad';
 import { IS_TOUCH_DEVICE } from '../config/mobileConfig';
+import { PlayerSaveManager } from '../systems/PlayerSaveManager';
+import type { OverworldSave } from '../systems/PlayerSaveManager';
+import { OverworldMenuOverlay } from '../ui/OverworldMenuOverlay';
+import type { ClassicBattleContext } from '../types/overworld';
+
+const WILD_STARTERS = ['flarepaw', 'droplet', 'sproutodon'];
+const ORB_ENCOUNTER_RADIUS = 60;
 
 type DialogueState = 'none' | 'showing' | 'transitioning';
 
@@ -18,6 +25,11 @@ export class OverworldScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container;
   private bgGfx!: Phaser.GameObjects.Graphics;
 
+  private saveData!: OverworldSave;
+  private encounteredOrbs = new Set<number>();
+  private inEncounter = false;
+  private menuOverlay: OverworldMenuOverlay | null = null;
+
   constructor() {
     super({ key: 'OverworldScene' });
   }
@@ -27,6 +39,11 @@ export class OverworldScene extends Phaser.Scene {
     const h = this.scale.height;
 
     this.dialogueState = 'none';
+    this.inEncounter   = false;
+    this.encounteredOrbs = new Set();
+
+    // Load save data
+    this.saveData = PlayerSaveManager.load();
 
     // Pin physics world bounds to CSS viewport dimensions so setCollideWorldBounds
     // cannot be constrained by stale initial-config values.
@@ -67,7 +84,31 @@ export class OverworldScene extends Phaser.Scene {
       { fontSize: '11px', color: '#666666', fontFamily: 'monospace' }
     ).setDepth(50);
 
+    // MENU button
+    const menuBtn = this.add.text(w - 14, 14, 'MENU', {
+      fontSize: '12px', color: '#aaaaff', fontFamily: 'monospace',
+      backgroundColor: 'rgba(0,0,20,0.65)',
+      padding: { x: 6, y: 4 },
+    }).setOrigin(1, 0).setDepth(50).setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerdown', () => this.openStartMenu());
+
+    // M key also opens the menu
+    this.input.keyboard?.on('keydown-M', () => this.openStartMenu());
+
     this.cameras.main.fadeIn(400);
+
+    // Check if returning from a wild battle
+    const battleResult = this.registry.get('arena_battle_result') as { won: boolean; enemyLevel: number } | null;
+    if (battleResult) {
+      this.registry.remove('arena_battle_result');
+      if (battleResult.won) {
+        const xpGain = PlayerSaveManager.calcXpGain(this.saveData.monariLevel, battleResult.enemyLevel);
+        const { save: newSave, levelsGained } = PlayerSaveManager.addXp(this.saveData, xpGain);
+        this.saveData = newSave;
+        PlayerSaveManager.persist(this.saveData);
+        this.time.delayedCall(600, () => this.showXpNotification(xpGain, levelsGained));
+      }
+    }
   }
 
   private drawTrainingField(w: number, h: number): void {
@@ -181,7 +222,7 @@ export class OverworldScene extends Phaser.Scene {
       return;
     }
 
-    if (this.dialogueState === 'transitioning') return;
+    if (this.dialogueState === 'transitioning' || this.inEncounter) return;
 
     // ── Normal overworld movement ──
     const mv = this.inputSys.getOverworldMove();
@@ -206,13 +247,115 @@ export class OverworldScene extends Phaser.Scene {
       this.cameras.main.shake(200, 0.003);
     }
 
+    // ── Orb proximity — wild encounter trigger ─────────────────────────────
+    if (this.dialogueState === 'none') {
+      for (let i = 0; i < this.orbs.length; i++) {
+        if (this.encounteredOrbs.has(i)) continue;
+        const orb = this.orbs[i];
+        const dx2 = this.player.x - orb.x;
+        const dy2 = this.player.y - orb.y;
+        if (Math.sqrt(dx2 * dx2 + dy2 * dy2) < ORB_ENCOUNTER_RADIUS) {
+          this.encounteredOrbs.add(i);
+          orb.setVisible(false);
+          this.startWildEncounter();
+          break;
+        }
+      }
+    }
+
     this.player.update();
     this.rival.update();
     this.orbs.forEach(o => o.update(delta));
   }
 
+  private startWildEncounter(): void {
+    this.inEncounter = true;
+
+    const enemyId    = WILD_STARTERS[Math.floor(Math.random() * WILD_STARTERS.length)];
+    const enemyLevel = Math.floor(Math.random() * 6) + 5; // 5–10
+
+    const ctx: ClassicBattleContext = {
+      returnMap:      'OverworldScene',
+      returnSpawn:    'default',
+      playerMinariId: this.saveData.starterMonariId,
+      enemyMinariId:  enemyId,
+      battleType:     'wild',
+      playerLevel:    this.saveData.monariLevel,
+      enemyLevel,
+      bondable:       false,
+    };
+
+    this.registry.set('classic_battle_context', ctx);
+
+    this.cameras.main.fade(500, 0, 0, 0, false, (_cam: unknown, progress: number) => {
+      if (progress === 1) this.scene.start('ClassicSoulDuelScene');
+    });
+  }
+
+  private showXpNotification(xpGain: number, levelsGained: number): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    const lines: string[] = [`+${xpGain} XP`];
+    if (levelsGained > 0) {
+      lines.push(`Level Up!  Lv.${this.saveData.monariLevel}`);
+    }
+
+    const popup = this.add.text(w / 2, h / 2 - 60, lines.join('\n'), {
+      fontSize: '22px',
+      color: '#ffee44',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(100).setAlpha(0);
+
+    this.tweens.add({
+      targets: popup,
+      alpha: 1,
+      y: h / 2 - 80,
+      duration: 300,
+      ease: 'Quad.Out',
+      onComplete: () => {
+        this.tweens.add({
+          targets: popup,
+          alpha: 0,
+          y: h / 2 - 105,
+          duration: 700,
+          delay: 1400,
+          ease: 'Quad.In',
+          onComplete: () => popup.destroy(),
+        });
+      },
+    });
+  }
+
+  private openStartMenu(): void {
+    // Toggle: if already visible, close it
+    if (this.menuOverlay?.isVisible()) {
+      this.menuOverlay.close();
+      return;
+    }
+
+    if (!this.menuOverlay) {
+      this.menuOverlay = new OverworldMenuOverlay({
+        onClose: () => { /* panel hides itself */ },
+        onModeSelect: () => {
+          this.menuOverlay?.destroy();
+          this.menuOverlay = null;
+          this.scene.start('ModeSelectScene');
+        },
+      });
+    }
+
+    this.menuOverlay.showBonderMenu([this.saveData.starterMonariId], this.saveData);
+  }
+
   shutdown(): void {
     this.dpad?.destroy();
     this.inputSys?.destroy();
+    this.menuOverlay?.destroy();
+    this.menuOverlay = null;
   }
 }

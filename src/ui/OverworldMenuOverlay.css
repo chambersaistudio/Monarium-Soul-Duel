@@ -472,6 +472,79 @@
   border-color: rgba(255, 200, 80, 0.70);
 }
 
+/* ── XP bar (detail screen) ───────────────────────────────────────────────── */
+
+.owmenu__xp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0;
+}
+
+.owmenu__xp-bar-track {
+  height: 5px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.owmenu__xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4466dd, #88aaff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.owmenu__xp-text {
+  font-family: var(--owmenu-font-stat);
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  letter-spacing: 0.03em;
+}
+
+/* ── Moves list (detail screen) ───────────────────────────────────────────── */
+
+.owmenu__moves-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.owmenu__move-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(10, 12, 30, 0.80);
+  border: 1px solid rgba(68, 78, 168, 0.28);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.owmenu__move-name {
+  font-family: var(--owmenu-font-hud);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--owmenu-c-text);
+  letter-spacing: 0.04em;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owmenu__move-meta {
+  font-family: var(--owmenu-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Mobile landscape — short screens (max-height ≤ 480px)
    ═══════════════════════════════════════════════════════════════════════════ */

@@ -161,6 +161,9 @@ export class PreloadScene extends Phaser.Scene {
     for (const [key, paths] of Object.entries(AUDIO_FILES)) {
       this.load.audio(key, paths);
     }
+
+    // ── Sproutodon fullbody reference (no animation frames available) ────────
+    this.load.image('sproutodon_fullbody', 'assets/monari/sproutodon/reference/fullbody.png');
   }
 
   private layoutLoadingScreen(): void {
@@ -195,6 +198,15 @@ export class PreloadScene extends Phaser.Scene {
     setBootLoading(1, 'Assets ready', SAFE_MODE);
     for (const charId of Object.keys(CHARACTERS_MANIFEST)) {
       this.createCharacter(charId);
+    }
+
+    // Sproutodon has no animation frames — use static fullbody image if it loaded
+    if (!this.loadErrors.has('sproutodon_fullbody') && this.textures.exists('sproutodon_fullbody')) {
+      this.registry.set('sproutodon_sprite_key', 'sproutodon_fullbody');
+      this.registry.set('sproutodon_anim_mode',  'static');
+    } else {
+      this.registry.set('sproutodon_sprite_key', null);
+      this.registry.set('sproutodon_anim_mode',  'none');
     }
 
     // Complete the DOM progress bar then fade-dismiss the boot overlay.

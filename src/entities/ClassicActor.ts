@@ -86,11 +86,15 @@ export class ClassicActor extends Phaser.GameObjects.Container {
     if (spriteKey && animMode !== 'none') {
       this.sprite    = scene.add.sprite(0, 0, spriteKey);
       this.useSprite = true;
-      this.sprite.setScale(SPRITE_SCALE);
+      const isStatic = animMode === 'static';
+      const scale    = isStatic
+        ? DISPLAY_HEIGHT / Math.max(1, this.sprite.height)
+        : SPRITE_SCALE;
+      this.sprite.setScale(scale);
       this.sprite.setOrigin(0.5, 1);
-      this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET + renderCfg.spriteYOffset);
+      this.sprite.setPosition(0, data.bodyHeight / 2 + FEET_OFFSET + (isStatic ? 0 : renderCfg.spriteYOffset));
       this.add(this.sprite);
-      this.setupAuraGlow();
+      if (!isStatic) this.setupAuraGlow();
     }
 
     // Placeholder body (always created; hidden when real sprite is loaded)

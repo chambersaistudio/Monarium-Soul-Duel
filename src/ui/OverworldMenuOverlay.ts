@@ -1,6 +1,9 @@
 import './OverworldMenuOverlay.css';
 import { MINARI_ROSTER } from '../data/minariData';
 import { elementLabel, rarityLabel } from '../config/uiTheme';
+import { MOVE_DEX } from '../data/moveDex';
+import type { OverworldSave } from '../systems/PlayerSaveManager';
+import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 
 // ── Element accent colours (CSS hex strings) ──────────────────────────────────
 
@@ -61,6 +64,10 @@ export class OverworldMenuOverlay {
 
   // Track the current team ids so Back from Detail can restore them
   private currentTeamIds: string[] = [];
+  // Player save data — set when showBonderMenu is called
+  private playerSave: OverworldSave | null = null;
+  // Player's actual team IDs (just starter for now)
+  private playerTeamIds: string[] = [];
 
   constructor(callbacks: MenuCallbacks) {
     this.cb = callbacks;
@@ -91,7 +98,9 @@ export class OverworldMenuOverlay {
 
   // ── Bonder Menu ─────────────────────────────────────────────────────────────
 
-  showBonderMenu(): void {
+  showBonderMenu(teamIds?: string[], save?: OverworldSave): void {
+    if (teamIds) this.playerTeamIds = [...teamIds];
+    if (save)    this.playerSave    = save;
     this.panel.innerHTML = '';
 
     const title = document.createElement('div');
@@ -121,8 +130,7 @@ export class OverworldMenuOverlay {
   private handleBonderMenuClick(item: BonderMenuItem): void {
     switch (item) {
       case 'Monari': {
-        // Show team with all roster IDs
-        const ids = Object.keys(MINARI_ROSTER);
+        const ids = this.playerTeamIds.length > 0 ? this.playerTeamIds : Object.keys(MINARI_ROSTER);
         this.showTeamScreen(ids);
         break;
       }
@@ -228,7 +236,15 @@ export class OverworldMenuOverlay {
     img.src = `assets/monari/${id}/portraits/neutral.png`;
     img.alt = monari?.name ?? id;
     img.draggable = false;
-    img.addEventListener('error', () => { img.style.display = 'none'; });
+    let avatarFallbackTried = false;
+    img.addEventListener('error', () => {
+      if (!avatarFallbackTried) {
+        avatarFallbackTried = true;
+        img.src = `assets/monari/${id}/reference/fullbody.png`;
+      } else {
+        img.style.display = 'none';
+      }
+    });
     card.appendChild(img);
 
     // Info column
@@ -240,9 +256,12 @@ export class OverworldMenuOverlay {
     nameEl.textContent = monari?.name ?? id;
     info.appendChild(nameEl);
 
+    const displayLevel = (this.playerSave && id === this.playerSave.starterMonariId)
+      ? this.playerSave.monariLevel
+      : LEVEL_DISPLAY;
     const levelEl = document.createElement('div');
     levelEl.className = 'owmenu__card-level';
-    levelEl.textContent = `Lv.${LEVEL_DISPLAY}`;
+    levelEl.textContent = `Lv.${displayLevel}`;
     info.appendChild(levelEl);
 
     const badge = document.createElement('span');
@@ -322,6 +341,9 @@ export class OverworldMenuOverlay {
     this.panel.appendChild(title);
 
     // ── Header: large portrait + name/meta ──
+    const isPlayerStarter = this.playerSave && id === this.playerSave.starterMonariId;
+    const realLevel = isPlayerStarter ? this.playerSave!.monariLevel : LEVEL_DISPLAY;
+
     const header = document.createElement('div');
     header.className = 'owmenu__detail-header';
 
@@ -330,7 +352,15 @@ export class OverworldMenuOverlay {
     portrait.src = `assets/monari/${id}/portraits/neutral.png`;
     portrait.alt = monari.name;
     portrait.draggable = false;
-    portrait.addEventListener('error', () => { portrait.style.display = 'none'; });
+    let portraitFallbackTried = false;
+    portrait.addEventListener('error', () => {
+      if (!portraitFallbackTried) {
+        portraitFallbackTried = true;
+        portrait.src = `assets/monari/${id}/reference/fullbody.png`;
+      } else {
+        portrait.style.display = 'none';
+      }
+    });
     header.appendChild(portrait);
 
     const meta = document.createElement('div');
@@ -343,8 +373,35 @@ export class OverworldMenuOverlay {
 
     const levelEl = document.createElement('div');
     levelEl.className = 'owmenu__detail-level';
-    levelEl.textContent = `Lv.${LEVEL_DISPLAY}`;
+    levelEl.textContent = `Lv.${realLevel}`;
     meta.appendChild(levelEl);
+
+    // XP bar — only shown for player's own starter
+    if (isPlayerStarter) {
+      const save = this.playerSave!;
+      const xpToNext = PlayerSaveManager.xpToNextLevel(save.monariLevel);
+      const xpPct    = save.monariLevel >= 100 ? 100 : Math.min(100, (save.monariXp / xpToNext) * 100);
+
+      const xpWrap = document.createElement('div');
+      xpWrap.className = 'owmenu__xp-wrap';
+
+      const xpTrack = document.createElement('div');
+      xpTrack.className = 'owmenu__xp-bar-track';
+      const xpFill = document.createElement('div');
+      xpFill.className = 'owmenu__xp-bar-fill';
+      xpFill.style.width = `${xpPct.toFixed(1)}%`;
+      xpTrack.appendChild(xpFill);
+      xpWrap.appendChild(xpTrack);
+
+      const xpText = document.createElement('div');
+      xpText.className = 'owmenu__xp-text';
+      xpText.textContent = save.monariLevel >= 100
+        ? 'MAX LEVEL'
+        : `XP ${save.monariXp} / ${xpToNext}`;
+      xpWrap.appendChild(xpText);
+
+      meta.appendChild(xpWrap);
+    }
 
     const elemBadge = document.createElement('span');
     elemBadge.className = 'owmenu__elem-badge';
@@ -368,14 +425,16 @@ export class OverworldMenuOverlay {
 
     // ── Stat rows — SINGLE COLUMN ONLY ──
     const s = monari.stats;
+    const lvScale = (base: number): number =>
+      Math.round(base * (1 + (realLevel - 1) * LEVEL_GROWTH));
     const statDefs: Array<{ label: string; value: number }> = [
-      { label: 'HP',      value: scaleStat(s.maxHp)    },
-      { label: 'Attack',  value: scaleStat(s.power)     },
-      { label: 'Sp.Atk',  value: Math.round(scaleStat(s.power) * 0.88)  },
-      { label: 'Defense', value: scaleStat(s.defense)   },
-      { label: 'Sp.Def',  value: Math.round(scaleStat(s.defense) * 0.88) },
-      { label: 'Speed',   value: scaleStat(s.speed)     },
-      { label: 'Aura',    value: scaleStat(s.maxAura)   },
+      { label: 'HP',      value: lvScale(s.maxHp)    },
+      { label: 'Attack',  value: lvScale(s.power)     },
+      { label: 'Sp.Atk',  value: Math.round(lvScale(s.power) * 0.88)  },
+      { label: 'Defense', value: lvScale(s.defense)   },
+      { label: 'Sp.Def',  value: Math.round(lvScale(s.defense) * 0.88) },
+      { label: 'Speed',   value: lvScale(s.speed)     },
+      { label: 'Aura',    value: lvScale(s.maxAura)   },
     ];
 
     const statRows = document.createElement('div');
@@ -386,6 +445,42 @@ export class OverworldMenuOverlay {
     }
 
     this.panel.appendChild(statRows);
+
+    // ── Moves ──
+    const movesHeading = document.createElement('div');
+    movesHeading.className = 'owmenu__stats-heading';
+    movesHeading.textContent = 'Moves';
+    this.panel.appendChild(movesHeading);
+
+    const movesList = document.createElement('div');
+    movesList.className = 'owmenu__moves-list';
+
+    const allMoveIds: string[] = [];
+    if (monari.coreAttackId) allMoveIds.push(monari.coreAttackId);
+    if (monari.specialSlots) allMoveIds.push(...monari.specialSlots);
+
+    for (const moveId of allMoveIds) {
+      const entry = MOVE_DEX[moveId];
+      const row   = document.createElement('div');
+      row.className = 'owmenu__move-row';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'owmenu__move-name';
+      nameSpan.textContent = entry?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      row.appendChild(nameSpan);
+
+      if (entry) {
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'owmenu__move-meta';
+        const catSym = entry.category === 'special' ? '✦' : entry.category === 'physical' ? '⚔' : '○';
+        metaSpan.textContent = `${catSym} PWR ${entry.power} · ${entry.auraCost > 0 ? entry.auraCost + 'AU' : 'Free'}`;
+        row.appendChild(metaSpan);
+      }
+
+      movesList.appendChild(row);
+    }
+
+    this.panel.appendChild(movesList);
 
     // ── Action buttons ──
     const actions = document.createElement('div');
