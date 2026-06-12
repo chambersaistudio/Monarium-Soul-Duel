@@ -18,16 +18,16 @@ export const AUDIO_FILES: Record<string, string[]> = {
   bgm_title:        ['assets/audio/music/title/title_theme.mp3'],
 
   // ── Overworld ──────────────────────────────────────────────────────────────
-  bgm_village:      ['assets/audio/music/overworld/village_theme.mp3'],
-  bgm_forest:       ['assets/audio/music/overworld/forest_theme.mp3'],
-  bgm_cave:         ['assets/audio/music/overworld/cave_theme.mp3'],
-  bgm_beach:        ['assets/audio/music/overworld/beach_theme.mp3'],
-  bgm_overworld:    ['assets/audio/music/overworld/general_overworld_theme.mp3'],
+  bgm_village:      ['assets/audio/music/overworld/town_music.mp3'],
+  bgm_forest:       ['assets/audio/music/overworld/town_music.mp3'],
+  bgm_cave:         ['assets/audio/music/overworld/town_music.mp3'],
+  bgm_beach:        ['assets/audio/music/overworld/town_music.mp3'],
+  bgm_overworld:    ['assets/audio/music/overworld/town_music.mp3'],
 
   // ── Battle ─────────────────────────────────────────────────────────────────
-  bgm_battle:       ['assets/audio/music/battle/wild_battle_theme.mp3'],
-  bgm_rival:        ['assets/audio/music/battle/rival_battle_theme.mp3'],
-  bgm_trainer:      ['assets/audio/music/battle/trainer_battle_theme.mp3'],
+  bgm_battle:       ['assets/audio/music/battle/monari-battle.mp3'],
+  bgm_rival:        ['assets/audio/music/battle/monari-battle.mp3'],
+  bgm_trainer:      ['assets/audio/music/battle/monari-battle.mp3'],
 
   // ── Events ─────────────────────────────────────────────────────────────────
   bgm_victory:      ['assets/audio/music/events/victory_theme.mp3'],
