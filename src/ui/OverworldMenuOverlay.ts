@@ -185,6 +185,9 @@ export class OverworldMenuOverlay {
         this.cb.onClose();
         this.hide();
         break;
+      case 'Bag':
+        this.showBagPage();
+        break;
       default:
         this.showComingSoon(item);
         break;
@@ -218,6 +221,59 @@ export class OverworldMenuOverlay {
     actions.appendChild(backBtn);
 
     this.panel.appendChild(actions);
+  }
+
+  private showBagPage(): void {
+    this.panel.innerHTML = '';
+    const save = this.playerSave;
+
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = 'Bag';
+    this.panel.appendChild(title);
+
+    const content = document.createElement('div');
+    content.className = 'owmenu__bag-content';
+
+    if (!save) {
+      const msg = document.createElement('div');
+      msg.className = 'owmenu__coming-soon';
+      msg.textContent = 'No save data found.';
+      content.appendChild(msg);
+    } else {
+      const potionCount = save.potionCount ?? 0;
+      if (potionCount > 0) {
+        const row = document.createElement('div');
+        row.className = 'owmenu__bag-item-row';
+        row.innerHTML = `
+          <div class="owmenu__bag-item-icon">🧪</div>
+          <div class="owmenu__bag-item-info">
+            <span class="owmenu__bag-item-name">Potion</span>
+            <span class="owmenu__bag-item-desc">+15 HP · Uses turn in battle</span>
+          </div>
+          <span class="owmenu__bag-item-qty">×${potionCount}</span>
+        `;
+        content.appendChild(row);
+      } else {
+        const empty = document.createElement('div');
+        empty.className = 'owmenu__empty-state';
+        empty.textContent = 'Bag is empty.';
+        content.appendChild(empty);
+      }
+    }
+
+    this.panel.appendChild(content);
+
+    const actions = document.createElement('div');
+    actions.className = 'owmenu__detail-actions';
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'owmenu__back-btn';
+    backBtn.textContent = '← Menu';
+    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.showBonderMenu(); });
+    actions.appendChild(backBtn);
+    this.panel.appendChild(actions);
+    this.show();
   }
 
   // ── Player Page ───────────────────────────────────────────────────────────
@@ -814,12 +870,6 @@ export class OverworldMenuOverlay {
       const row = this.buildTechRow(moveId, move);
       row.setAttribute('data-lib-move', moveId);
       row.style.cursor = 'default';
-      row.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        if (this.swapState && this.swapState.monariId === id) {
-          this.executeSwap(id, this.swapState.slotIndex, moveId, swapHint);
-        }
-      });
       libraryCol.appendChild(row);
     }
 
@@ -850,23 +900,57 @@ export class OverworldMenuOverlay {
     oldMoveId: string,
     hintEl: HTMLElement,
   ): void {
+    // Toggle: tap the same slot again to cancel
+    if (this.swapState && this.swapState.slotIndex === slotIndex && this.swapState.monariId === monariId) {
+      this.cancelSwapMode(hintEl);
+      return;
+    }
     this.swapState = { monariId, slotIndex, oldMoveId };
     hintEl.style.display = 'block';
 
-    // Highlight selected slot, unhighlight others
     const modal = document.getElementById('owmenu-tech-modal');
     if (!modal) return;
-    modal.querySelectorAll('.owmenu-tech__move-row').forEach((el) => {
+
+    // Highlight selected slot
+    modal.querySelectorAll('.owmenu-tech__move-row').forEach(el => {
       (el as HTMLElement).classList.remove('owmenu-tech__move-row--swap-source');
     });
-    const slotRow = document.getElementById(`owmenu-tech-slot-${slotIndex}`);
-    slotRow?.classList.add('owmenu-tech__move-row--swap-source');
+    document.getElementById(`owmenu-tech-slot-${slotIndex}`)?.classList.add('owmenu-tech__move-row--swap-source');
 
-    // Make library rows visually active
-    modal.querySelectorAll('[data-lib-move]').forEach((el) => {
-      (el as HTMLElement).style.cursor = 'pointer';
-      (el as HTMLElement).classList.add('owmenu-tech__move-row--lib-active');
+    // Remove old swap buttons from library rows
+    modal.querySelectorAll('.owmenu-tech__swap-btn').forEach(b => b.remove());
+
+    // Add SWAP button to each library row
+    modal.querySelectorAll('[data-lib-move]').forEach(el => {
+      const libRow = el as HTMLElement;
+      const libMoveId = libRow.dataset.libMove!;
+      libRow.classList.add('owmenu-tech__move-row--lib-active');
+
+      const swapBtn = document.createElement('button');
+      swapBtn.type = 'button';
+      swapBtn.className = 'owmenu-tech__swap-btn';
+      swapBtn.textContent = '↓';
+      swapBtn.setAttribute('aria-label', 'Swap in');
+      swapBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.swapState) {
+          this.executeSwap(monariId, this.swapState.slotIndex, libMoveId, hintEl);
+        }
+      });
+      libRow.appendChild(swapBtn);
     });
+  }
+
+  private cancelSwapMode(hintEl: HTMLElement): void {
+    this.swapState = null;
+    hintEl.style.display = 'none';
+    const modal = document.getElementById('owmenu-tech-modal');
+    modal?.querySelectorAll('.owmenu-tech__move-row--swap-source').forEach(el =>
+      (el as HTMLElement).classList.remove('owmenu-tech__move-row--swap-source'));
+    modal?.querySelectorAll('.owmenu-tech__swap-btn').forEach(b => b.remove());
+    modal?.querySelectorAll('.owmenu-tech__move-row--lib-active').forEach(el =>
+      (el as HTMLElement).classList.remove('owmenu-tech__move-row--lib-active'));
   }
 
   private executeSwap(

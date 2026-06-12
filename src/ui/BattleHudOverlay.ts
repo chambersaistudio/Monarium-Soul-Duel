@@ -113,6 +113,9 @@ export class BattleHudOverlay {
   private menuOpen   = false;
   private inMoves    = false;
 
+  // Move info popup (long-press)
+  private moveInfoEl: HTMLDivElement | null = null;
+
   private readonly cb: HudOverlayCallbacks;
 
   constructor(callbacks: HudOverlayCallbacks) {
@@ -410,6 +413,7 @@ export class BattleHudOverlay {
   hideMenu(): void {
     this.menuOpen = false;
     this.inMoves  = false;
+    this.dismissMoveInfoPopup();
     this.root.classList.remove('bhud--menu-visible');
   }
 
@@ -420,6 +424,7 @@ export class BattleHudOverlay {
     this.movesPanel.classList.remove('bhud--active');
     this.bagPanel.classList.remove('bhud--active');
     this.bondPanel.classList.remove('bhud--active');
+    this.dismissMoveInfoPopup();
     this.refreshMainCursor();
   }
 
@@ -595,23 +600,47 @@ export class BattleHudOverlay {
         const catSym   = move?.category === 'special' ? '✦ ' : '⚔ ';
         const nameStr  = id === 'basic_attack' ? `${catSym}BASIC ATK` : `${catSym}${move?.displayName?.toUpperCase() ?? id.toUpperCase()}`;
         const metaStr  = id === 'basic_attack'
-          ? `PWR ${move?.power ?? 0} · +${move?.auraGain ?? 0}AU · ${move?.accuracy ?? 100}%`
-          : (isGuard ? 'Priority +4' : (cost > 0 ? `${cost} AU` : ''));
+          ? `PWR ${move?.power ?? 0} | +${move?.auraGain ?? 0} AU | ${move?.accuracy ?? 100}%`
+          : (isGuard ? `Guard Stance${blocked ? '' : ''}` : (cost > 0 ? `AU ${cost}` : ''));
         btn.innerHTML  = `<span class="bhud__move-name">${nameStr}${blocked ? ' <span class="bhud__move-locked">LOCKED</span>' : ''}</span>`
           + (metaStr ? `<span class="bhud__move-meta">${metaStr}</span>` : '');
 
         const idx = this.moveBtns.length;
+        let lpTimer_u: ReturnType<typeof setTimeout> | null = null;
+        let lpFired_u = false;
+        let lpStartX_u = 0, lpStartY_u = 0;
+
         btn.addEventListener('pointerenter', () => {
           if (!this.menuOpen || !this.inMoves || dimmed) return;
           this.moveCursor = idx;
           this.refreshMoveCursor();
         });
         btn.addEventListener('pointerdown', (e) => {
-          e.preventDefault();
           if (!this.menuOpen || !this.inMoves || dimmed) return;
+          lpFired_u = false;
+          lpStartX_u = e.clientX;
+          lpStartY_u = e.clientY;
           this.moveCursor = idx;
           this.refreshMoveCursor();
+          lpTimer_u = window.setTimeout(() => {
+            lpFired_u = true;
+            this.showMoveInfoPopup(id);
+          }, 500);
+        });
+        btn.addEventListener('pointermove', (e) => {
+          if (Math.abs(e.clientX - lpStartX_u) > 8 || Math.abs(e.clientY - lpStartY_u) > 8) {
+            if (lpTimer_u) { clearTimeout(lpTimer_u); lpTimer_u = null; }
+          }
+        });
+        btn.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          if (lpTimer_u) { clearTimeout(lpTimer_u); lpTimer_u = null; }
+          if (!this.menuOpen || !this.inMoves || dimmed || lpFired_u) return;
           this.cb.onMoveSelect(id);
+        });
+        btn.addEventListener('pointercancel', () => {
+          if (lpTimer_u) { clearTimeout(lpTimer_u); lpTimer_u = null; }
+          lpFired_u = false;
         });
         col.appendChild(btn);
         this.moveBtns.push(btn);
@@ -648,25 +677,49 @@ export class BattleHudOverlay {
         const nameStr = `${catSym}${move?.displayName?.toUpperCase() ?? id.toUpperCase()}`;
         const hasSyncDmg = (move?.syncDamage ?? 0) !== 0;
         const costStr = hasSyncDmg
-          ? `SYNC ${move!.syncDamage} · ${cost > 0 ? cost + 'AU' : 'Free'} · ${move?.accuracy ?? 100}%`
+          ? `SYNC ${move!.syncDamage} | AU ${cost} | ${move?.accuracy ?? 100}%`
           : (move?.holdsStance
-            ? `Stance · ${cost > 0 ? cost + 'AU' : 'Free'}`
-            : `PWR ${move?.power ?? 0} · ${cost > 0 ? cost + 'AU' : 'Free'} · ${move?.accuracy ?? 100}%`);
+            ? `Guard Stance | AU ${cost}`
+            : `PWR ${move?.power ?? 0} | AU ${cost} | ACC ${move?.accuracy ?? 100}%`);
         btn.innerHTML = `<span class="bhud__move-name">${nameStr}</span>`
           + `<span class="bhud__move-meta">${costStr}</span>`;
 
         const idx = this.moveBtns.length;
+        let lpTimer_s: ReturnType<typeof setTimeout> | null = null;
+        let lpFired_s = false;
+        let lpStartX_s = 0, lpStartY_s = 0;
+
         btn.addEventListener('pointerenter', () => {
           if (!this.menuOpen || !this.inMoves || dimmed) return;
           this.moveCursor = idx;
           this.refreshMoveCursor();
         });
         btn.addEventListener('pointerdown', (e) => {
-          e.preventDefault();
           if (!this.menuOpen || !this.inMoves || dimmed) return;
+          lpFired_s = false;
+          lpStartX_s = e.clientX;
+          lpStartY_s = e.clientY;
           this.moveCursor = idx;
           this.refreshMoveCursor();
+          lpTimer_s = window.setTimeout(() => {
+            lpFired_s = true;
+            this.showMoveInfoPopup(id);
+          }, 500);
+        });
+        btn.addEventListener('pointermove', (e) => {
+          if (Math.abs(e.clientX - lpStartX_s) > 8 || Math.abs(e.clientY - lpStartY_s) > 8) {
+            if (lpTimer_s) { clearTimeout(lpTimer_s); lpTimer_s = null; }
+          }
+        });
+        btn.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          if (lpTimer_s) { clearTimeout(lpTimer_s); lpTimer_s = null; }
+          if (!this.menuOpen || !this.inMoves || dimmed || lpFired_s) return;
           this.cb.onMoveSelect(id);
+        });
+        btn.addEventListener('pointercancel', () => {
+          if (lpTimer_s) { clearTimeout(lpTimer_s); lpTimer_s = null; }
+          lpFired_s = false;
         });
         row.appendChild(btn);
         this.moveBtns.push(btn);
@@ -766,9 +819,69 @@ export class BattleHudOverlay {
   get curMainCursor(): number { return this.mainCursor; }
   get curMoveCursor(): number { return this.moveCursor; }
 
+  // ── Move info popup (long-press) ────────────────────────────────────────────
+
+  showMoveInfoPopup(moveId: string): void {
+    this.dismissMoveInfoPopup();
+    const move = CLASSIC_MOVES[moveId];
+    const bg = document.createElement('div');
+    bg.className = 'bhud-minfo-bg';
+    const card = document.createElement('div');
+    card.className = 'bhud-minfo';
+
+    const icon = move?.holdsStance ? '🛡' : move?.category === 'special' ? '✦' : move?.category === 'physical' ? '⚔' : '◎';
+    const catLabel = move?.holdsStance ? 'Guard' : move?.category === 'special' ? 'Special' : move?.category === 'physical' ? 'Physical' : 'Status';
+    const typeColor = ({
+      fire:'#ff6b35',water:'#38c8ff',flora:'#66c86d',wind:'#66e7de',
+      thunder:'#ffe65c',stone:'#a08a6a',dark:'#8b5cff',neutral:'#9da3c7',none:'#9da3c7'
+    } as Record<string,string>)[move?.damageType ?? 'neutral'] ?? '#9da3c7';
+    const name = move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const au = move?.auraCost ?? 0;
+    const acc = move?.accuracy ?? 100;
+    const desc = move?.description ?? '';
+    const typeLabel = (move?.damageType ?? 'neutral');
+    const typeStr = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+
+    card.innerHTML = `
+      <div class="bhud-minfo__header">
+        <span class="bhud-minfo__name">${name}</span>
+        <button class="bhud-minfo__close" type="button">✕</button>
+      </div>
+      <div class="bhud-minfo__badges">
+        <span class="bhud-minfo__cat">${icon} ${catLabel}</span>
+        <span class="bhud-minfo__type" style="color:${typeColor}">● ${typeStr}</span>
+      </div>
+      <div class="bhud-minfo__stats">
+        <div class="bhud-minfo__stat"><span class="bhud-minfo__sl">PWR</span><span class="bhud-minfo__sv" style="color:#ff8844">${move?.power ?? 0}</span></div>
+        <div class="bhud-minfo__stat"><span class="bhud-minfo__sl">AU</span><span class="bhud-minfo__sv" style="color:#44aaff">${au}</span></div>
+        <div class="bhud-minfo__stat"><span class="bhud-minfo__sl">ACC</span><span class="bhud-minfo__sv">${acc}%</span></div>
+      </div>
+      ${desc ? `<p class="bhud-minfo__desc">${desc}</p>` : ''}
+      <div class="bhud-minfo__hint">Hold for details · Tap to use</div>
+    `;
+
+    bg.appendChild(card);
+    document.body.appendChild(bg);
+    this.moveInfoEl = bg;
+
+    (card.querySelector('.bhud-minfo__close') as HTMLButtonElement).addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.dismissMoveInfoPopup();
+    });
+    bg.addEventListener('pointerdown', (e) => {
+      if (e.target === bg) this.dismissMoveInfoPopup();
+    });
+  }
+
+  dismissMoveInfoPopup(): void {
+    this.moveInfoEl?.remove();
+    this.moveInfoEl = null;
+  }
+
   // ── Cleanup ─────────────────────────────────────────────────────────────────
 
   destroy(): void {
+    this.dismissMoveInfoPopup();
     this.root.remove();
   }
 

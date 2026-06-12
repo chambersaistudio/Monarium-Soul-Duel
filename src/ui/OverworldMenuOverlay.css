@@ -47,7 +47,7 @@
   background: var(--owmenu-c-panel);
   border: 1px solid var(--owmenu-c-border);
   border-radius: 0 0 var(--owmenu-radius) var(--owmenu-radius);
-  padding: 16px 14px 20px;
+  padding: max(16px, calc(10px + env(safe-area-inset-top))) 14px 20px;
   width: 100%;
   max-width: 340px;
   max-height: 90vh;
@@ -1334,4 +1334,51 @@
     padding: 6px 12px;
     font-size: 9px;
   }
+}
+
+/* ── Swap button (added dynamically to library rows in swap mode) ─────────── */
+
+.owmenu-tech__swap-btn {
+  flex-shrink: 0;
+  background: rgba(60, 30, 120, 0.85);
+  border: 1px solid rgba(139, 92, 255, 0.65);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-family: "Rajdhani", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #a855f7;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s;
+  user-select: none;
+  white-space: nowrap;
+}
+.owmenu-tech__swap-btn:hover,
+.owmenu-tech__swap-btn:focus-visible {
+  background: rgba(100, 40, 200, 0.90);
+  color: #ffffff;
+}
+
+/* ── Bag page ─────────────────────────────────────────────────────────────── */
+
+.owmenu__bag-content { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.owmenu__bag-item-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(10, 12, 30, 0.90);
+  border: 1px solid rgba(68, 78, 168, 0.38);
+  border-radius: 8px; padding: 10px 12px;
+}
+.owmenu__bag-item-icon { font-size: 22px; flex-shrink: 0; }
+.owmenu__bag-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.owmenu__bag-item-name {
+  font-family: var(--owmenu-font-hud); font-size: 11px; font-weight: 700; color: #f0ecff;
+}
+.owmenu__bag-item-desc {
+  font-family: var(--owmenu-font-stat); font-size: 10px; color: var(--owmenu-c-muted);
+}
+.owmenu__bag-item-qty {
+  font-family: var(--owmenu-font-hud); font-size: 14px; font-weight: 700; color: var(--owmenu-c-gold);
+  flex-shrink: 0;
 }

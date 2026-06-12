@@ -33,6 +33,11 @@ export const AUDIO_FILES: Record<string, string[]> = {
   // ── Creature SFX ───────────────────────────────────────────────────────────
   flarepaw_hurt:    ['assets/audio/sfx/creatures/flarepaw/hurt.ogg', 'assets/audio/sfx/creatures/flarepaw/hurt.mp3'],
   droplet_hurt:     ['assets/audio/sfx/creatures/droplet/hurt.ogg',  'assets/audio/sfx/creatures/droplet/hurt.mp3'],
+
+  // ── Music (alternate paths) ────────────────────────────────────────────────
+  bgm_victory:   ['assets/audio/music/victory_theme.mp3', 'assets/audio/bgm/victory.mp3'],
+  bgm_title:     ['assets/audio/music/title_theme.mp3',   'assets/audio/bgm/menu.mp3'],
+  sfx_bond:      ['assets/audio/sfx/bond_success.mp3'],
 };
 
 /** Typed constants so scenes never hard-code string keys. */
@@ -41,6 +46,8 @@ export const AUDIO_KEYS = {
     menu:      'bgm_menu',
     battle:    'bgm_battle',
     overworld: 'bgm_overworld',
+    victory:   'bgm_victory',
+    title:     'bgm_title',
   },
   ui: {
     move:    'ui_move',
@@ -53,6 +60,7 @@ export const AUDIO_KEYS = {
     hurtImpact: 'sfx_hurt_impact',
     victory:    'sfx_victory',
     defeat:     'sfx_defeat',
+    bond:       'sfx_bond',
   },
   /** Returns the hurt-sound key for any character ID. */
   creatureHurt: (charId: string): string => `${charId}_hurt`,
