@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
 
 /**
- * Plays the Monarium opening cinematic while PreloadScene loads assets in parallel.
+ * Plays monarium_opening.MP4 while PreloadScene loads assets in the background.
+ *
+ * The opening video is muted so it autoplays reliably before any user gesture
+ * (iOS/Android block unmuted autoplay).  z-index 10000 puts it above the boot
+ * overlay (9999) so the loading bar is hidden while the cinematic plays.
  *
  * Skip rules:
- *   - Video always plays to completion unless the user taps / presses Enter.
- *   - Tapping or pressing Enter only skips if preload_complete is already true.
- *     (user must watch the opening if assets are still loading)
- *   - When the video ends naturally, always proceed to TitleScene regardless
- *     of load state (TitleScene handles the "still loading" case).
- *   - Missing / unplayable file → immediately proceeds to TitleScene.
+ *   - Tap or Enter skips only when preload_complete is already true.
+ *   - The video always plays to completion if still loading.
+ *   - Missing file / play error → proceed to TitleScene immediately.
  */
 export class SplashScene extends Phaser.Scene {
   private videoEl: HTMLVideoElement | null = null;
@@ -33,12 +34,13 @@ export class SplashScene extends Phaser.Scene {
 
   private playOpening(): void {
     const video = document.createElement('video');
-    // Note: file on disk is monarium_opening.MP4 (uppercase extension)
     video.src = 'assets/startup/opening/monarium_opening.MP4';
     video.playsInline = true;
-    video.muted = false;
+    video.muted = true;          // muted = guaranteed autoplay before user gesture
+    video.setAttribute('playsinline', '');  // belt-and-braces for iOS WKWebView
     video.style.cssText =
-      'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:9000;';
+      'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;' +
+      'background:#000;z-index:10000;';  // above boot-overlay (9999)
 
     const done = () => {
       this.proceedFn = null;
@@ -51,14 +53,12 @@ export class SplashScene extends Phaser.Scene {
 
     // Always proceed when video ends naturally.
     video.addEventListener('ended', done, { once: true });
-    // Missing file or codec error → skip immediately.
+    // Missing file / codec error → skip.
     video.addEventListener('error', done, { once: true });
 
-    // Tap to skip — only allowed once assets are loaded.
+    // Tap anywhere on video to skip — only when loaded.
     const trySkip = () => {
-      if (this.registry.get('preload_complete') && this.videoEl === video) {
-        done();
-      }
+      if (this.registry.get('preload_complete') && this.videoEl === video) done();
     };
     video.addEventListener('pointerdown', trySkip);
     this.proceedFn = done;
@@ -66,7 +66,8 @@ export class SplashScene extends Phaser.Scene {
     document.body.appendChild(video);
     this.videoEl = video;
 
-    video.play().catch(done);
+    const promise = video.play();
+    if (promise !== undefined) promise.catch(done);
   }
 
   private proceed(): void {

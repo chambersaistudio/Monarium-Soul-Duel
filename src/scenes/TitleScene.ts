@@ -2,19 +2,24 @@ import Phaser from 'phaser';
 import { layoutDomOverlays } from '../ui/bootOverlay';
 
 /**
- * Title screen — plays title_screen_loop.mp4 full-screen.
+ * Title screen — plays title_screen_loop.mp4 full-screen (muted, z-index 10000).
  *
- * Loading bar overlay sits on top of the video if assets are still loading
- * (possible when the opening is skipped early or the file was missing).
- * Once preload_complete fires, the bar fades out and the screen becomes
- * tappable — the video's last frame has a built-in "tap to start" image.
+ * z-index stack:
+ *   boot-overlay    9 999  (fades out when PreloadScene finishes)
+ *   title video    10 000  (above boot overlay — user sees video, not loading bar)
+ *   load overlay   10 001  (own minimal progress bar shown on top of video)
  *
- * Tap anywhere / press Enter → ModeSelectScene.
+ * Interaction:
+ *   - While preload_complete is false: tap / Enter does nothing.
+ *   - Once preload_complete fires: load bar fades, tap / Enter → ModeSelectScene.
+ *   - The video's last frame has a built-in "tap to start" — no DOM button needed.
+ *   - Phaser canvas fallback (text + canvas tap) activates if the video fails.
  */
 export class TitleScene extends Phaser.Scene {
-  private titleVideo: HTMLVideoElement | null = null;
+  private titleVideo:  HTMLVideoElement | null = null;
   private loadOverlay: HTMLDivElement  | null = null;
-  private ready = false;
+  private promptText:  Phaser.GameObjects.Text | null = null;
+  private ready    = false;
   private starting = false;
   private enterKey!: Phaser.Input.Keyboard.Key;
 
@@ -34,6 +39,9 @@ export class TitleScene extends Phaser.Scene {
       this.loadOverlay?.remove();
       this.loadOverlay = null;
     });
+
+    // Phaser canvas always handles tap as a fallback (works even when video is invisible)
+    this.input.on('pointerup', () => { if (this.ready) this.startGame(); });
 
     this.createTitleVideo();
 
@@ -56,70 +64,94 @@ export class TitleScene extends Phaser.Scene {
     video.src = 'assets/startup/title/title_screen_loop.mp4';
     video.loop = true;
     video.playsInline = true;
-    video.muted = false;
+    video.muted = true;         // muted = reliable autoplay; audio can be re-enabled later
+    video.setAttribute('playsinline', '');
     video.style.cssText =
-      'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:9000;';
+      'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;' +
+      'z-index:10000;';
 
+    // If the file doesn't exist / codec fails, show the Phaser fallback.
     video.addEventListener('error', () => {
       video.remove();
       if (this.titleVideo === video) this.titleVideo = null;
+      this.showPhaserFallback();
     }, { once: true });
 
-    video.addEventListener('pointerdown', () => {
-      if (this.ready) this.startGame();
-    });
+    // Tap on video → start game (only when ready)
+    video.addEventListener('pointerdown', () => { if (this.ready) this.startGame(); });
 
     document.body.appendChild(video);
     this.titleVideo = video;
 
-    video.play().catch(() => {
-      // Autoplay blocked — retry muted (browser policy on first load)
-      video.muted = true;
-      video.play().catch(() => {
-        video.remove();
-        if (this.titleVideo === video) this.titleVideo = null;
+    const promise = video.play();
+    if (promise !== undefined) {
+      promise.catch(() => {
+        // play() blocked but video element is still in DOM.
+        // First frame renders; user can still tap when ready.
       });
-    });
+    }
   }
 
-  // ── Loading overlay ──────────────────────────────────────────────────────────
+  // ── Loading overlay (shown while assets are still loading) ──────────────────
 
   private createLoadOverlay(): void {
     const el = document.createElement('div');
     el.id = 'title-load-overlay';
     el.style.cssText = [
-      'position:fixed;inset:0;z-index:9001;',
+      'position:fixed;inset:0;',
+      'z-index:10001;',    // above the title video (10000)
       'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;',
-      'padding-bottom:max(48px,env(safe-area-inset-bottom,48px));',
+      'padding-bottom:max(52px,env(safe-area-inset-bottom,52px));',
       'pointer-events:none;',
     ].join('');
     el.innerHTML = `
-      <div style="width:min(280px,72vw)">
-        <div style="height:3px;background:#1a1a22;border-radius:2px;overflow:hidden">
+      <div style="width:min(260px,68vw)">
+        <div style="height:3px;background:rgba(255,255,255,0.12);border-radius:2px;overflow:hidden">
           <div id="title-load-bar"
-               style="height:100%;width:0%;background:#ff6600;transition:width 120ms linear;">
+               style="height:100%;width:0%;background:#ff6600;
+                      transition:width 120ms linear;border-radius:2px;">
           </div>
         </div>
-        <div id="title-load-label"
-             style="margin-top:6px;font-family:monospace;font-size:10px;color:#555;text-align:center;letter-spacing:2px;">
-          LOADING
-        </div>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(el);
     this.loadOverlay = el;
   }
 
   private onLoadReady(): void {
     if (this.loadOverlay) {
-      this.loadOverlay.style.transition = 'opacity 0.4s';
+      this.loadOverlay.style.transition = 'opacity 0.35s';
       this.loadOverlay.style.opacity    = '0';
       setTimeout(() => {
         this.loadOverlay?.remove();
         this.loadOverlay = null;
-      }, 420);
+      }, 380);
+    }
+    // If promptText is showing (Phaser fallback), make it pulsing/visible
+    if (this.promptText) {
+      this.promptText.setAlpha(1);
+      this.tweens.add({ targets: this.promptText, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
     }
     this.ready = true;
+  }
+
+  // ── Phaser fallback (used when video fails to load) ──────────────────────────
+
+  private showPhaserFallback(): void {
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+    this.add.text(cx, cy - 50, 'MONARIUM', {
+      fontSize: String(Math.floor(Math.min(64, this.scale.width / 9))) + 'px',
+      color: '#ff6600', fontStyle: 'bold',
+      fontFamily: 'Orbitron, monospace',
+      stroke: '#000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(2);
+    this.add.text(cx, cy + 4, 'SOUL DUEL', {
+      fontSize: '22px', color: '#ffaa44',
+      fontFamily: 'Orbitron, monospace', letterSpacing: 10,
+    }).setOrigin(0.5).setDepth(2);
+    this.promptText = this.add.text(cx, cy + 68, 'Tap to Start', {
+      fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(2).setAlpha(0);
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
@@ -135,7 +167,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   update(): void {
-    // Update loading bar progress from registry (written by PreloadScene each frame)
+    // Keep progress bar in sync with PreloadScene's load progress.
     if (this.loadOverlay) {
       const pct = Math.round((this.registry.get('preload_progress') as number ?? 0) * 100);
       const bar = document.getElementById('title-load-bar');
