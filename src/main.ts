@@ -9,7 +9,10 @@ import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
-import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
+import { applyHighDpiCanvas, getRenderDpr, installHighDpiText } from './config/highDpi';
+
+// Must run before any scene creates text objects
+installHighDpiText();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -60,9 +63,9 @@ const game = new Phaser.Game(config);
 
 // ── DPR-aware canvas sync ─────────────────────────────────────────────────────
 // Keeps the canvas drawing buffer at CSS × DPR pixels while the Phaser
-// coordinate system stays in CSS pixels.  The camera zoom shim (zoom = DPR)
-// ensures all scenes render at native resolution without changing any scene
-// coordinate code.  See src/config/highDpi.ts for implementation details.
+// coordinate system stays in CSS pixels.  Cameras zoom from the top-left
+// corner (origin 0,0) so the CSS-pixel world maps exactly onto the buffer —
+// no scene coordinate code changes.  See src/config/highDpi.ts for details.
 let viewportSyncTimer: ReturnType<typeof setTimeout> | undefined;
 
 function syncViewport(reason: string): void {
