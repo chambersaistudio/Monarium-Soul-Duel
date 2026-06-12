@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MONARIUM Overworld Menu Overlay
-   Full-screen overlay: Bonder Menu | Monari Team | Monari Detail
+   Full-screen overlay: Bonder Menu | Monari Team | Monari Detail (modal)
    Orbitron = titles/names/labels   Rajdhani = stats/sub-text
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -35,7 +35,6 @@
   align-items: flex-start;
   justify-content: center;
 
-  /* semi-transparent dark veil */
   background: var(--owmenu-c-bg);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -61,7 +60,6 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-sizing: border-box;
-  /* Scrollbar styling for dark theme */
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 90, 180, 0.35) transparent;
 }
@@ -170,6 +168,19 @@
   line-height: 1.5;
 }
 
+/* ── Empty team state ─────────────────────────────────────────────────────── */
+
+.owmenu__empty-state {
+  padding: 28px 14px;
+  font-family: var(--owmenu-font-stat);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--owmenu-c-muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
 /* ── Monari Team grid ─────────────────────────────────────────────────────── */
 
 .owmenu__team-grid {
@@ -207,11 +218,12 @@
   background: rgba(28, 22, 68, 0.98);
 }
 
-/* Avatar image on the card */
+/* Avatar image on the card — fullbody centered */
 .owmenu__card-avatar {
   width: 60px;
   height: 60px;
   object-fit: contain;
+  object-position: center center;
   border-radius: 6px;
   flex-shrink: 0;
   background: rgba(20, 16, 48, 0.55);
@@ -301,129 +313,6 @@
   border-radius: 3px;
 }
 
-/* ── Monari Detail screen ─────────────────────────────────────────────────── */
-
-.owmenu__detail-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(68, 78, 168, 0.30);
-}
-
-.owmenu__detail-avatar {
-  width: 120px;
-  height: 120px;
-  object-fit: contain;
-  border-radius: 10px;
-  flex-shrink: 0;
-  background: rgba(20, 16, 48, 0.60);
-  border: 1px solid rgba(68, 78, 168, 0.35);
-}
-
-.owmenu__detail-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding-top: 4px;
-}
-
-.owmenu__detail-name {
-  font-family: var(--owmenu-font-hud);
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.owmenu__detail-level {
-  font-family: var(--owmenu-font-stat);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--owmenu-c-gold);
-  opacity: 0.85;
-}
-
-.owmenu__detail-rarity {
-  font-family: var(--owmenu-font-stat);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--owmenu-c-muted);
-  letter-spacing: 0.04em;
-}
-
-/* ── Stat section heading ─────────────────────────────────────────────────── */
-
-.owmenu__stats-heading {
-  font-family: var(--owmenu-font-hud);
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--owmenu-c-muted);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-
-/* ── Stat rows — SINGLE COLUMN ONLY, no two-column layout ────────────────── */
-
-.owmenu__stat-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-bottom: 16px;
-}
-
-.owmenu__stat-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.owmenu__stat-label {
-  font-family: var(--owmenu-font-stat);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--owmenu-c-muted);
-  width: 80px;
-  flex-shrink: 0;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.owmenu__stat-bar-wrap {
-  flex: 1;
-  height: 7px;
-  background: rgba(14, 14, 30, 0.95);
-  border-radius: 4px;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.owmenu__stat-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.22s ease;
-}
-
-.owmenu__stat-val {
-  font-family: var(--owmenu-font-stat);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--owmenu-c-text);
-  width: 48px;
-  flex-shrink: 0;
-  text-align: right;
-  white-space: nowrap;
-}
-
 /* ── Detail action buttons ────────────────────────────────────────────────── */
 
 .owmenu__detail-actions {
@@ -472,9 +361,262 @@
   border-color: rgba(255, 200, 80, 0.70);
 }
 
-/* ── Move info button (ℹ) ────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Monari Detail — centered widescreen modal
+   Appended to document.body → all colours are HARDCODED (no CSS vars)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.owmenu__move-info-btn {
+.owmenu-dmodal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 10, 0.68);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.owmenu-dmodal {
+  position: relative;
+  background: rgba(8, 9, 24, 0.97);
+  border: 1px solid rgba(68, 78, 168, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 20px 70px rgba(0, 0, 16, 0.88), inset 0 1px 0 rgba(200, 190, 255, 0.06);
+  display: flex;
+  flex-direction: row;
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Close button — top-right corner */
+.owmenu-dmodal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  background: rgba(10, 12, 30, 0.85);
+  border: 1px solid rgba(68, 78, 168, 0.40);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #7a7498;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, color 0.10s;
+  user-select: none;
+}
+.owmenu-dmodal__close:hover,
+.owmenu-dmodal__close:focus-visible {
+  background: rgba(139, 92, 255, 0.30);
+  color: #ffffff;
+}
+
+/* Image column — left side */
+.owmenu-dmodal__img-col {
+  flex-shrink: 0;
+  width: 38%;
+  max-width: 260px;
+  min-width: 110px;
+  background: rgba(5, 6, 18, 0.98);
+  border-right: 1px solid rgba(68, 78, 168, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  box-sizing: border-box;
+}
+
+.owmenu-dmodal__img {
+  width: 100%;
+  height: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  object-position: center center;
+}
+
+/* Info column — right side, scrollable */
+.owmenu-dmodal__info-col {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 46px 18px 20px; /* right padding leaves room for close btn */
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 90, 180, 0.35) transparent;
+}
+.owmenu-dmodal__info-col::-webkit-scrollbar { width: 4px; }
+.owmenu-dmodal__info-col::-webkit-scrollbar-track { background: transparent; }
+.owmenu-dmodal__info-col::-webkit-scrollbar-thumb { background: rgba(100, 90, 180, 0.40); border-radius: 4px; }
+
+.owmenu-dmodal__name {
+  font-family: "Orbitron", monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.15;
+  margin-bottom: 4px;
+}
+
+.owmenu-dmodal__level {
+  font-family: "Rajdhani", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffe39a;
+  margin-bottom: 6px;
+}
+
+/* XP bar */
+.owmenu-dmodal__xp-wrap {
+  margin-bottom: 10px;
+}
+.owmenu-dmodal__xp-track {
+  height: 5px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+.owmenu-dmodal__xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4466dd, #88aaff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.owmenu-dmodal__xp-text {
+  font-family: "Rajdhani", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a7498;
+}
+
+/* Element + rarity badges */
+.owmenu-dmodal__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.owmenu-dmodal__elem-badge,
+.owmenu-dmodal__rar-badge {
+  font-family: "Rajdhani", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.owmenu-dmodal__rar-badge { color: #7a7498; }
+
+/* Section heading */
+.owmenu-dmodal__section-heading {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #7a7498;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Stat rows */
+.owmenu-dmodal__stat-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.owmenu-dmodal__stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.owmenu-dmodal__stat-label {
+  font-family: "Rajdhani", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7a7498;
+  width: 72px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.owmenu-dmodal__stat-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 0;
+}
+.owmenu-dmodal__stat-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.22s ease;
+}
+.owmenu-dmodal__stat-val {
+  font-family: "Rajdhani", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f0ecff;
+  width: 42px;
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Moves list */
+.owmenu-dmodal__moves-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.owmenu-dmodal__move-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 12, 30, 0.80);
+  border: 1px solid rgba(68, 78, 168, 0.28);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+.owmenu-dmodal__move-name {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #f0ecff;
+  letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.owmenu-dmodal__move-meta {
+  font-family: "Rajdhani", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a7498;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.owmenu-dmodal__move-info-btn {
   flex-shrink: 0;
   background: rgba(68, 78, 168, 0.25);
   border: 1px solid rgba(68, 78, 168, 0.45);
@@ -485,7 +627,7 @@
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  color: var(--owmenu-c-muted);
+  color: #7a7498;
   cursor: pointer;
   outline: none;
   padding: 0;
@@ -493,19 +635,61 @@
   transition: background 0.10s, color 0.10s;
   user-select: none;
 }
-
-.owmenu__move-info-btn:hover,
-.owmenu__move-info-btn:focus-visible {
+.owmenu-dmodal__move-info-btn:hover,
+.owmenu-dmodal__move-info-btn:focus-visible {
   background: rgba(139, 92, 255, 0.35);
   color: #ffffff;
 }
 
-/* ── Move detail popup ────────────────────────────────────────────────────── */
+/* Portrait orientation — stack vertically */
+@media (max-width: 500px) {
+  .owmenu-dmodal {
+    flex-direction: column;
+    max-height: calc(100vh - 24px);
+  }
+  .owmenu-dmodal__img-col {
+    width: 100%;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid rgba(68, 78, 168, 0.25);
+    height: 140px;
+    padding: 10px;
+  }
+  .owmenu-dmodal__img {
+    max-height: 120px;
+  }
+  .owmenu-dmodal__info-col {
+    padding: 14px 44px 14px 16px;
+  }
+}
+
+/* Short landscape (mobile) */
+@media (max-height: 480px) {
+  .owmenu-dmodal {
+    max-height: calc(100vh - 12px);
+  }
+  .owmenu-dmodal__img-col {
+    padding: 12px 10px;
+    width: 32%;
+    min-width: 90px;
+  }
+  .owmenu-dmodal__img { max-height: 220px; }
+  .owmenu-dmodal__info-col { padding: 12px 44px 12px 14px; }
+  .owmenu-dmodal__name { font-size: 15px; }
+  .owmenu-dmodal__level { font-size: 11px; }
+  .owmenu-dmodal__stat-rows { gap: 4px; margin-bottom: 10px; }
+  .owmenu-dmodal__moves-list { gap: 4px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Move detail popup
+   Appended to document.body → all colours are HARDCODED (no CSS vars)
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .owmenu-mpop-bg {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10001;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -531,7 +715,7 @@
 }
 
 .owmenu-mpop__name {
-  font-family: var(--owmenu-font-hud);
+  font-family: "Orbitron", monospace;
   font-size: 14px;
   font-weight: 700;
   color: #ffffff;
@@ -542,13 +726,14 @@
 .owmenu-mpop__close {
   background: none;
   border: none;
-  color: var(--owmenu-c-muted);
+  color: #7a7498;
   font-size: 16px;
   cursor: pointer;
   padding: 2px 4px;
   line-height: 1;
   -webkit-tap-highlight-color: transparent;
 }
+.owmenu-mpop__close:hover { color: #ffffff; }
 
 .owmenu-mpop__badges {
   display: flex;
@@ -559,7 +744,7 @@
 
 .owmenu-mpop__cat,
 .owmenu-mpop__type {
-  font-family: var(--owmenu-font-stat);
+  font-family: "Rajdhani", monospace;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -569,7 +754,7 @@
   opacity: 0.9;
 }
 
-.owmenu-mpop__cat { color: var(--owmenu-c-text); }
+.owmenu-mpop__cat { color: #f0ecff; }
 
 .owmenu-mpop__stats {
   display: flex;
@@ -590,23 +775,23 @@
 }
 
 .owmenu-mpop__stat-label {
-  font-family: var(--owmenu-font-stat);
+  font-family: "Rajdhani", monospace;
   font-size: 8px;
   font-weight: 700;
-  color: var(--owmenu-c-muted);
+  color: #7a7498;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .owmenu-mpop__stat-val {
-  font-family: var(--owmenu-font-hud);
+  font-family: "Orbitron", monospace;
   font-size: 15px;
   font-weight: 700;
-  color: var(--owmenu-c-text);
+  color: #f0ecff;
 }
 
 .owmenu-mpop__desc {
-  font-family: var(--owmenu-font-stat);
+  font-family: "Rajdhani", monospace;
   font-size: 11px;
   font-weight: 500;
   color: rgba(200, 190, 255, 0.70);
@@ -614,79 +799,6 @@
   margin: 0;
   padding-top: 10px;
   border-top: 1px solid rgba(68, 78, 168, 0.25);
-}
-
-/* ── XP bar (detail screen) ───────────────────────────────────────────────── */
-
-.owmenu__xp-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 2px 0;
-}
-
-.owmenu__xp-bar-track {
-  height: 5px;
-  background: rgba(14, 14, 30, 0.95);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.owmenu__xp-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #4466dd, #88aaff);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.owmenu__xp-text {
-  font-family: var(--owmenu-font-stat);
-  font-size: 8px;
-  font-weight: 600;
-  color: var(--owmenu-c-muted);
-  letter-spacing: 0.03em;
-}
-
-/* ── Moves list (detail screen) ───────────────────────────────────────────── */
-
-.owmenu__moves-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-bottom: 16px;
-}
-
-.owmenu__move-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: rgba(10, 12, 30, 0.80);
-  border: 1px solid rgba(68, 78, 168, 0.28);
-  border-radius: 6px;
-  padding: 6px 10px;
-}
-
-.owmenu__move-name {
-  font-family: var(--owmenu-font-hud);
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--owmenu-c-text);
-  letter-spacing: 0.04em;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.owmenu__move-meta {
-  font-family: var(--owmenu-font-stat);
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--owmenu-c-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -735,45 +847,6 @@
 
   .owmenu__card-level {
     font-size: 8px;
-  }
-
-  .owmenu__detail-header {
-    gap: 10px;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-  }
-
-  .owmenu__detail-avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 7px;
-  }
-
-  .owmenu__detail-name {
-    font-size: 13px;
-  }
-
-  .owmenu__detail-level {
-    font-size: 10px;
-  }
-
-  .owmenu__stat-rows {
-    gap: 5px;
-    margin-bottom: 12px;
-  }
-
-  .owmenu__stat-label {
-    font-size: 9px;
-    width: 68px;
-  }
-
-  .owmenu__stat-bar-wrap {
-    height: 5px;
-  }
-
-  .owmenu__stat-val {
-    font-size: 10px;
-    width: 40px;
   }
 
   .owmenu__back-btn,
