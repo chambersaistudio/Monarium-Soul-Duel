@@ -5,6 +5,9 @@ import { STORY_CHARACTERS } from '../data/storyCharacters';
 import { STORY_MONARI, randomStoryGender, renzoCounterPick, type StoryGender, type StoryMonariDef } from '../data/storyMonari';
 import { StoryOverlayController, starterPreviewImage, type StoryDialogueLine } from '../ui/storyOverlay';
 import type { ClassicBattleContext } from '../types/overworld';
+import { PlayerSaveManager } from '../systems/PlayerSaveManager';
+import type { OverworldSave } from '../systems/PlayerSaveManager';
+import { OverworldMenuOverlay } from '../ui/OverworldMenuOverlay';
 
 const PLAYER_NAME = 'Corn';
 type StoryEdge = 'north' | 'south' | 'west' | 'east';
@@ -29,6 +32,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   private edgeCooldown = 0;
   private edgeArmed: Record<StoryEdge, boolean> = { north: true, south: true, west: true, east: true };
   private cutoutDebug: Record<string, string> = {};
+  private menuOverlay: OverworldMenuOverlay | null = null;
 
   constructor() { super({ key: 'StoryOverworldScene' }); }
 
@@ -66,11 +70,29 @@ export class StoryOverworldScene extends Phaser.Scene {
 
     this.buildMap();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.relayout, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this); this.ui.destroy(); });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this);
+      this.ui.destroy();
+      this.menuOverlay?.destroy();
+      this.menuOverlay = null;
+    });
 
     if (this.mapId === 'bond_lab_interior' && !this.state.professorIntro) {
       this.state.professorIntro = true; this.saveState();
       this.time.delayedCall(250, () => this.showProfessorIntro());
+    }
+
+    // Award XP if returning from a wild battle win
+    const battleResult = this.registry.get('arena_battle_result') as { won: boolean; enemyLevel: number } | null;
+    if (battleResult) {
+      this.registry.remove('arena_battle_result');
+      if (battleResult.won && this.state.starter) {
+        const save = this.getOrInitSave();
+        const xpGain = PlayerSaveManager.calcXpGain(save.monariLevel, battleResult.enemyLevel);
+        const { save: newSave, levelsGained } = PlayerSaveManager.addXp(save, xpGain);
+        PlayerSaveManager.persist(newSave);
+        this.time.delayedCall(600, () => this.showXpNotification(xpGain, levelsGained, newSave.monariLevel));
+      }
     }
   }
 
@@ -294,10 +316,97 @@ export class StoryOverworldScene extends Phaser.Scene {
   private portrait(character: keyof typeof STORY_CHARACTERS): string | undefined { return STORY_CHARACTERS[character].assets.portrait ?? STORY_CHARACTERS[character].assets.fullBody; }
   private showProfessorIntro(): void { this.ui.showDialogue([{ speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: `Welcome, ${PLAYER_NAME}. I’m Dr. Warren Ellis. This is the Bond Lab, where new Bonders meet their first partner.` }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Three Monari are waiting here. Each one carries a different element and a different path.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Walk up to a Monari and tap to learn about it. When you’re ready, choose your partner.' }]); }
   private previewStarter(id: StoryMonariDef['id']): void { const gender = randomStoryGender(); this.ui.showStarterPreview({ monari: STORY_MONARI[id], gender, image: starterPreviewImage(id), onCancel: () => this.ui.hideStarterPreview(), onChoose: () => this.chooseStarter(id, gender) }); }
-  private chooseStarter(id: StoryMonariDef['id'], gender: StoryGender): void { this.ui.hideStarterPreview(); this.state.starter = id; this.state.starterGender = gender; this.state.renzoStarter = renzoCounterPick(id); this.state.renzoIntro = true; this.saveState(); this.ui.setHud({ mapName: this.map.displayName, playerName: PLAYER_NAME, starter: STORY_MONARI[id].name }); const renzoPick = STORY_MONARI[this.state.renzoStarter].name; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Yo, so that’s your pick?' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: `Not bad. But if you’re choosing that one, I’m taking ${renzoPick}.` }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Meet me at the Training Field. Let’s see if your bond is real.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Renzo never waits long. Head north to the Training Field when you’re ready.' }], () => this.buildMap()); }
+  private chooseStarter(id: StoryMonariDef['id'], gender: StoryGender): void { this.ui.hideStarterPreview(); this.state.starter = id; this.state.starterGender = gender; this.state.renzoStarter = renzoCounterPick(id); this.state.renzoIntro = true; this.saveState(); this.getOrInitSave(); this.ui.setHud({ mapName: this.map.displayName, playerName: PLAYER_NAME, starter: STORY_MONARI[id].name }); const renzoPick = STORY_MONARI[this.state.renzoStarter].name; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Yo, so that’s your pick?' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: `Not bad. But if you’re choosing that one, I’m taking ${renzoPick}.` }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Meet me at the Training Field. Let’s see if your bond is real.' }, { speaker: 'Dr. Warren Ellis', portrait: this.portrait('warren_ellis'), text: 'Renzo never waits long. Head north to the Training Field when you’re ready.' }], () => this.buildMap()); }
   private handleRenzo(): void { if (this.mapId !== 'training_field') return; this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'There you are. I was starting to think you got scared.' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Your first bond is new. Mine is already battle-ready.' }, { speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Let’s make this quick. Show me what your partner can do.' }], () => this.startRivalBattle()); }
   private startRivalBattle(): void { if (!this.state.starter || !this.state.renzoStarter) { this.ui.showDialogue([{ speaker: 'Renzo', portrait: this.portrait('renzo'), text: 'Get a partner from the Bond Lab first.' }]); return; } const ctx: ClassicBattleContext = { returnMap: 'training_field', returnSpawn: 'south', playerMinariId: this.state.starter, enemyMinariId: this.state.renzoStarter, bondable: false, battleType: 'rival', playerLevel: 7, enemyLevel: 7 }; this.registry.set('classic_battle_context', ctx); applyHighDpiCanvas(this.game, 'story:rival-battle:sync-now'); requestAnimationFrame(() => { applyHighDpiCanvas(this.game, 'story:rival-battle:sync-raf'); window.setTimeout(() => { applyHighDpiCanvas(this.game, 'story:rival-battle:sync-settled'); this.scene.start('ClassicSoulDuelScene'); }, 80); }); }
-  private showWildEncounter(): void { const ids = Object.keys(STORY_MONARI) as StoryMonariDef['id'][]; const id = ids[Math.floor(Math.random() * ids.length)]; const level = Phaser.Math.Between(7, 10); this.ui.showDialogue([{ speaker: 'Soul Orb', text: `A wild ${STORY_MONARI[id].name} appeared! Lv.${level}. Battle bonding will unlock in the next story pass.` }]); }
-  private showMenuStub(): void { this.ui.showMenu({ title: 'Bonder Menu', subtitle: `${this.map.displayName} • Story Mode`, partner: this.state.starter ? STORY_MONARI[this.state.starter].name : undefined, onSave: () => this.saveGame(), onClose: () => undefined }); }
+  private showWildEncounter(): void {
+    if (!this.state.starter) {
+      this.ui.showDialogue([{ speaker: 'Soul Orb', text: 'You need a partner before you can battle wild Monari!' }]);
+      return;
+    }
+    const ids = Object.keys(STORY_MONARI) as StoryMonariDef['id'][];
+    const enemyId    = ids[Math.floor(Math.random() * ids.length)];
+    const enemyLevel = Phaser.Math.Between(5, 10);
+    const playerLevel = this.getOrInitSave().monariLevel;
+    const ctx: ClassicBattleContext = {
+      returnMap:      this.mapId,
+      returnSpawn:    this.state.spawn ?? 'default',
+      playerMinariId: this.state.starter,
+      enemyMinariId:  enemyId,
+      battleType:     'wild',
+      playerLevel,
+      enemyLevel,
+      bondable:       false,
+    };
+    this.registry.set('classic_battle_context', ctx);
+    applyHighDpiCanvas(this.game, 'story:wild-encounter:sync-now');
+    requestAnimationFrame(() => {
+      applyHighDpiCanvas(this.game, 'story:wild-encounter:sync-raf');
+      window.setTimeout(() => {
+        applyHighDpiCanvas(this.game, 'story:wild-encounter:sync-settled');
+        this.scene.start('ClassicSoulDuelScene');
+      }, 80);
+    });
+  }
+
+  private showMenuStub(): void {
+    this.ui.showMenu({
+      title: 'Bonder Menu',
+      subtitle: `${this.map.displayName} • Story Mode`,
+      partner: this.state.starter ? STORY_MONARI[this.state.starter].name : undefined,
+      onSave: () => this.saveGame(),
+      onClose: () => undefined,
+      onMonari: this.state.starter ? () => this.openMonariMenu() : undefined,
+    });
+  }
+
+  private getOrInitSave(): OverworldSave {
+    if (!this.state.starter) return PlayerSaveManager.load();
+    const existing = PlayerSaveManager.load();
+    if (existing.starterMonariId === this.state.starter) return existing;
+    // New or mismatched — start fresh for this starter
+    const fresh: OverworldSave = { starterMonariId: this.state.starter, playerName: PLAYER_NAME, monariLevel: 7, monariXp: 0 };
+    PlayerSaveManager.persist(fresh);
+    return fresh;
+  }
+
+  private openMonariMenu(): void {
+    if (!this.state.starter) return;
+    if (!this.menuOverlay) {
+      this.menuOverlay = new OverworldMenuOverlay({
+        onClose: () => {},
+        onModeSelect: () => {
+          this.menuOverlay?.destroy();
+          this.menuOverlay = null;
+          this.scene.start('ModeSelectScene');
+        },
+      });
+    }
+    this.menuOverlay.showBonderMenu([this.state.starter], this.getOrInitSave());
+  }
+
+  private showXpNotification(xpGain: number, levelsGained: number, newLevel: number): void {
+    const { w, h, dpr } = this.worldSize();
+    const lines = [`+${xpGain} XP`];
+    if (levelsGained > 0) lines.push(`Level Up!  Lv.${newLevel}`);
+    const popup = this.add.text(w / 2, h / 3, lines.join('\n'), {
+      fontSize: `${Math.round(22 * dpr)}px`,
+      color: '#ffee44',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4 * dpr,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(100).setAlpha(0);
+    this.tweens.add({
+      targets: popup, alpha: 1, y: h / 3 - 20 * dpr, duration: 300, ease: 'Quad.Out',
+      onComplete: () => {
+        this.tweens.add({
+          targets: popup, alpha: 0, y: h / 3 - 44 * dpr, duration: 700, delay: 1400,
+          ease: 'Quad.In', onComplete: () => popup.destroy(),
+        });
+      },
+    });
+  }
   private debugSpriteAudit(reason: string): void { const f = this.player?.frame; const bg = this.bg?.frame; const bounds = this.cameras.main.getBounds(); const diagnostics = { reason, scene: this.scene.key, map: this.mapId, viewport: `${this.worldSize().w}x${this.worldSize().h}`, camera: `vp ${this.cameras.main.x},${this.cameras.main.y} ${this.cameras.main.width}x${this.cameras.main.height} scroll ${this.cameras.main.scrollX},${this.cameras.main.scrollY} z${this.cameras.main.zoom}`, worldBounds: `${bounds.x},${bounds.y} ${bounds.width}x${bounds.height}`, bgTexture: bg ? `${bg.realWidth}x${bg.realHeight}` : 'none', bgDisplay: this.bg ? `${Math.round(this.bg.displayWidth)}x${Math.round(this.bg.displayHeight)} @ ${Math.round(this.bg.x)},${Math.round(this.bg.y)} origin ${this.bg.originX},${this.bg.originY}` : 'none', playerTexture: this.player?.texture.key, playerTextureSize: f ? `${f.realWidth}x${f.realHeight}` : 'none', playerDisplay: this.player ? `${Math.round(this.player.displayWidth)}x${Math.round(this.player.displayHeight)} @ ${Math.round(this.player.x)},${Math.round(this.player.y)}` : 'none', playerScale: this.player ? `${this.player.scaleX.toFixed(3)},${this.player.scaleY.toFixed(3)}` : 'none' }; this.registry.set('story_layout_debug', [`story bg tex ${diagnostics.bgTexture} display ${diagnostics.bgDisplay}`, `story player ${diagnostics.playerTexture} tex ${diagnostics.playerTextureSize} display ${diagnostics.playerDisplay} scale ${diagnostics.playerScale}`, `story world ${diagnostics.worldBounds}`, `story transition cooldown ${Math.round(this.edgeCooldown)} margin ${Math.round(Math.max(8 * this.worldSize().dpr, Math.min(this.worldSize().w, this.worldSize().h) * 0.012))}`, ...this.actors.filter(a => a.sprite).map(a => `${a.id} ${a.sprite!.texture.key} ${this.cutoutDebug[a.sprite!.texture.key] ?? 'no trim'} display ${Math.round(a.sprite!.displayWidth)}x${Math.round(a.sprite!.displayHeight)} @ ${Math.round(a.sprite!.x)},${Math.round(a.sprite!.y)} origin ${a.sprite!.originX},${a.sprite!.originY}`)]); console.info('[story-overworld-layout]', diagnostics); }
 }

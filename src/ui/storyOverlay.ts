@@ -2,7 +2,7 @@ import { STORY_MONARI, type StoryGender, type StoryMonariDef } from '../data/sto
 import { viewportCssSize } from '../config/highDpi';
 
 export interface StoryHudState { mapName: string; playerName: string; starter?: string }
-export interface StoryMenuState { title: string; subtitle: string; partner?: string; onSave: () => void; onClose: () => void }
+export interface StoryMenuState { title: string; subtitle: string; partner?: string; onSave: () => void; onClose: () => void; onMonari?: () => void }
 export interface StoryDialogueLine { speaker: string; text: string; portrait?: string }
 export interface StarterPreviewState { monari: StoryMonariDef; gender: StoryGender; image?: string; onChoose: () => void; onCancel: () => void }
 
@@ -133,7 +133,9 @@ export class StoryOverlayController {
     card.hidden = false;
     this.root.classList.add('story-modal-active');
     this.releaseStick();
-    card.innerHTML = `<h2>${state.title}</h2><p>${state.subtitle}</p><div class="story-menu-row"><span>Partner</span><b>${state.partner ?? 'Not chosen'}</b></div><div class="story-menu-actions"><button id="story-save">Save Game</button><button id="story-menu-close">Close</button></div><small id="story-save-status"></small>`;
+    const monariBtn = state.onMonari ? `<button id="story-monari-btn">Monari</button>` : '';
+    card.innerHTML = `<h2>${state.title}</h2><p>${state.subtitle}</p><div class="story-menu-row"><span>Partner</span><b>${state.partner ?? 'Not chosen'}</b></div><div class="story-menu-actions">${monariBtn}<button id="story-save">Save Game</button><button id="story-menu-close">Close</button></div><small id="story-save-status"></small>`;
+    if (state.onMonari) (el<HTMLButtonElement>('story-monari-btn')).onclick = () => { this.hideMenu(); state.onMonari!(); };
     el<HTMLButtonElement>('story-save').onclick = () => { state.onSave(); el('story-save-status').textContent = 'Saved.'; };
     el<HTMLButtonElement>('story-menu-close').onclick = () => { this.hideMenu(); state.onClose(); };
   }
