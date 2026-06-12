@@ -217,6 +217,11 @@ export class PreloadScene extends Phaser.Scene {
       overlay.classList.add('fade-out');
     }
 
+    // Stop the opening cinematic overlay (removes the video DOM element via its
+    // SHUTDOWN handler) and transition to the title screen.
+    if (this.scene.isActive('SplashScene')) {
+      this.scene.stop('SplashScene');
+    }
     this.scene.start('TitleScene');
   }
 
