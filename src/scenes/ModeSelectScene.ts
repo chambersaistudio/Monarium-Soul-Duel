@@ -54,7 +54,7 @@ export class ModeSelectScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#05050a');
 
     this.audio = new AudioManager(this);
-    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+    this.audio.playBgm(AUDIO_KEYS.bgm.title);
 
     showModeSelectOverlay(
       MODES,

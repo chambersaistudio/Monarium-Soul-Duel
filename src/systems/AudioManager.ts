@@ -33,6 +33,30 @@ export class AudioManager {
     this.bgm.play();
   }
 
+  /**
+   * Crossfade to a new BGM track over ~500 ms.
+   * No-ops if the requested track is already playing.
+   * Falls back to instant play if there is nothing currently playing.
+   */
+  fadeToBgm(key: string, volume = 0.65): void {
+    if (this.bgmKey === key && this.bgm?.isPlaying) return;
+    if (!this.bgm) { this.playBgm(key, volume); return; }
+    const outgoing = this.bgm as Phaser.Sound.WebAudioSound;
+    this.bgm = null;
+    this.bgmKey = null;
+    let step = 0;
+    const steps = 10;
+    const tick = setInterval(() => {
+      step++;
+      try { outgoing.setVolume(volume * (1 - step / steps)); } catch { /* no-op */ }
+      if (step >= steps) {
+        clearInterval(tick);
+        try { outgoing.stop(); outgoing.destroy(); } catch { /* scene shutting down */ }
+        this.playBgm(key, volume);
+      }
+    }, 50);
+  }
+
   /** Stop and destroy the current BGM (e.g. before a scene transition). */
   stopBgm(): void {
     if (!this.bgm) return;

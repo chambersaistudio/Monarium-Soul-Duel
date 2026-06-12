@@ -38,7 +38,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
     this.debugEnabled = false;
 
     this.audio = new AudioManager(this);
-    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+    this.audio.playBgm(AUDIO_KEYS.bgm.title);
 
     this.cameras.main.setBackgroundColor('#05050a');
     this.showDomOverlay();

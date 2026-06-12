@@ -21,6 +21,7 @@ export class TitleScene extends Phaser.Scene {
   private controlsText!: Phaser.GameObjects.Text;
   private lineGfx!: Phaser.GameObjects.Graphics;
   private debugText: Phaser.GameObjects.Text | null = null;
+  private titleVideoBg: HTMLVideoElement | null = null;
   private starting = false;
 
   constructor() {
@@ -88,18 +89,44 @@ export class TitleScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutStartScreen, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutStartScreen, this);
+      this.titleVideoBg?.remove();
+      this.titleVideoBg = null;
     });
 
     this.enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
     this.audio = new AudioManager(this);
-    this.audio.playBgm(AUDIO_KEYS.bgm.menu);
+    this.audio.playBgm(AUDIO_KEYS.bgm.title);
+
+    this.createTitleVideo();
 
     showStartOverlay(() => this.startGame());
     this.children.list.forEach(child => { if ('setVisible' in child) (child as unknown as { setVisible: (visible: boolean) => void }).setVisible(false); });
 
     // Canvas tap / click is a fallback for desktop or if the DOM overlay is hidden.
     this.input.once('pointerup', () => this.startGame());
+  }
+
+  private createTitleVideo(): void {
+    const video = document.createElement('video');
+    video.src = 'assets/startup/title/title_screen_loop.mp4';
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.style.cssText =
+      'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none;';
+    video.addEventListener('error', () => {
+      video.remove();
+      if (this.titleVideoBg === video) this.titleVideoBg = null;
+    }, { once: true });
+    const canvas = this.game.canvas;
+    canvas.parentElement?.insertBefore(video, canvas);
+    this.titleVideoBg = video;
+    video.play().catch(() => {
+      video.remove();
+      if (this.titleVideoBg === video) this.titleVideoBg = null;
+    });
   }
 
   private layoutStartScreen(): void {

@@ -8,6 +8,8 @@ import type { ClassicBattleContext } from '../types/overworld';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 import type { OverworldSave } from '../systems/PlayerSaveManager';
 import { OverworldMenuOverlay } from '../ui/OverworldMenuOverlay';
+import { AudioManager } from '../systems/AudioManager';
+import { AUDIO_KEYS } from '../config/audioConfig';
 
 const PLAYER_NAME = 'Corn';
 type StoryEdge = 'north' | 'south' | 'west' | 'east';
@@ -16,6 +18,7 @@ type StoryState = { mapId: StoryMapId; spawn: string; starter?: StoryMonariDef['
 type Actor = { id: string; kind: 'npc' | 'starter' | 'orb'; targetId?: string; label: string; sprite?: Phaser.GameObjects.Image; marker: Phaser.GameObjects.Arc; x: number; y: number; radius: number };
 
 export class StoryOverworldScene extends Phaser.Scene {
+  private audio!: AudioManager;
   private ui!: StoryOverlayController;
   private state!: StoryState;
   private mapId!: StoryMapId;
@@ -68,6 +71,7 @@ export class StoryOverworldScene extends Phaser.Scene {
     this.interactKeys = [this.input.keyboard!.addKey('E'), this.input.keyboard!.addKey('SPACE'), this.input.keyboard!.addKey('ENTER')];
     this.input.keyboard!.addKey('ESC').on('down', () => this.showMenuStub());
 
+    this.audio = new AudioManager(this);
     this.buildMap();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.relayout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -168,9 +172,19 @@ export class StoryOverworldScene extends Phaser.Scene {
     return this.textureKey(order);
   }
 
+  private mapBgmKey(mapId: StoryMapId): string {
+    switch (mapId) {
+      case 'forest_route':  return AUDIO_KEYS.bgm.forest;
+      case 'crystal_cave':  return AUDIO_KEYS.bgm.cave;
+      case 'coastal_beach': return AUDIO_KEYS.bgm.beach;
+      default:              return AUDIO_KEYS.bgm.village;
+    }
+  }
+
   private buildMap(): void {
     this.children.removeAll(true);
     this.syncStoryCamera();
+    this.audio.fadeToBgm(this.mapBgmKey(this.mapId));
     const { w, h } = this.worldSize();
     this.map = STORY_MAPS[this.mapId];
     const bgKey = `story_bg_${this.map.id}`;

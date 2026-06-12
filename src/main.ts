@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
+import { SplashScene } from './scenes/SplashScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { TitleScene } from './scenes/TitleScene';
 import { ModeSelectScene } from './scenes/ModeSelectScene';
@@ -28,6 +29,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   scene: [
     BootScene,
+    SplashScene,
     PreloadScene,
     TitleScene,
     ModeSelectScene,
