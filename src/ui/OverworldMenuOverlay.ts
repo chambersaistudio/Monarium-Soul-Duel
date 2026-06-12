@@ -1,7 +1,7 @@
 import './OverworldMenuOverlay.css';
 import { MINARI_ROSTER } from '../data/minariData';
 import { elementLabel, rarityLabel } from '../config/uiTheme';
-import { MOVE_DEX } from '../data/moveDex';
+import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS } from '../data/classicMoveData';
 import type { OverworldSave } from '../systems/PlayerSaveManager';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 
@@ -33,6 +33,26 @@ function scaleStat(base: number): number {
   return Math.round(base * (1 + (LEVEL_DISPLAY - 1) * LEVEL_GROWTH));
 }
 
+// ── Move descriptions ──────────────────────────────────────────────────────────
+
+const MOVE_DESCRIPTIONS: Record<string, string> = {
+  basic_attack:     'A reliable strike that costs no Aura.',
+  guard:            'Brace for the next hit — significantly reduces incoming damage.',
+  flame_paw_barrage:'Relentless fire claw combo that overwhelms the opponent.',
+  ember_shot:       'A focused burst of flame launched at range.',
+  heat_guard:       'Fire aura shield that burns enemies who strike Flarepaw.',
+  blinding_flare:   'Bright flash disrupts the opponent, draining their Soul Sync.',
+  aqua_ripple:      'A surging water projectile that hits hard at range.',
+  crystal_knuckle:  'A hardened water-crystal punch delivered up close.',
+  shell_guard:      'Surround the body in water armor to absorb the next hit.',
+  tidal_feint:      'A deceptive water feint that saps the opponent\'s Soul Sync.',
+  vine_snap:        'A whipping vine strike that stings on contact.',
+  root_pulse:       'Shockwaves sent through earth roots erupt beneath the enemy.',
+  bark_guard:       'Hardens bark plating to absorb the next incoming hit.',
+  pollen_haze:      'Releases a status cloud that steadily drains Soul Sync.',
+  shadow_coil:      'Dark energy coils around the opponent and constricts.',
+};
+
 // ── Menu item definitions ──────────────────────────────────────────────────────
 
 const BONDER_MENU_ITEMS = [
@@ -53,6 +73,7 @@ type BonderMenuItem = typeof BONDER_MENU_ITEMS[number];
 export interface MenuCallbacks {
   onClose:      () => void;
   onModeSelect: () => void;
+  onSave?:      () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +89,8 @@ export class OverworldMenuOverlay {
   private playerSave: OverworldSave | null = null;
   // Player's actual team IDs (just starter for now)
   private playerTeamIds: string[] = [];
+  // Active move-detail popup element (if any)
+  private movePopupEl: HTMLDivElement | null = null;
 
   constructor(callbacks: MenuCallbacks) {
     this.cb = callbacks;
@@ -105,7 +128,7 @@ export class OverworldMenuOverlay {
 
     const title = document.createElement('div');
     title.className = 'owmenu__title';
-    title.textContent = 'Bonder Menu';
+    title.textContent = 'Menu';
     this.panel.appendChild(title);
 
     const list = document.createElement('div');
@@ -118,7 +141,7 @@ export class OverworldMenuOverlay {
       btn.textContent = item;
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        this.handleBonderMenuClick(item as BonderMenuItem);
+        this.handleBonderMenuClick(item as BonderMenuItem, btn);
       });
       list.appendChild(btn);
     }
@@ -127,13 +150,26 @@ export class OverworldMenuOverlay {
     this.show();
   }
 
-  private handleBonderMenuClick(item: BonderMenuItem): void {
+  private handleBonderMenuClick(item: BonderMenuItem, btn?: HTMLButtonElement): void {
     switch (item) {
       case 'Monari': {
         const ids = this.playerTeamIds.length > 0 ? this.playerTeamIds : Object.keys(MINARI_ROSTER);
         this.showTeamScreen(ids);
         break;
       }
+      case 'Save':
+        if (this.cb.onSave) {
+          this.cb.onSave();
+          if (btn) {
+            const orig = btn.textContent ?? 'Save';
+            btn.textContent = 'Saved ✓';
+            btn.disabled = true;
+            setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+          }
+        } else {
+          this.showComingSoon(item);
+        }
+        break;
       case 'Mode Select':
         this.cb.onModeSelect();
         break;
@@ -446,7 +482,7 @@ export class OverworldMenuOverlay {
 
     this.panel.appendChild(statRows);
 
-    // ── Moves ──
+    // ── Moves (from actual battle command set) ──
     const movesHeading = document.createElement('div');
     movesHeading.className = 'owmenu__stats-heading';
     movesHeading.textContent = 'Moves';
@@ -455,27 +491,39 @@ export class OverworldMenuOverlay {
     const movesList = document.createElement('div');
     movesList.className = 'owmenu__moves-list';
 
-    const allMoveIds: string[] = [];
-    if (monari.coreAttackId) allMoveIds.push(monari.coreAttackId);
-    if (monari.specialSlots) allMoveIds.push(...monari.specialSlots);
+    const battleMoveIds: string[] = CLASSIC_COMMAND_SETS[id] ?? [];
 
-    for (const moveId of allMoveIds) {
-      const entry = MOVE_DEX[moveId];
-      const row   = document.createElement('div');
+    for (const moveId of battleMoveIds) {
+      const move = CLASSIC_MOVES[moveId];
+      const row  = document.createElement('div');
       row.className = 'owmenu__move-row';
+
+      const catSym = move?.category === 'special' ? '✦' : move?.category === 'physical' ? '⚔' : '○';
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'owmenu__move-name';
-      nameSpan.textContent = entry?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      nameSpan.textContent = `${catSym} ${move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
       row.appendChild(nameSpan);
 
-      if (entry) {
+      if (move) {
         const metaSpan = document.createElement('span');
         metaSpan.className = 'owmenu__move-meta';
-        const catSym = entry.category === 'special' ? '✦' : entry.category === 'physical' ? '⚔' : '○';
-        metaSpan.textContent = `${catSym} PWR ${entry.power} · ${entry.auraCost > 0 ? entry.auraCost + 'AU' : 'Free'}`;
+        const costStr = (move.auraCost ?? 0) > 0 ? `${move.auraCost}AU` : 'Free';
+        metaSpan.textContent = `PWR ${move.power} · ${costStr}`;
         row.appendChild(metaSpan);
       }
+
+      const infoBtn = document.createElement('button');
+      infoBtn.type = 'button';
+      infoBtn.className = 'owmenu__move-info-btn';
+      infoBtn.setAttribute('aria-label', `Info: ${move?.displayName ?? moveId}`);
+      infoBtn.textContent = 'ℹ';
+      infoBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showMovePopup(moveId, move);
+      });
+      row.appendChild(infoBtn);
 
       movesList.appendChild(row);
     }
@@ -539,15 +587,70 @@ export class OverworldMenuOverlay {
     return row;
   }
 
+  // ── Move detail popup ───────────────────────────────────────────────────────
+
+  private showMovePopup(moveId: string, move: import('../types/classic').ClassicMoveConfig | undefined): void {
+    this.dismissMovePopup();
+
+    const bg = document.createElement('div');
+    bg.className = 'owmenu-mpop-bg';
+
+    const card = document.createElement('div');
+    card.className = 'owmenu-mpop';
+
+    const catSym  = move?.category === 'special' ? '✦ Special' : move?.category === 'physical' ? '⚔ Physical' : '○ Status';
+    const typeColor = ELEM_CSS[move?.damageType ?? 'neutral'] ?? ELEM_CSS.neutral;
+    const costStr   = (move?.auraCost ?? 0) > 0 ? `${move!.auraCost} AU` : 'Free';
+    const accStr    = (move?.accuracy != null && move.accuracy < 100) ? `${move.accuracy}%` : '100%';
+    const desc      = MOVE_DESCRIPTIONS[moveId] ?? '';
+    const name      = move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    card.innerHTML = `
+      <div class="owmenu-mpop__header">
+        <span class="owmenu-mpop__name">${name}</span>
+        <button class="owmenu-mpop__close" type="button">✕</button>
+      </div>
+      <div class="owmenu-mpop__badges">
+        <span class="owmenu-mpop__cat">${catSym}</span>
+        <span class="owmenu-mpop__type" style="color:${typeColor}">● ${(move?.damageType ?? 'neutral').charAt(0).toUpperCase() + (move?.damageType ?? 'neutral').slice(1)}</span>
+      </div>
+      <div class="owmenu-mpop__stats">
+        <div class="owmenu-mpop__stat"><span class="owmenu-mpop__stat-label">Power</span><span class="owmenu-mpop__stat-val">${move?.power ?? 0}</span></div>
+        <div class="owmenu-mpop__stat"><span class="owmenu-mpop__stat-label">Accuracy</span><span class="owmenu-mpop__stat-val">${accStr}</span></div>
+        <div class="owmenu-mpop__stat"><span class="owmenu-mpop__stat-label">Aura Cost</span><span class="owmenu-mpop__stat-val">${costStr}</span></div>
+      </div>
+      ${desc ? `<p class="owmenu-mpop__desc">${desc}</p>` : ''}
+    `;
+
+    bg.appendChild(card);
+    document.body.appendChild(bg);
+    this.movePopupEl = bg;
+
+    (card.querySelector('.owmenu-mpop__close') as HTMLButtonElement).addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.dismissMovePopup();
+    });
+    bg.addEventListener('pointerdown', (e) => {
+      if (e.target === bg) this.dismissMovePopup();
+    });
+  }
+
+  private dismissMovePopup(): void {
+    this.movePopupEl?.remove();
+    this.movePopupEl = null;
+  }
+
   // ── Public close (called by external scene) ─────────────────────────────────
 
   close(): void {
+    this.dismissMovePopup();
     this.hide();
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
 
   destroy(): void {
+    this.dismissMovePopup();
     this.root.remove();
   }
 }

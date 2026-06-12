@@ -350,14 +350,7 @@ export class StoryOverworldScene extends Phaser.Scene {
   }
 
   private showMenuStub(): void {
-    this.ui.showMenu({
-      title: 'Bonder Menu',
-      subtitle: `${this.map.displayName} • Story Mode`,
-      partner: this.state.starter ? STORY_MONARI[this.state.starter].name : undefined,
-      onSave: () => this.saveGame(),
-      onClose: () => undefined,
-      onMonari: this.state.starter ? () => this.openMonariMenu() : undefined,
-    });
+    this.openMonariMenu();
   }
 
   private getOrInitSave(): OverworldSave {
@@ -371,18 +364,21 @@ export class StoryOverworldScene extends Phaser.Scene {
   }
 
   private openMonariMenu(): void {
-    if (!this.state.starter) return;
+    this.busy = true;
     if (!this.menuOverlay) {
       this.menuOverlay = new OverworldMenuOverlay({
-        onClose: () => {},
+        onClose: () => { this.busy = false; },
         onModeSelect: () => {
+          this.busy = false;
           this.menuOverlay?.destroy();
           this.menuOverlay = null;
           this.scene.start('ModeSelectScene');
         },
+        onSave: () => this.saveGame(),
       });
     }
-    this.menuOverlay.showBonderMenu([this.state.starter], this.getOrInitSave());
+    const starterIds = this.state.starter ? [this.state.starter] : [];
+    this.menuOverlay.showBonderMenu(starterIds, this.state.starter ? this.getOrInitSave() : undefined);
   }
 
   private showXpNotification(xpGain: number, levelsGained: number, newLevel: number): void {

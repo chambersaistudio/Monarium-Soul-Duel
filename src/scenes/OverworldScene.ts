@@ -346,6 +346,7 @@ export class OverworldScene extends Phaser.Scene {
           this.menuOverlay = null;
           this.scene.start('ModeSelectScene');
         },
+        onSave: () => PlayerSaveManager.persist(this.saveData),
       });
     }
 
