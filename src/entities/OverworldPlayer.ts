@@ -23,7 +23,9 @@ export class OverworldPlayer extends Phaser.GameObjects.Container {
     this.phBody.setCollideWorldBounds(true);
     this.phBody.setSize(28, 44);
     this.phBody.setOffset(-14, -22);
-    this.phBody.setGravityY(0);
+    // setGravityY(0) only zeroes the body's own gravity — the world gravity
+    // (y: 800) still applies and makes the player drift downward each frame.
+    this.phBody.setAllowGravity(false);
 
     this.setDepth(5);
   }

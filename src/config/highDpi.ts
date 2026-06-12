@@ -128,9 +128,18 @@ export function applyHighDpiCanvas(game: Phaser.Game, reason = 'sync'): void {
     game.renderer.resize(renderW, renderH);
   }
 
+  // Pointer page coordinates must be scaled into drawing-buffer pixels so
+  // camera.getWorldPoint / hit-tests resolve correctly for both camera kinds
+  // below (buffer-space zoom=1 cameras and CSS-space zoom=dpr cameras).
+  game.scale.displayScale.set(dpr, dpr);
+
   game.scene.scenes.forEach(scene => {
     scene.cameras?.cameras.forEach(camera => {
       camera.setViewport(0, 0, renderW, renderH);
+      // Zoom must scale from the top-left, not the viewport centre, so the
+      // CSS-pixel world (0..cssW) maps exactly onto the DPR-sized buffer.
+      // With the default centre origin a zoom of dpr pushes content off-canvas.
+      camera.setOrigin(0, 0);
       // StoryOverworldScene and ClassicSoulDuelScene lay out their Phaser
       // worlds directly in renderer pixels so the map/battlefield fill the
       // DPR-sized drawing buffer. Other legacy scenes keep CSS-pixel
