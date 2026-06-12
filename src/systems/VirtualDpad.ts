@@ -22,9 +22,7 @@ export class VirtualDpad {
 
   private readonly onGlobalMove = (pointer: Phaser.Input.Pointer): void => {
     if (this.joyPointerId !== pointer.id) return;
-    // worldX/worldY: CSS-pixel scene coords regardless of the high-DPI camera
-    // zoom (raw pointer.x/y are in canvas buffer pixels — see highDpi.ts)
-    this.updateStick(pointer.worldX, pointer.worldY);
+    this.updateStick(pointer.x, pointer.y);
   };
 
   constructor(scene: Phaser.Scene, input: InputSystem) {
@@ -43,7 +41,7 @@ export class VirtualDpad {
     this.base.setInteractive(new Phaser.Geom.Circle(this.cx, this.cy, JOY_R + 18), Phaser.Geom.Circle.Contains);
     this.base.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.joyPointerId = p.id;
-      this.updateStick(p.worldX, p.worldY);
+      this.updateStick(p.x, p.y);
     });
     this.objects.push(this.base);
 

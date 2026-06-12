@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHighDpiCanvas, getRenderDpr } from '../config/highDpi';
 import { ClassicActor } from '../entities/ClassicActor';
 import { ClassicBattleEngine } from '../systems/ClassicBattleEngine';
 import { SoulSyncSystem } from '../systems/SoulSyncSystem';
@@ -22,7 +23,7 @@ import {
 import { getEffectivenessMessage } from '../config/elementEffectivenessConfig';
 import { BattleHudOverlay } from '../ui/BattleHudOverlay';
 import type { ClassicBattlePhase, ClassicActorRole } from '../types/classic';
-import type { ClassicBattleContext } from '../types/overworld';
+import type { BattleStatOverrides, ClassicBattleContext } from '../types/overworld';
 import type { BattleHUDData, PlayerProfile, SoulSyncTier, SoulRankTier } from '../types/progression';
 
 // ── HUD button colour schemes (fallback when PNGs absent) ────────────────────
@@ -183,6 +184,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private domHud!: BattleHudOverlay;
   private playerLevel = 1;
   private enemyLevel  = 1;
+  private resizeTimer?: Phaser.Time.TimerEvent;
 
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
@@ -221,10 +223,56 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+  private battleWorldSize(): { w: number; h: number; dpr: number; landscape: boolean } {
+    const dpr = getRenderDpr();
+    const w = Math.max(1, Math.round(this.game.renderer.width || this.scale.width * dpr));
+    const h = Math.max(1, Math.round(this.game.renderer.height || this.scale.height * dpr));
+    return { w, h, dpr, landscape: w > h };
+  }
+
+  private syncBattleCamera(): void {
+    const { w, h } = this.battleWorldSize();
+    this.cameras.main.setViewport(0, 0, w, h).setZoom(1).setScroll(0, 0);
+    this.cameras.main.setBounds(0, 0, w, h);
+  }
+
+  private relayoutBattle = (): void => {
+    this.resizeTimer?.remove(false);
+    this.resizeTimer = this.time.delayedCall(220, () => {
+      this.registry.set('classic_battle_context', this.battleCtx);
+      this.scene.restart();
+    });
+  };
+
+
+  private applyLabStatOverrides(actor: ClassicActor, overrides?: BattleStatOverrides): void {
+    if (!overrides) return;
+    const stats = actor.computedStats as unknown as Record<string, number>;
+    if (overrides.attack !== undefined) stats.attack = overrides.attack;
+    if (overrides.specialAttack !== undefined) stats.specialAttack = overrides.specialAttack;
+    if (overrides.defense !== undefined) stats.defense = overrides.defense;
+    if (overrides.specialDefense !== undefined) stats.specialDefense = overrides.specialDefense;
+    if (overrides.speed !== undefined) stats.speed = overrides.speed;
+  }
+
+  private updateLabDebugRegistry(): void {
+    if (!this.battleCtx?.labDebug) return;
+    const lines = this.registry.get('battle_layout_debug') as string[] | undefined ?? [];
+    this.registry.set('battle_layout_debug', [
+      ...lines,
+      `formula damage=floor(power × atk/def × (0.35+level/100) × type × sync × crit × variance × guard)`,
+      `type effective 1.75 resisted 0.75 variance 0.90-1.10 crit 1.5`,
+      `player stats A${this.playerActor.computedStats.attack}/SA${this.playerActor.computedStats.specialAttack}/D${this.playerActor.computedStats.defense}/SD${this.playerActor.computedStats.specialDefense}/Spd${this.playerActor.computedStats.speed}`,
+      `enemy stats A${this.enemyActor.computedStats.attack}/SA${this.enemyActor.computedStats.specialAttack}/D${this.enemyActor.computedStats.defense}/SD${this.enemyActor.computedStats.specialDefense}/Spd${this.enemyActor.computedStats.speed}`,
+    ]);
+  }
+
   create(): void {
     this.turnNumber = 0;
     this.domHud?.destroy();
-    const { width: w, height: h } = this.scale;
+    applyHighDpiCanvas(this.game, 'battle:create');
+    this.syncBattleCamera();
+    const { w, h, dpr, landscape } = this.battleWorldSize();
     const mob = IS_TOUCH_DEVICE;
 
     this.battleCtx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
@@ -268,6 +316,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enemyActor = new ClassicActor(
       this, this.eAnchorX, this.groundY - enemyData.bodyHeight / 2, enemyData, false, enemyLevel,
     );
+    // The battle scene now lays out in renderer pixels, matching the fixed Story
+    // overworld. Scale actors by DPR, with a landscape-specific reduction so
+    // Monari remain grounded and do not crowd the mobile HUD.
+    const battleActorScale = dpr * (landscape ? 0.74 : 0.96);
+    this.playerActor.setScale(battleActorScale);
+    this.enemyActor.setScale(battleActorScale);
+    this.applyLabStatOverrides(this.playerActor, this.battleCtx?.playerStatOverrides);
+    this.applyLabStatOverrides(this.enemyActor, this.battleCtx?.enemyStatOverrides);
 
     this.engine = new ClassicBattleEngine(this, this.playerActor, this.enemyActor, {
       onPhaseChange:     (p)              => this.onPhaseChange(p),
@@ -349,6 +405,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.enterKey = this.input.keyboard!.addKey(K.ENTER);
     this.escKey   = this.input.keyboard!.addKey(K.ESC);
 
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.relayoutBattle, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.relayoutBattle, this);
+      this.resizeTimer?.remove(false);
+    });
+
+    this.debugBattleLayout('create');
+    this.updateLabDebugRegistry();
     this.cameras.main.fadeIn(500);
     this.time.delayedCall(800, () => this.engine.startBattle());
   }
@@ -374,6 +438,21 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     if (jEsc)            { this.domHud.back();     this.audio.playUi(AUDIO_KEYS.ui.move); }
   }
 
+  private debugBattleLayout(reason: string): void {
+    const bg = this.children.list.find((obj): obj is Phaser.GameObjects.Image =>
+      obj instanceof Phaser.GameObjects.Image && !!obj.getData('battleDebug')
+    );
+    const info = bg?.getData('battleDebug') as { key: string; texture: string } | undefined;
+    const orientation = this.battleWorldSize().landscape ? 'landscape' : 'portrait';
+    const lines = [
+      `battle ${orientation} bg ${info?.key ?? 'fallback'} tex ${info?.texture ?? 'generated'} display ${bg ? `${Math.round(bg.displayWidth)}x${Math.round(bg.displayHeight)} @ ${Math.round(bg.x)},${Math.round(bg.y)} origin ${bg.originX},${bg.originY}` : 'none'}`,
+      `battle player ${this.playerActor?.actorId ?? 'none'} @ ${Math.round(this.playerActor?.x ?? 0)},${Math.round(this.playerActor?.y ?? 0)} scale ${this.playerActor?.scaleX?.toFixed(2) ?? 'n/a'}`,
+      `battle enemy ${this.enemyActor?.actorId ?? 'none'} @ ${Math.round(this.enemyActor?.x ?? 0)},${Math.round(this.enemyActor?.y ?? 0)} scale ${this.enemyActor?.scaleX?.toFixed(2) ?? 'n/a'}`,
+    ];
+    this.registry.set('battle_layout_debug', lines);
+    console.info('[battle-layout]', { reason, scene: this.scene.key, orientation, renderer: `${this.game.renderer.width}x${this.game.renderer.height}`, scale: `${this.scale.width}x${this.scale.height}`, camera: `vp ${this.cameras.main.x},${this.cameras.main.y} ${this.cameras.main.width}x${this.cameras.main.height} scroll ${this.cameras.main.scrollX},${this.cameras.main.scrollY} z${this.cameras.main.zoom}`, lines });
+  }
+
   // ── Background ─────────────────────────────────────────────────────────────
 
   private drawBackground(w: number, h: number): void {
@@ -381,7 +460,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     if (this.textures.exists(bgKey)) {
       const frame = this.textures.getFrame(bgKey);
       const scale = Math.max(w / frame.realWidth, h / frame.realHeight);
-      this.add.image(w / 2, h / 2, bgKey).setDepth(0).setScale(scale);
+      const bg = this.add.image(w / 2, h / 2, bgKey).setDepth(0).setScale(scale);
+      bg.setData('battleDebug', { key: bgKey, texture: `${frame.realWidth}x${frame.realHeight}` });
 
       const topScrim = this.add.graphics().setDepth(1);
       topScrim.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.52, 0.52, 0, 0);
@@ -1319,7 +1399,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
           this.registry.set('classic_spawn_name',  ctx.returnSpawn ?? 'default');
           this.registry.remove('classic_battle_context');
           this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
-            if (p === 1) this.scene.start('ClassicOverworldScene');
+            if (p !== 1) return;
+            const storyState = this.registry.get('story_state') as { mapId?: string; spawn?: string } | undefined;
+            if (storyState) {
+              this.registry.set('story_state', { ...storyState, mapId: ctx.returnMap, spawn: ctx.returnSpawn ?? 'south' });
+              this.scene.start('StoryOverworldScene');
+              return;
+            }
+            this.scene.start('ClassicOverworldScene');
           });
         } else {
           this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {

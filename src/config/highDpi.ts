@@ -1,130 +1,211 @@
 import Phaser from 'phaser';
 
-/**
- * High-DPI rendering support.
- *
- * Phaser 3.80 has no built-in renderer resolution setting, and ScaleManager
- * `zoom` changes the coordinate space (breaking hardcoded pixel values in
- * scenes). Instead we:
- *
- *  1. Keep the Phaser game size (and therefore all scene layout code) in CSS
- *     pixels — scenes need zero changes.
- *  2. Size the canvas drawing buffer to CSS × DPR so the GPU has real pixels
- *     to fill instead of upscaling a small buffer (the source of mobile blur).
- *  3. Shim every camera: viewport = buffer size, zoom = DPR, origin = (0,0).
- *     Zooming from the top-left corner maps the CSS-pixel world exactly onto
- *     the full buffer — no scroll compensation needed, and camera effects
- *     (fade/flash) and any future scrolling keep working.
- *  4. Set ScaleManager.displayScale to DPR so pointer coordinates arrive in
- *     buffer pixels — the same space the camera hit-test expects, keeping
- *     interactive objects tap-accurate. Code that needs CSS-pixel pointer
- *     positions must read pointer.worldX/worldY (correct in both spaces).
- *
- * The camera shim runs every PRE_RENDER with cheap per-property checks, so
- * cameras created by newly started scenes are corrected before their first
- * rendered frame.
- */
-
 export const MAX_RENDER_DPR = 2;
+
+let lastAppliedKey = '';
+let lastLoggedKey = '';
+const DEBUG_ENABLED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 
 export function getRenderDpr(): number {
   if (typeof window === 'undefined') return 1;
-  return Math.max(1, Math.min(MAX_RENDER_DPR, Number(window.devicePixelRatio) || 1));
+  const dpr = Number(window.devicePixelRatio) || 1;
+  return Math.max(1, Math.min(MAX_RENDER_DPR, dpr));
 }
 
-export function viewportCssSize(game?: Phaser.Game): { width: number; height: number } {
-  if (typeof window !== 'undefined') {
-    const vv = window.visualViewport;
-    const w  = Math.round(vv?.width  ?? window.innerWidth);
-    const h  = Math.round(vv?.height ?? window.innerHeight);
-    if (w > 1 && h > 1) return { width: w, height: h };
-  }
-  // Non-browser / test fallback: Phaser's current logical size
-  if (game?.scale) {
+export function viewportCssSize(): { width: number; height: number } {
+  if (typeof window === 'undefined') return { width: 1, height: 1 };
+  const vv = window.visualViewport;
+  return {
+    width: Math.max(1, Math.round(vv?.width ?? window.innerWidth)),
+    height: Math.max(1, Math.round(vv?.height ?? window.innerHeight)),
+  };
+}
+
+export function cssCanvasSize(canvas: HTMLCanvasElement, game?: Phaser.Game): { width: number; height: number } {
+  void canvas;
+  // The Phaser canvas must visually match the *current* mobile viewport. During
+  // rotation, canvas bounds and ScaleManager values can both be one event behind,
+  // so visualViewport is the source of truth and window.inner* is the fallback.
+  const viewport = viewportCssSize();
+
+  // In non-browser test environments, fall back to Phaser's CSS-pixel game size.
+  if (viewport.width <= 1 && viewport.height <= 1 && game?.scale) {
     return {
-      width:  Math.max(1, Math.round(game.scale.gameSize.width)),
-      height: Math.max(1, Math.round(game.scale.gameSize.height)),
+      width: Math.max(1, Math.round(game.scale.gameSize.width || game.scale.displaySize.width)),
+      height: Math.max(1, Math.round(game.scale.gameSize.height || game.scale.displaySize.height)),
     };
   }
-  return { width: 1, height: 1 };
+
+  return viewport;
 }
 
-function syncCanvasStyles(canvas: HTMLCanvasElement, css: { width: number; height: number }): void {
-  if (canvas.style.width !== `${css.width}px`)   canvas.style.width  = `${css.width}px`;
-  if (canvas.style.height !== `${css.height}px`) canvas.style.height = `${css.height}px`;
-}
-
-function shimCamera(camera: Phaser.Cameras.Scene2D.Camera, renderW: number, renderH: number, dpr: number): void {
-  if (camera.x !== 0 || camera.y !== 0 || camera.width !== renderW || camera.height !== renderH) {
-    camera.setViewport(0, 0, renderW, renderH);
+function applyDomViewportStyles(canvas: HTMLCanvasElement, css: { width: number; height: number }): void {
+  if (typeof document !== 'undefined') {
+    const html = document.documentElement;
+    const body = document.body;
+    html.style.width = '100%';
+    html.style.height = '100%';
+    html.style.margin = '0';
+    html.style.overflow = 'hidden';
+    body.style.width = '100%';
+    body.style.height = '100%';
+    body.style.margin = '0';
+    body.style.overflow = 'hidden';
   }
-  if (camera.zoom !== dpr) camera.setZoom(dpr);
-  // Zoom scales around the camera origin; (0,0) anchors the CSS-pixel world
-  // to the buffer's top-left so nothing shifts off screen.
-  if (camera.originX !== 0 || camera.originY !== 0) camera.setOrigin(0, 0);
+
+  const parent = canvas.parentElement as HTMLElement | null;
+  if (parent) {
+    parent.style.width = `${css.width}px`;
+    parent.style.height = `${css.height}px`;
+    parent.style.margin = '0';
+    parent.style.padding = '0';
+    parent.style.overflow = 'hidden';
+    parent.style.position = parent === document.body ? 'fixed' : (parent.style.position || 'fixed');
+    parent.style.left = '0';
+    parent.style.top = '0';
+  }
+
+  canvas.style.display = 'block';
+  canvas.style.position = 'fixed';
+  canvas.style.left = '0';
+  canvas.style.top = '0';
+  canvas.style.margin = '0';
+  canvas.style.padding = '0';
+  canvas.style.width = `${css.width}px`;
+  canvas.style.height = `${css.height}px`;
+  canvas.style.maxWidth = 'none';
+  canvas.style.maxHeight = 'none';
+  canvas.style.transform = 'none';
+  canvas.style.transformOrigin = '0 0';
 }
 
-let lastLoggedKey = '';
+
+function updateDomDebug(game: Phaser.Game, reason: string, css: { width: number; height: number }, dpr: number): void {
+  if (!DEBUG_ENABLED || typeof document === 'undefined') return;
+  const overlay = document.getElementById('mobile-debug-overlay') as HTMLPreElement | null;
+  if (!overlay) return;
+  const canvas = game.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const parentRect = canvas.parentElement?.getBoundingClientRect();
+  const activeScenes = game.scene.getScenes(true);
+  const scene = activeScenes[activeScenes.length - 1];
+  const camera = scene?.cameras?.main;
+  overlay.hidden = false;
+  overlay.style.width = `${css.width}px`;
+  overlay.style.height = `${css.height}px`;
+  overlay.textContent = [
+    `[viewport-sync] ${reason}`,
+    `scene ${scene?.scene.key ?? 'n/a'} bootOverlay ${!(document.getElementById('boot-overlay') as HTMLElement | null)?.hidden} modeOverlay ${!(document.getElementById('mode-select-overlay') as HTMLElement | null)?.hidden} storyOverlay ${!!(document.getElementById('story-ui-overlay') as HTMLElement | null) && !(document.getElementById('story-ui-overlay') as HTMLElement).hidden}`,
+    `visualViewport ${css.width}x${css.height} window ${window.innerWidth}x${window.innerHeight} DPR ${dpr}`,
+    `parent ${parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none'}`,
+    `canvas css ${Math.round(rect.width)}x${Math.round(rect.height)} style ${canvas.style.width}x${canvas.style.height} internal ${canvas.width}x${canvas.height}`,
+    `renderer ${game.renderer.width}x${game.renderer.height}`,
+    `scale ${Math.round(game.scale.width)}x${Math.round(game.scale.height)} game ${Math.round(game.scale.gameSize.width)}x${Math.round(game.scale.gameSize.height)} base ${Math.round(game.scale.baseSize.width)}x${Math.round(game.scale.baseSize.height)} display ${Math.round(game.scale.displaySize.width)}x${Math.round(game.scale.displaySize.height)}`,
+    `camera z${camera?.zoom.toFixed(2) ?? 'n/a'} vp ${camera ? `${Math.round(camera.x)},${Math.round(camera.y)} ${Math.round(camera.width)}x${Math.round(camera.height)}` : 'n/a'}`,
+    ...((game.registry.get('story_layout_debug') as string[] | undefined) ?? []),
+    ...((game.registry.get('battle_layout_debug') as string[] | undefined) ?? []),
+  ].join('\n');
+}
 
 export function applyHighDpiCanvas(game: Phaser.Game, reason = 'sync'): void {
   const canvas = game.canvas;
-  if (!canvas || !game.renderer) return;
+  if (!canvas) return;
 
-  const dpr     = getRenderDpr();
-  const css     = viewportCssSize(game);
-  const renderW = Math.max(1, Math.round(css.width  * dpr));
+  const dpr = getRenderDpr();
+  const css = cssCanvasSize(canvas, game);
+  const renderW = Math.max(1, Math.round(css.width * dpr));
   const renderH = Math.max(1, Math.round(css.height * dpr));
 
-  // Phaser logical size tracks the viewport in CSS pixels.
-  // NOTE: scale.resize() resets the canvas buffer and displayScale, so the
-  // buffer/displayScale overrides below must come after it.
-  if (Math.round(game.scale.gameSize.width)  !== css.width ||
-      Math.round(game.scale.gameSize.height) !== css.height) {
+  applyDomViewportStyles(canvas, css);
+
+  if (Math.round(game.scale.gameSize.width) !== css.width || Math.round(game.scale.gameSize.height) !== css.height) {
     game.scale.resize(css.width, css.height);
   }
 
-  syncCanvasStyles(canvas, css);
-
-  if (canvas.width !== renderW || canvas.height !== renderH ||
-      game.renderer.width !== renderW || game.renderer.height !== renderH) {
-    canvas.width  = renderW;
+  if (canvas.width !== renderW || canvas.height !== renderH || game.renderer.width !== renderW || game.renderer.height !== renderH) {
+    canvas.width = renderW;
     canvas.height = renderH;
     game.renderer.resize(renderW, renderH);
   }
 
-  // Pointer coords: page CSS px → buffer px, matching camera screen space.
-  game.scale.displayScale.set(dpr, dpr);
+  game.scene.scenes.forEach(scene => {
+    scene.cameras?.cameras.forEach(camera => {
+      camera.setViewport(0, 0, renderW, renderH);
+      // StoryOverworldScene and ClassicSoulDuelScene lay out their Phaser
+      // worlds directly in renderer pixels so the map/battlefield fill the
+      // DPR-sized drawing buffer. Other legacy scenes keep CSS-pixel
+      // coordinates and therefore need the DPR camera zoom shim.
+      camera.setZoom(scene.scene.key === 'StoryOverworldScene' || scene.scene.key === 'ClassicSoulDuelScene' ? 1 : dpr);
+    });
+  });
 
-  for (const scene of game.scene.scenes) {
-    const cams = scene.cameras?.cameras;
-    if (!cams) continue;
-    for (const cam of cams) shimCamera(cam, renderW, renderH, dpr);
+  const key = `${css.width}x${css.height}@${dpr}:${renderW}x${renderH}:${reason}`;
+  if (key !== lastAppliedKey) {
+    lastAppliedKey = key;
   }
 
-  const logKey = `${css.width}x${css.height}@${dpr}`;
+  updateDomDebug(game, reason, css, dpr);
+
+  const logKey = `${css.width}x${css.height}@${dpr}:${renderW}x${renderH}`;
   if (logKey !== lastLoggedKey) {
     lastLoggedKey = logKey;
-    console.info('[highDpi]', { reason, viewport: `${css.width}x${css.height}`, buffer: `${renderW}x${renderH}`, dpr });
+    const parentRect = canvas.parentElement?.getBoundingClientRect();
+    console.info('[viewport-sync]', {
+      reason,
+      viewport: `${css.width}x${css.height}`,
+      canvasCss: `${Math.round(canvas.getBoundingClientRect().width)}x${Math.round(canvas.getBoundingClientRect().height)}`,
+      canvasStyle: `${canvas.style.width}x${canvas.style.height}`,
+      canvasInternal: `${canvas.width}x${canvas.height}`,
+      parent: parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none',
+      scale: `${Math.round(game.scale.width)}x${Math.round(game.scale.height)}`,
+      renderer: `${game.renderer.width}x${game.renderer.height}`,
+      dpr,
+    });
   }
 }
 
-/**
- * Renders Phaser Text objects at DPR resolution so glyphs stay sharp inside
- * the DPR-sized buffer. Must be installed before any scene creates text.
- */
-export function installHighDpiText(): void {
-  const dpr = getRenderDpr();
-  if (dpr <= 1) return;
+export interface RenderDiagnostics {
+  dpr: number;
+  viewportSize: string;
+  canvasCss: string;
+  canvasRect: string;
+  canvasStyle: string;
+  canvasInternal: string;
+  parentSize: string;
+  parentRect: string;
+  phaserGameSize: string;
+  phaserBaseSize: string;
+  phaserDisplaySize: string;
+  rendererSize: string;
+  cameraZoom: string;
+  cameraScroll: string;
+  cameraViewport: string;
+  sceneKey: string;
+}
 
-  const proto = Phaser.GameObjects.GameObjectFactory.prototype as unknown as {
-    text: (...args: unknown[]) => Phaser.GameObjects.Text;
-    __highDpiText?: boolean;
-  };
-  if (proto.__highDpiText) return;
-  proto.__highDpiText = true;
-
-  const original = proto.text;
-  proto.text = function (this: unknown, ...args: unknown[]): Phaser.GameObjects.Text {
-    return original.apply(this, args).setResolution(dpr);
+export function getRenderDiagnostics(scene: Phaser.Scene): RenderDiagnostics {
+  const canvas = scene.game.canvas;
+  const css = cssCanvasSize(canvas, scene.game);
+  const rect = canvas.getBoundingClientRect();
+  const parentRect = canvas.parentElement?.getBoundingClientRect();
+  const scale = scene.scale;
+  const camera = scene.cameras.main;
+  return {
+    dpr: getRenderDpr(),
+    viewportSize: `${css.width}x${css.height}`,
+    canvasCss: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+    canvasRect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}x${Math.round(rect.height)}`,
+    canvasStyle: `${canvas.style.width}x${canvas.style.height}`,
+    canvasInternal: `${canvas.width}x${canvas.height}`,
+    parentSize: parentRect ? `${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none',
+    parentRect: parentRect ? `${Math.round(parentRect.x)},${Math.round(parentRect.y)} ${Math.round(parentRect.width)}x${Math.round(parentRect.height)}` : 'none',
+    phaserGameSize: `${Math.round(scale.gameSize.width)}x${Math.round(scale.gameSize.height)}`,
+    phaserBaseSize: `${Math.round(scale.baseSize.width)}x${Math.round(scale.baseSize.height)}`,
+    phaserDisplaySize: `${Math.round(scale.displaySize.width)}x${Math.round(scale.displaySize.height)}`,
+    rendererSize: `${scene.game.renderer.width}x${scene.game.renderer.height}`,
+    cameraZoom: camera.zoom.toFixed(2),
+    cameraScroll: `${Math.round(camera.scrollX)},${Math.round(camera.scrollY)}`,
+    cameraViewport: `${Math.round(camera.x)},${Math.round(camera.y)} ${Math.round(camera.width)}x${Math.round(camera.height)}`,
+    sceneKey: scene.scene.key,
   };
 }

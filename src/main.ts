@@ -7,19 +7,18 @@ import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
+import { StoryOverworldScene } from './scenes/StoryOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
-import { applyHighDpiCanvas, getRenderDpr, installHighDpiText } from './config/highDpi';
-
-// Must run before any scene creates text objects
-installHighDpiText();
+import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
+import { layoutDomOverlays } from './ui/bootOverlay';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   width: 960,
   height: 600,
   backgroundColor: '#0a0a0f',
-  parent: document.body,
+  parent: 'game',
   physics: {
     default: 'arcade',
     arcade: {
@@ -32,6 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
     PreloadScene,
     TitleScene,
     ModeSelectScene,
+    StoryOverworldScene,
     ClassicOverworldScene,
     ClassicSoulDuelScene,
     BattleLabScene,
@@ -46,7 +46,7 @@ const config: Phaser.Types.Core.GameConfig = {
     // game coordinate space by DPR (so this.scale.width becomes cssWidth/dpr),
     // breaking all hardcoded pixel values throughout the codebase.
     mode: Phaser.Scale.RESIZE,
-    parent: document.body,
+    parent: 'game',
   },
   render: {
     antialias:   true,
@@ -61,39 +61,33 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// ── DPR-aware canvas sync ─────────────────────────────────────────────────────
-// Keeps the canvas drawing buffer at CSS × DPR pixels while the Phaser
-// coordinate system stays in CSS pixels.  Cameras zoom from the top-left
-// corner (origin 0,0) so the CSS-pixel world maps exactly onto the buffer —
-// no scene coordinate code changes.  See src/config/highDpi.ts for details.
-let viewportSyncTimer: ReturnType<typeof setTimeout> | undefined;
-
+// Phaser 3.80 has no top-level renderer `resolution` GameConfig field, and
+// ScaleManager `zoom` changes CSS sizing rather than the drawing-buffer DPR.
+// Keep scene/layout units in CSS pixels, but render into a DPR-sized canvas
+// (clamped for mobile performance) and zoom cameras back to CSS-pixel world units.
+let viewportSyncTimer: number | undefined;
 function syncViewport(reason: string): void {
+  layoutDomOverlays();
   applyHighDpiCanvas(game, reason);
 }
-
 function scheduleViewportSync(reason: string): void {
   syncViewport(reason);
   requestAnimationFrame(() => syncViewport(`${reason}:raf`));
-  clearTimeout(viewportSyncTimer);
-  viewportSyncTimer = setTimeout(() => syncViewport(`${reason}:settled`), 250);
+  window.clearTimeout(viewportSyncTimer);
+  viewportSyncTimer = window.setTimeout(() => syncViewport(`${reason}:settled`), 250);
 }
 
-game.events.once(Phaser.Core.Events.READY, () => {
+game.events.on(Phaser.Core.Events.READY, () => {
   syncViewport('ready');
-  console.info('[render]', { dpr: getRenderDpr(), buf: `${game.canvas.width}x${game.canvas.height}` });
+  console.info('[render-resolution]', { dpr: getRenderDpr(), canvas: `${game.canvas.width}x${game.canvas.height}` });
 });
-
-// Sync on every frame — lightweight guard inside applyHighDpiCanvas skips
-// camera updates when renderer dimensions haven't changed.
 game.events.on(Phaser.Core.Events.PRE_RENDER, () => syncViewport('pre-render'));
+window.addEventListener('resize', () => scheduleViewportSync('window-resize'), { passive: true });
+window.addEventListener('orientationchange', () => scheduleViewportSync('orientationchange'), { passive: true });
+window.visualViewport?.addEventListener('resize', () => scheduleViewportSync('visualViewport-resize'), { passive: true });
+window.visualViewport?.addEventListener('scroll', () => scheduleViewportSync('visualViewport-scroll'), { passive: true });
 
-window.addEventListener('resize',            () => scheduleViewportSync('window-resize'),       { passive: true });
-window.addEventListener('orientationchange', () => scheduleViewportSync('orientationchange'),    { passive: true });
-window.visualViewport?.addEventListener('resize', () => scheduleViewportSync('vvp-resize'),      { passive: true });
-window.visualViewport?.addEventListener('scroll', () => scheduleViewportSync('vvp-scroll'),      { passive: true });
-
-// ── Web Audio unlock (required by iOS Safari) ──────────────────────────────────
+// Unlock Web Audio API on first interaction (required by iOS Safari)
 function tryUnlockAudio(): void {
   try {
     if (game.sound instanceof Phaser.Sound.WebAudioSoundManager) {

@@ -62,6 +62,14 @@ export interface MapDef {
   encounterTable?:  Record<string, number>;
 }
 
+export interface BattleStatOverrides {
+  attack?: number;
+  specialAttack?: number;
+  defense?: number;
+  specialDefense?: number;
+  speed?: number;
+}
+
 export interface ClassicBattleContext {
   returnMap:      string;
   returnSpawn:    string;
@@ -72,4 +80,7 @@ export interface ClassicBattleContext {
   playerLevel?:   number;
   enemyLevel?:    number;
   labMode?:       boolean;
+  labDebug?:      boolean;
+  playerStatOverrides?: BattleStatOverrides;
+  enemyStatOverrides?:  BattleStatOverrides;
 }

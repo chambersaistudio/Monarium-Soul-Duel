@@ -12,28 +12,275 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-    html {
-      width: 100%;
-      height: 100%;
-      background: #0a0a0f;
-      overflow: hidden;
-    }
-
-    body {
-      /* position:fixed + inset:0 always fills the *actual* visual viewport on all
-         mobile browsers — bypasses the iOS Safari 100vh stale-dimension bug that
-         keeps portrait height after rotation.  Phaser Scale.RESIZE reads
-         body.offsetWidth/Height, so the canvas re-sizes correctly after rotate
-         without requiring delayed refreshes. */
+    html, body {
       position: fixed;
       inset: 0;
-      background: #0a0a0f;
+      width: 100%;
+      height: 100%;
+      min-width: 100vw;
+      min-height: 100dvh;
       overflow: hidden;
+      background: #0a0a0f;
       touch-action: none;
     }
+    body { display: block; }
+    #game, canvas {
+      display: block;
+      position: fixed;
+      inset: 0;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100dvh;
+      max-width: none;
+      max-height: none;
+      transform: none;
+      transform-origin: 0 0;
+      overflow: hidden;
+      touch-action: none;
+      outline: none;
+      background: #0a0a0f;
+    }
 
-    canvas { display: block; touch-action: none; outline: none; }
+    #boot-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 8000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100dvh;
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      overflow: hidden;
+      color: #fff4d6;
+      background: radial-gradient(circle at 50% 38%, rgba(255, 102, 0, 0.18), rgba(10, 10, 15, 0.96) 54%, #05050a 100%);
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #boot-overlay[hidden] { display: none; }
+    .boot-card {
+      width: min(86vw, 520px);
+      text-align: center;
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+    }
+    .boot-title {
+      color: #ff7a1a;
+      font-size: clamp(34px, 9vw, 72px);
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 28px rgba(255, 78, 0, 0.72);
+    }
+    .boot-subtitle {
+      margin-top: 10px;
+      color: #ffbf72;
+      font-size: clamp(15px, 3.2vw, 28px);
+      font-weight: 700;
+      letter-spacing: 0.36em;
+    }
+    .boot-progress {
+      width: min(72vw, 360px);
+      height: 14px;
+      margin: 34px auto 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 138, 54, 0.45);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 18px rgba(255, 102, 0, 0.15);
+    }
+    #boot-progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ff5b1a, #ffb347);
+      transition: width 120ms linear;
+    }
+    #boot-status, #boot-hint {
+      font-family: Rajdhani, system-ui, sans-serif;
+      color: #b9b3d8;
+      font-size: clamp(13px, 2.6vw, 18px);
+      font-weight: 600;
+    }
+    #boot-hint { margin-top: 5px; color: #80799f; }
+    #boot-start-button {
+      margin-top: 28px;
+      min-width: 176px;
+      min-height: 48px;
+      border: 1px solid rgba(255, 190, 108, 0.72);
+      border-radius: 999px;
+      color: #fff3ce;
+      background: linear-gradient(180deg, rgba(255, 132, 48, 0.36), rgba(94, 34, 160, 0.38));
+      box-shadow: 0 0 24px rgba(255, 102, 0, 0.22);
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      touch-action: manipulation;
+    }
+
+    #mode-select-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 7900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100dvh;
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      overflow: hidden;
+      color: #f5efff;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(122, 74, 255, 0.20), transparent 42%),
+        linear-gradient(180deg, rgba(7, 7, 18, 0.96), rgba(4, 4, 10, 0.98));
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #mode-select-overlay[hidden] { display: none; }
+    .mode-card {
+      width: min(92vw, 760px);
+      max-height: min(88dvh, 680px);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+      text-align: center;
+    }
+    .mode-eyebrow {
+      color: #ffbf72;
+      font: 700 clamp(11px, 2.2vw, 14px)/1 Rajdhani, system-ui, sans-serif;
+      letter-spacing: 0.38em;
+      text-transform: uppercase;
+    }
+    .mode-title {
+      color: #fff4dc;
+      font-size: clamp(30px, 7vw, 58px);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      text-shadow: 0 0 26px rgba(123, 92, 255, 0.58);
+    }
+    .mode-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+      gap: clamp(10px, 2.4vw, 16px);
+      width: 100%;
+      margin-top: 6px;
+    }
+    .mode-option {
+      min-height: 116px;
+      padding: 16px;
+      border: 1px solid rgba(255, 218, 151, 0.34);
+      border-radius: 22px;
+      color: #f6efff;
+      background: linear-gradient(180deg, rgba(32, 24, 64, 0.88), rgba(10, 9, 28, 0.92));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 16px 36px rgba(0,0,0,0.28);
+      font-family: Rajdhani, system-ui, sans-serif;
+      text-align: left;
+      touch-action: manipulation;
+    }
+    .mode-option:focus-visible,
+    .mode-option:hover {
+      border-color: rgba(255, 190, 108, 0.92);
+      box-shadow: 0 0 0 3px rgba(255, 132, 48, 0.18), 0 18px 38px rgba(0,0,0,0.34);
+      outline: none;
+    }
+    .mode-option-title {
+      display: block;
+      color: #fff4c7;
+      font-family: Orbitron, Rajdhani, system-ui, sans-serif;
+      font-size: clamp(16px, 3vw, 21px);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .mode-option-desc {
+      display: block;
+      margin-top: 9px;
+      color: #b9b3d8;
+      font-size: clamp(13px, 2.4vw, 16px);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .mode-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: #80799f;
+      font: 600 13px/1.2 Rajdhani, system-ui, sans-serif;
+    }
+    #mode-back-button {
+      min-height: 36px;
+      padding: 0 18px;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 999px;
+      color: #d8d3ff;
+      background: rgba(255,255,255,0.06);
+      font: 700 13px/1 Orbitron, Rajdhani, system-ui, sans-serif;
+      letter-spacing: 0.12em;
+      touch-action: manipulation;
+    }
+    @media (max-height: 430px) and (orientation: landscape) {
+      .mode-card { gap: 10px; max-height: 94dvh; }
+      .mode-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .mode-option { min-height: 88px; padding: 12px; border-radius: 16px; }
+      .mode-option-desc { margin-top: 5px; line-height: 1.12; }
+      .mode-footer { font-size: 11px; }
+    }
+
+    #mobile-debug-overlay {
+      position: fixed;
+      left: max(8px, env(safe-area-inset-left));
+      top: max(8px, env(safe-area-inset-top));
+      z-index: 10000;
+      max-width: calc(100vw - 16px);
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px;
+      color: #e8fff2;
+      background: rgba(0,0,0,0.68);
+      font: 10px/1.32 monospace;
+      white-space: pre-wrap;
+      pointer-events: none;
+    }
+    #mobile-debug-overlay[hidden] { display: none; }
+
+
+    #story-ui-overlay {
+      position: fixed; inset: 0; z-index: 6000; pointer-events: none; color: #fff4dc;
+      font-family: Rajdhani, Orbitron, system-ui, sans-serif;
+    }
+    #story-ui-overlay[hidden] { display: none; }
+    .story-hud {
+      position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); right: max(96px, calc(86px + env(safe-area-inset-right)));
+      display: flex; justify-content: space-between; gap: 12px; align-items: start; pointer-events: none;
+      font-size: clamp(13px, 2.4vw, 16px);
+    }
+    .story-hud > div { padding: 10px 14px; border: 1px solid rgba(255,190,108,.38); border-radius: 16px; background: rgba(7,7,18,.70); box-shadow: 0 0 22px rgba(122,74,255,.18); backdrop-filter: blur(8px); }
+    .story-hud b { display:block; color:#fff7d8; font-family:Orbitron, Rajdhani, sans-serif; letter-spacing:.08em; }
+    .story-hud span { color:#ffcf8a; }
+    .story-prompt { position:absolute; left:50%; bottom: calc(124px + env(safe-area-inset-bottom)); transform:translateX(-50%); padding:8px 14px; border-radius:999px; background:rgba(0,0,0,.72); border:1px solid rgba(255,190,108,.5); pointer-events:none; font-weight:800; letter-spacing:.08em; }
+    .story-controls { position:absolute; inset:auto 0 0 0; height:148px; pointer-events:none; transition:opacity .18s ease, filter .18s ease; }
+    .story-joy { pointer-events:auto; position:absolute; left:max(22px, env(safe-area-inset-left)); bottom:max(20px, env(safe-area-inset-bottom)); width:112px; height:112px; border-radius:999px; background:rgba(12,10,28,.64); border:2px solid rgba(255,190,108,.42); box-shadow:0 0 28px rgba(122,74,255,.25); touch-action:none; }
+    #story-joy-thumb { position:absolute; left:50%; top:50%; width:46px; height:46px; border-radius:999px; transform:translate(-50%,-50%); background:rgba(255,244,199,.86); box-shadow:0 0 18px rgba(255,190,108,.45); }
+    .story-actions { pointer-events:auto; position:absolute; right:max(18px, env(safe-area-inset-right)); bottom:max(24px, env(safe-area-inset-bottom)); display:flex; gap:12px; align-items:end; }
+    .story-actions button, .story-menu-button { border:1px solid rgba(255,190,108,.58); color:#fff4c7; background:rgba(10,9,28,.78); border-radius:999px; font-family:Orbitron, Rajdhani, sans-serif; font-weight:900; box-shadow:0 0 22px rgba(66,230,155,.16); touch-action:manipulation; }
+    #story-a { width:76px; height:76px; font-size:30px; } .story-menu-button { pointer-events:auto; position:absolute; left:50%; bottom:max(24px, env(safe-area-inset-bottom)); transform:translateX(-50%); width:86px; height:48px; font-size:11px; z-index:4; }
+    .story-dialogue { pointer-events:auto; position:absolute; left:50%; bottom:calc(142px + env(safe-area-inset-bottom)); transform:translateX(-50%); width:min(92vw, 820px); min-height:112px; display:flex; gap:14px; padding:14px; border:1px solid rgba(255,190,108,.48); border-radius:22px; background:rgba(6,6,18,.94); box-shadow:0 18px 42px rgba(0,0,0,.38),0 0 28px rgba(122,74,255,.22); backdrop-filter:blur(10px); z-index:20; }
+    .story-dialogue[hidden], .story-starter-card[hidden], .story-menu-card[hidden] { display:none; }
+    #story-dialogue-portrait { width:82px; height:82px; object-fit:cover; border-radius:18px; background:rgba(255,255,255,.06); }
+    .story-dialogue-copy b { display:block; color:#ffbf72; font-family:Orbitron, Rajdhani, sans-serif; margin-bottom:4px; } .story-dialogue-copy p { margin:0; font-size:clamp(16px,2.8vw,21px); line-height:1.2; } .story-dialogue-copy small { color:#8f86b8; }
+    .story-menu-card { pointer-events:auto; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(88vw,420px); padding:20px; border:1px solid rgba(255,190,108,.52); border-radius:26px; background:radial-gradient(circle at 50% 0%,rgba(255,142,64,.18),transparent 38%),rgba(6,6,18,.96); box-shadow:0 20px 56px rgba(0,0,0,.48),0 0 32px rgba(122,74,255,.18); z-index:23; text-align:center; } .story-menu-card h2 { margin:0 0 8px; font-family:Orbitron, Rajdhani, sans-serif; color:#fff4c7; } .story-menu-card p { margin:0 0 14px; color:#cfc7ff; } .story-menu-row { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:16px; background:rgba(255,255,255,.07); } .story-menu-row span { color:#ffcf8a; font-weight:800; } .story-menu-actions { display:flex; justify-content:center; gap:10px; margin-top:16px; flex-wrap:wrap; } .story-menu-actions button { min-height:44px; border-radius:999px; padding:0 18px; border:1px solid rgba(255,190,108,.55); color:#fff4c7; background:rgba(122,74,255,.20); font-weight:900; } #story-save-status { display:block; min-height:18px; margin-top:10px; color:#66e6a3; }
+    .story-starter-card { pointer-events:auto; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(92vw,900px); max-height:92vh; overflow:auto; display:grid; grid-template-columns:minmax(180px, 32%) 1fr; grid-template-areas:'art info' 'art stats' 'buttons buttons'; align-items:center; gap:16px 24px; padding:18px; border:1px solid rgba(255,190,108,.50); border-radius:26px; background:radial-gradient(circle at 22% 50%, rgba(122,74,255,.22), transparent 34%), rgba(6,6,18,.96); box-shadow:0 20px 56px rgba(0,0,0,.5),0 0 32px rgba(255,102,0,.16); z-index:22; }
+    .story-starter-art { grid-area:art; align-self:center; width:100%; min-height:240px; display:flex; align-items:center; justify-content:center; filter:drop-shadow(0 0 24px rgba(255,190,108,.22)); } .story-starter-art img { width:100%; max-height:min(48vh,340px); object-fit:contain; object-position:center; } .story-starter-info { grid-area:info; align-self:end; } .story-starter-info h2 { margin:0 0 8px; font-family:Orbitron, Rajdhani, sans-serif; color:#fff4c7; letter-spacing:.04em; } .story-starter-info p { margin:7px 0; } .story-starter-meta { display:flex; align-items:center; gap:8px; color:#ffcf8a; font-weight:800; flex-wrap:wrap; } .story-starter-meta img { width:22px; height:22px; object-fit:contain; } .story-stats { grid-area:stats; width:100%; display:grid; grid-template-columns:repeat(2,minmax(150px,1fr)); gap:8px; } .story-stats span { padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.08); display:flex; justify-content:space-between; gap:10px; } .story-stats b { color:#ffcf8a; } .story-starter-buttons { grid-area:buttons; display:flex; justify-content:center; gap:10px; margin-top:2px; flex-wrap:wrap; } .story-starter-buttons button { min-height:44px; border-radius:999px; padding:0 18px; border:1px solid rgba(255,190,108,.55); color:#fff4c7; background:rgba(122,74,255,.20); font-weight:900; }
+    #story-ui-overlay.story-dialogue-active .story-controls, #story-ui-overlay.story-dialogue-active .story-menu-button, #story-ui-overlay.story-modal-active .story-controls, #story-ui-overlay.story-modal-active .story-menu-button { opacity:0; pointer-events:none; filter:blur(1px); }
+    @media (max-height: 480px) and (orientation: landscape) { .story-dialogue { bottom: max(12px, env(safe-area-inset-bottom)); width:min(70vw,760px); } .story-controls { height:118px; } .story-joy { width:92px; height:92px; } #story-a { width:62px; height:62px; } .story-starter-card { width:min(90vw,920px); grid-template-columns:minmax(150px, 28%) 1fr; gap:8px 18px; padding:12px; } .story-starter-art { min-height:210px; } .story-starter-art img { max-height:54vh; } .story-stats { grid-template-columns:repeat(3,minmax(96px,1fr)); gap:6px; } .story-stats span { padding:6px 8px; } }
+    @media (max-width: 520px) { .story-starter-card { max-height:88vh; grid-template-columns:1fr; grid-template-areas:'info' 'art' 'stats' 'buttons'; text-align:center; } .story-starter-meta { justify-content:center; } .story-starter-art { min-height:180px; } .story-starter-art img { max-height:230px; } .story-stats { grid-template-columns:1fr 1fr; } }
 
     /* ── Boot / loading DOM overlay ─────────────────────────────────────────────
        Lives in front of the Phaser canvas. CSS flexbox keeps it perfectly centred
@@ -116,38 +363,32 @@
     #rotate-overlay h2   { font-size: 20px; letter-spacing: 3px; }
     #rotate-overlay p    { font-size: 13px; color: #555555; margin-top: 4px; }
 
-    /* Show only on touch devices in portrait */
-    @media (pointer: coarse) and (orientation: portrait) {
-      #rotate-overlay { display: flex; }
-    }
-
-    /* ── Viewport debug overlay (?debug=1) ──────────────────────────────────── */
-    #debug-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      background: rgba(0,0,0,0.78);
-      color: #00ff88;
-      font: 10px/1.6 monospace;
-      padding: 6px 10px;
-      z-index: 10000;
-      pointer-events: none;
-      white-space: pre;
-      border-right: 1px solid #00ff8840;
-      border-bottom: 1px solid #00ff8840;
-    }
   </style>
 </head>
 <body>
-  <!-- Boot overlay: visible immediately, removed by PreloadScene on load complete -->
-  <div id="boot-overlay">
-    <div id="boot-logo">MONARIUM</div>
-    <div id="boot-tagline">SOUL DUEL</div>
-    <div id="boot-bar-wrap"><div id="boot-bar"></div></div>
-    <div id="boot-status">Loading…</div>
+  <div id="game" aria-label="Monarium game canvas container"></div>
+  <div id="boot-overlay" role="dialog" aria-live="polite">
+    <div class="boot-card">
+      <div class="boot-title">MONARIUM</div>
+      <div class="boot-subtitle">SOUL DUEL</div>
+      <div class="boot-progress" aria-hidden="true"><div id="boot-progress-fill"></div></div>
+      <div id="boot-status">Loading assets…</div>
+      <div id="boot-hint">Preparing Soul Duel</div>
+      <button id="boot-start-button" type="button" hidden>START</button>
+    </div>
   </div>
-
-  <!-- Rotate prompt: CSS-only, shown in portrait on touch devices -->
+  <div id="mode-select-overlay" role="dialog" aria-live="polite" hidden>
+    <div class="mode-card">
+      <div class="mode-eyebrow">Choose your path</div>
+      <div class="mode-title">SELECT MODE</div>
+      <div id="mode-options" class="mode-options"></div>
+      <div class="mode-footer">
+        <button id="mode-back-button" type="button">BACK</button>
+        <span>Tap a mode to begin</span>
+      </div>
+    </div>
+  </div>
+  <pre id="mobile-debug-overlay" hidden></pre>
   <div id="rotate-overlay">
     <div class="icon">↺</div>
     <h2>ROTATE YOUR DEVICE</h2>
