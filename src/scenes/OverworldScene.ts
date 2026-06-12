@@ -282,7 +282,7 @@ export class OverworldScene extends Phaser.Scene {
       battleType:     'wild',
       playerLevel:    this.saveData.monariLevel,
       enemyLevel,
-      bondable:       false,
+      bondable:       true,
     };
 
     this.registry.set('classic_battle_context', ctx);

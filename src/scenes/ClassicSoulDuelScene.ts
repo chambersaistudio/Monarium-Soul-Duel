@@ -4,7 +4,7 @@ import { ClassicActor } from '../entities/ClassicActor';
 import { ClassicBattleEngine } from '../systems/ClassicBattleEngine';
 import { SoulSyncSystem } from '../systems/SoulSyncSystem';
 import { AudioManager } from '../systems/AudioManager';
-import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
+import { CLASSIC_MOVES, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
 import { PLAYER_PROFILE } from '../data/playerProfile';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
@@ -362,8 +362,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.battle);
 
-    // Populate move list before building callbacks
-    const moveset       = CLASSIC_COMMAND_SETS[playerMinId] ?? ['basic_attack'];
+    // Populate move list before building callbacks — reads from save for custom slots
+    const _bSave        = PlayerSaveManager.load();
+    const moveset       = PlayerSaveManager.getMonariMoveset(_bSave, playerMinId);
     this.menuCommandIds = [...moveset, BACK_COMMAND];
 
     this.domHud = new BattleHudOverlay({
@@ -876,7 +877,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.mainBtnW = btnW;
     this.mainBtnH = btnH;
 
-    const moveset       = CLASSIC_COMMAND_SETS[playerId] ?? ['basic_attack'];
+    const _hSave        = PlayerSaveManager.load();
+    const moveset       = PlayerSaveManager.getMonariMoveset(_hSave, playerId);
     this.menuCommandIds = [...moveset, BACK_COMMAND];
     const nMoves        = this.menuCommandIds.length;
     const rows          = Math.ceil(nMoves / this.MOVE_COLS);

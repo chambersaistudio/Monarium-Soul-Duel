@@ -1,7 +1,8 @@
 import './OverworldMenuOverlay.css';
 import { MINARI_ROSTER } from '../data/minariData';
 import { elementLabel, rarityLabel } from '../config/uiTheme';
-import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS } from '../data/classicMoveData';
+import { CLASSIC_MOVES, CLASSIC_TECHNIQUE_LIBRARY } from '../data/classicMoveData';
+import { MONARI_ABILITIES } from '../data/abilities';
 import type { OverworldSave } from '../systems/PlayerSaveManager';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 
@@ -40,34 +41,14 @@ function catIcon(move: import('../types/classic').ClassicMoveConfig | undefined)
   return '◎';
 }
 
-// ── Move descriptions ──────────────────────────────────────────────────────────
-
-const MOVE_DESCRIPTIONS: Record<string, string> = {
-  basic_attack:     'A reliable strike that costs no Aura.',
-  guard:            'Brace for the next hit — significantly reduces incoming damage.',
-  flame_paw_barrage:'Relentless fire claw combo that overwhelms the opponent.',
-  ember_shot:       'A focused burst of flame launched at range.',
-  heat_guard:       'Fire aura shield that burns enemies who strike Flarepaw.',
-  blinding_flare:   'Bright flash disrupts the opponent, draining their Soul Sync.',
-  aqua_ripple:      'A surging water projectile that hits hard at range.',
-  crystal_knuckle:  'A hardened water-crystal punch delivered up close.',
-  shell_guard:      'Surround the body in water armor to absorb the next hit.',
-  tidal_feint:      'A deceptive water feint that saps the opponent\'s Soul Sync.',
-  vine_snap:        'A whipping vine strike that stings on contact.',
-  root_pulse:       'Shockwaves sent through earth roots erupt beneath the enemy.',
-  bark_guard:       'Hardens bark plating to absorb the next incoming hit.',
-  pollen_haze:      'Releases a status cloud that steadily drains Soul Sync.',
-  shadow_coil:      'Dark energy coils around the opponent and constricts.',
-};
-
 // ── Menu items ─────────────────────────────────────────────────────────────────
 
 const BONDER_MENU_ITEMS = [
   'Monari',
   'Techniques',
   'Bag',
-  'Codex',
   'Player',
+  'Codex',
   'Settings',
   'Save',
   'Mode Select',
@@ -84,6 +65,14 @@ export interface MenuCallbacks {
   onSave?:      () => void;
 }
 
+// ── Swap state ─────────────────────────────────────────────────────────────────
+
+interface SwapState {
+  monariId:   string;
+  slotIndex:  number;  // 0–3
+  oldMoveId:  string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class OverworldMenuOverlay {
@@ -97,6 +86,9 @@ export class OverworldMenuOverlay {
   private movePopupEl:   HTMLDivElement | null = null;
   private detailModalEl: HTMLDivElement | null = null;
   private techModalEl:   HTMLDivElement | null = null;
+
+  // Technique swap state
+  private swapState: SwapState | null = null;
 
   constructor(callbacks: MenuCallbacks) {
     this.cb = callbacks;
@@ -167,9 +159,11 @@ export class OverworldMenuOverlay {
         } else if (this.playerTeamIds.length === 0) {
           this.showComingSoon('Techniques');
         } else {
-          // multiple Monari: show team to select one
           this.showTeamScreen(this.playerTeamIds);
         }
+        break;
+      case 'Player':
+        this.showPlayerPage();
         break;
       case 'Save':
         if (this.cb.onSave) {
@@ -224,6 +218,137 @@ export class OverworldMenuOverlay {
     actions.appendChild(backBtn);
 
     this.panel.appendChild(actions);
+  }
+
+  // ── Player Page ───────────────────────────────────────────────────────────
+
+  private showPlayerPage(): void {
+    this.panel.innerHTML = '';
+
+    const save = this.playerSave;
+
+    const title = document.createElement('div');
+    title.className = 'owmenu__title';
+    title.textContent = 'Player';
+    this.panel.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className = 'owmenu__player-body';
+
+    if (!save) {
+      const msg = document.createElement('div');
+      msg.className = 'owmenu__coming-soon';
+      msg.textContent = 'No save data found.';
+      body.appendChild(msg);
+    } else {
+      // Portrait (starter portrait)
+      const portrait = document.createElement('div');
+      portrait.className = 'owmenu__player-portrait';
+      const pImg = document.createElement('img');
+      pImg.className = 'owmenu__player-portrait-img';
+      pImg.src = `assets/monari/${save.starterMonariId}/portraits/neutral.png`;
+      pImg.alt = save.playerName;
+      pImg.draggable = false;
+      let pfb = 0;
+      pImg.addEventListener('error', () => {
+        pfb++;
+        if (pfb === 1) pImg.src = `assets/monari/${save.starterMonariId}/reference/fullbody.png`;
+        else pImg.style.display = 'none';
+      });
+      portrait.appendChild(pImg);
+      body.appendChild(portrait);
+
+      const infoWrap = document.createElement('div');
+      infoWrap.className = 'owmenu__player-info';
+
+      // Name + rank
+      const nameRow = document.createElement('div');
+      nameRow.className = 'owmenu__player-name-row';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'owmenu__player-name';
+      nameEl.textContent = save.playerName;
+      nameRow.appendChild(nameEl);
+      const rankEl = document.createElement('span');
+      rankEl.className = 'owmenu__player-rank';
+      rankEl.textContent = `Soul Rank ${this.calcSoulRank(save)}`;
+      nameRow.appendChild(rankEl);
+      infoWrap.appendChild(nameRow);
+
+      // Starter info
+      const starterMonari = MINARI_ROSTER[save.starterMonariId];
+      if (starterMonari) {
+        const starterRow = document.createElement('div');
+        starterRow.className = 'owmenu__player-starter';
+        starterRow.innerHTML = `Partner: <span style="color:${elemCss(starterMonari.element)}">${starterMonari.name}</span> Lv.${save.monariLevel}`;
+        infoWrap.appendChild(starterRow);
+      }
+
+      // Level XP bar
+      const xpToNext = PlayerSaveManager.xpToNextLevel(save.monariLevel);
+      const xpPct = save.monariLevel >= 100 ? 100 : Math.min(100, (save.monariXp / xpToNext) * 100);
+      infoWrap.appendChild(this.buildInfoBar(
+        `XP  ${save.monariXp} / ${xpToNext}`,
+        xpPct,
+        '#36ccff',
+      ));
+
+      // Bond XP bar
+      const BOND_CAP = 10;
+      const bondLevel = save.bondLevel ?? 1;
+      const bondXp    = save.bondXp ?? 0;
+      const bondToNext = PlayerSaveManager.bondXpToNextLevel(bondLevel);
+      const bondPct   = bondLevel >= BOND_CAP ? 100 : Math.min(100, (bondXp / bondToNext) * 100);
+      const bondLabel = bondLevel >= BOND_CAP
+        ? `Bond Lv. ${bondLevel} — MAX`
+        : `Bond Lv. ${bondLevel}  ·  ${bondXp} / ${bondToNext} XP`;
+      infoWrap.appendChild(this.buildInfoBar(bondLabel, bondPct, '#a855f7'));
+
+      // Stats row
+      const statsRow = document.createElement('div');
+      statsRow.className = 'owmenu__player-stats';
+      statsRow.innerHTML = `
+        <span class="owmenu__pstat">Potions <b>${save.potionCount ?? 0}</b></span>
+        <span class="owmenu__pstat">Bonded <b>${PlayerSaveManager.getBondedTeam(save).length}</b></span>
+      `;
+      infoWrap.appendChild(statsRow);
+
+      body.appendChild(infoWrap);
+    }
+
+    this.panel.appendChild(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'owmenu__detail-actions';
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'owmenu__back-btn';
+    backBtn.textContent = '← Menu';
+    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.showBonderMenu(); });
+    actions.appendChild(backBtn);
+    this.panel.appendChild(actions);
+    this.show();
+  }
+
+  private calcSoulRank(save: OverworldSave): number {
+    return Math.max(1, Math.floor(save.monariLevel / 10) + 1);
+  }
+
+  private buildInfoBar(label: string, pct: number, color: string): HTMLDivElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'owmenu__player-bar-wrap';
+    const track = document.createElement('div');
+    track.className = 'owmenu__player-bar-track';
+    const fill = document.createElement('div');
+    fill.className = 'owmenu__player-bar-fill';
+    fill.style.width = `${pct.toFixed(1)}%`;
+    fill.style.background = color;
+    track.appendChild(fill);
+    wrap.appendChild(track);
+    const lbl = document.createElement('div');
+    lbl.className = 'owmenu__player-bar-label';
+    lbl.textContent = label;
+    wrap.appendChild(lbl);
+    return wrap;
   }
 
   // ── Team screen ───────────────────────────────────────────────────────────
@@ -284,7 +409,6 @@ export class OverworldMenuOverlay {
     card.setAttribute('tabindex', '0');
     card.setAttribute('aria-label', monari?.name ?? id);
 
-    // Avatar — fullbody first, portrait fallback
     const img = document.createElement('img');
     img.className = 'owmenu__card-avatar';
     img.src = `assets/monari/${id}/reference/fullbody.png`;
@@ -325,7 +449,7 @@ export class OverworldMenuOverlay {
       bars.className = 'owmenu__mini-bars';
       const hp   = scaleStat(monari.stats.maxHp);
       const aura = scaleStat(monari.stats.maxAura);
-      bars.appendChild(this.buildMiniBar('HP',  hp  / 600, '#3be071'));
+      bars.appendChild(this.buildMiniBar('HP',  hp   / 600, '#3be071'));
       bars.appendChild(this.buildMiniBar('AU',  aura / 400, '#36ccff'));
       bars.appendChild(this.buildMiniBar('PWR', monari.stats.power / 150, color));
       info.appendChild(bars);
@@ -381,7 +505,6 @@ export class OverworldMenuOverlay {
     const modal = document.createElement('div');
     modal.className = 'owmenu-dmodal';
 
-    // Close button
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'owmenu-dmodal__close';
@@ -411,7 +534,7 @@ export class OverworldMenuOverlay {
     const infoCol = document.createElement('div');
     infoCol.className = 'owmenu-dmodal__info-col';
 
-    // ── Name row (name + gender icon) ──
+    // Name row (name + gender icon)
     const nameRow = document.createElement('div');
     nameRow.className = 'owmenu-dmodal__name-row';
     const nameEl = document.createElement('div');
@@ -433,7 +556,7 @@ export class OverworldMenuOverlay {
     levelEl.textContent = `Lv.${realLevel}`;
     infoCol.appendChild(levelEl);
 
-    // XP bar
+    // XP bars (only for player's starter)
     if (isPlayerStarter && this.playerSave) {
       const save = this.playerSave;
       const xpToNext = PlayerSaveManager.xpToNextLevel(save.monariLevel);
@@ -446,19 +569,19 @@ export class OverworldMenuOverlay {
         'owmenu-dmodal__xp-text',
       ));
 
-      // Bond level + XP bar (purple)
+      const BOND_CAP = 10;
       const bondLevel = save.bondLevel ?? 1;
       const bondXp    = save.bondXp ?? 0;
       const bondToNext = PlayerSaveManager.bondXpToNextLevel(bondLevel);
-      const bondPct   = bondLevel >= 100 ? 100 : Math.min(100, (bondXp / bondToNext) * 100);
+      const bondPct   = bondLevel >= BOND_CAP ? 100 : Math.min(100, (bondXp / bondToNext) * 100);
       const bondWrap = document.createElement('div');
       bondWrap.className = 'owmenu-dmodal__bond-wrap';
       const bondLabel = document.createElement('div');
       bondLabel.className = 'owmenu-dmodal__bond-label';
-      bondLabel.textContent = `Bond Lv. ${bondLevel}`;
+      bondLabel.textContent = bondLevel >= BOND_CAP ? `Bond Lv. ${bondLevel} — MAX` : `Bond Lv. ${bondLevel}`;
       bondWrap.appendChild(bondLabel);
       bondWrap.appendChild(this.buildXpBar(
-        bondLevel >= 100 ? 'MAX' : `Bond XP  ${bondXp} / ${bondToNext}`,
+        bondLevel >= BOND_CAP ? 'MAX BOND' : `Bond XP  ${bondXp} / ${bondToNext}`,
         bondPct,
         'owmenu-dmodal__bond-track',
         'owmenu-dmodal__bond-fill',
@@ -467,7 +590,7 @@ export class OverworldMenuOverlay {
       infoCol.appendChild(bondWrap);
     }
 
-    // Element + rarity badges
+    // Badges
     const badgesRow = document.createElement('div');
     badgesRow.className = 'owmenu-dmodal__badges';
     const elemBadge = document.createElement('span');
@@ -481,7 +604,7 @@ export class OverworldMenuOverlay {
     badgesRow.appendChild(rarBadge);
     infoCol.appendChild(badgesRow);
 
-    // Stats heading + rows
+    // Stats
     const statsH = document.createElement('div');
     statsH.className = 'owmenu-dmodal__section-heading';
     statsH.textContent = 'Base Stats';
@@ -584,15 +707,22 @@ export class OverworldMenuOverlay {
     const monari = MINARI_ROSTER[id];
     if (!monari) return;
 
+    this.swapState = null;
     this.dismissTechModal();
 
-    const battleMoveIds: string[] = CLASSIC_COMMAND_SETS[id] ?? [];
+    const save = this.playerSave;
+    const equippedSlots = save
+      ? PlayerSaveManager.getTechniqueSlots(save, id)
+      : ['basic_attack', 'basic_attack', 'basic_attack', 'basic_attack'] as [string,string,string,string];
+    const libraryIds = CLASSIC_TECHNIQUE_LIBRARY[id] ?? [];
+    const ability = MONARI_ABILITIES[id];
 
     const bg = document.createElement('div');
     bg.className = 'owmenu-tech-bg';
 
     const modal = document.createElement('div');
     modal.className = 'owmenu-tech';
+    modal.id = 'owmenu-tech-modal';
 
     // Close button
     const closeBtn = document.createElement('button');
@@ -600,14 +730,38 @@ export class OverworldMenuOverlay {
     closeBtn.className = 'owmenu-tech__close';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.textContent = '✕';
-    closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.dismissTechModal(); });
+    closeBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.swapState = null;
+      this.dismissTechModal();
+    });
     modal.appendChild(closeBtn);
 
     // Title bar
     const titleBar = document.createElement('div');
     titleBar.className = 'owmenu-tech__title';
-    titleBar.textContent = `TECHNIQUES — ${monari.name}`;
+    titleBar.textContent = `TECHNIQUES — ${monari.name.toUpperCase()}`;
     modal.appendChild(titleBar);
+
+    // Ability banner
+    if (ability) {
+      const abilityBanner = document.createElement('div');
+      abilityBanner.className = 'owmenu-tech__ability';
+      abilityBanner.innerHTML = `
+        <span class="owmenu-tech__ability-label">ABILITY</span>
+        <span class="owmenu-tech__ability-name">${ability.name}</span>
+        <span class="owmenu-tech__ability-desc">${ability.description}</span>
+      `;
+      modal.appendChild(abilityBanner);
+    }
+
+    // Swap hint bar (shown when swap mode active)
+    const swapHint = document.createElement('div');
+    swapHint.className = 'owmenu-tech__swap-hint';
+    swapHint.id = 'owmenu-tech-swap-hint';
+    swapHint.textContent = 'Tap a technique in the library to swap it in.';
+    swapHint.style.display = 'none';
+    modal.appendChild(swapHint);
 
     // Body (left + right)
     const body = document.createElement('div');
@@ -618,13 +772,34 @@ export class OverworldMenuOverlay {
     equippedCol.className = 'owmenu-tech__col';
     const equippedH = document.createElement('div');
     equippedH.className = 'owmenu-tech__col-heading';
-    equippedH.textContent = `EQUIPPED (${battleMoveIds.length})`;
+    equippedH.textContent = 'EQUIPPED  (4 slots)';
     equippedCol.appendChild(equippedH);
 
-    battleMoveIds.forEach((moveId, i) => {
+    equippedSlots.forEach((moveId, slotIdx) => {
       const move = CLASSIC_MOVES[moveId];
-      equippedCol.appendChild(this.buildTechRow(moveId, move, i + 1));
+      const row = this.buildTechRow(moveId, move, slotIdx + 1);
+      row.id = `owmenu-tech-slot-${slotIdx}`;
+      row.setAttribute('data-slot', String(slotIdx));
+      row.style.cursor = 'pointer';
+      row.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.enterSwapMode(id, slotIdx, moveId, swapHint);
+      });
+      equippedCol.appendChild(row);
     });
+
+    // Permanent actions section (below equipped, non-swappable)
+    const permHeading = document.createElement('div');
+    permHeading.className = 'owmenu-tech__col-heading owmenu-tech__col-heading--perm';
+    permHeading.textContent = 'PERMANENT';
+    equippedCol.appendChild(permHeading);
+
+    for (const permId of ['basic_attack', 'guard'] as const) {
+      const permMove = CLASSIC_MOVES[permId];
+      const permRow = this.buildTechRow(permId, permMove);
+      permRow.classList.add('owmenu-tech__move-row--perm');
+      equippedCol.appendChild(permRow);
+    }
 
     // ── Right: Library ──
     const libraryCol = document.createElement('div');
@@ -634,13 +809,20 @@ export class OverworldMenuOverlay {
     libraryH.textContent = 'MOVE LIBRARY';
     libraryCol.appendChild(libraryH);
 
-    // For now the library = same as equipped; future will add extra learnable moves
-    battleMoveIds.forEach((moveId) => {
+    for (const moveId of libraryIds) {
       const move = CLASSIC_MOVES[moveId];
-      libraryCol.appendChild(this.buildTechRow(moveId, move));
-    });
+      const row = this.buildTechRow(moveId, move);
+      row.setAttribute('data-lib-move', moveId);
+      row.style.cursor = 'default';
+      row.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (this.swapState && this.swapState.monariId === id) {
+          this.executeSwap(id, this.swapState.slotIndex, moveId, swapHint);
+        }
+      });
+      libraryCol.appendChild(row);
+    }
 
-    // Coming-soon footer in library
     const libFooter = document.createElement('div');
     libFooter.className = 'owmenu-tech__lib-footer';
     libFooter.textContent = 'New techniques unlock as you level up.';
@@ -655,8 +837,55 @@ export class OverworldMenuOverlay {
     this.techModalEl = bg;
 
     bg.addEventListener('pointerdown', (e) => {
-      if (e.target === bg) this.dismissTechModal();
+      if (e.target === bg) {
+        this.swapState = null;
+        this.dismissTechModal();
+      }
     });
+  }
+
+  private enterSwapMode(
+    monariId: string,
+    slotIndex: number,
+    oldMoveId: string,
+    hintEl: HTMLElement,
+  ): void {
+    this.swapState = { monariId, slotIndex, oldMoveId };
+    hintEl.style.display = 'block';
+
+    // Highlight selected slot, unhighlight others
+    const modal = document.getElementById('owmenu-tech-modal');
+    if (!modal) return;
+    modal.querySelectorAll('.owmenu-tech__move-row').forEach((el) => {
+      (el as HTMLElement).classList.remove('owmenu-tech__move-row--swap-source');
+    });
+    const slotRow = document.getElementById(`owmenu-tech-slot-${slotIndex}`);
+    slotRow?.classList.add('owmenu-tech__move-row--swap-source');
+
+    // Make library rows visually active
+    modal.querySelectorAll('[data-lib-move]').forEach((el) => {
+      (el as HTMLElement).style.cursor = 'pointer';
+      (el as HTMLElement).classList.add('owmenu-tech__move-row--lib-active');
+    });
+  }
+
+  private executeSwap(
+    monariId: string,
+    slotIndex: number,
+    newMoveId: string,
+    _hintEl: HTMLElement,
+  ): void {
+    if (!this.playerSave) return;
+
+    const slots = PlayerSaveManager.getTechniqueSlots(this.playerSave, monariId);
+    slots[slotIndex] = newMoveId;
+    const newSave = PlayerSaveManager.setCustomSlots(this.playerSave, monariId, slots);
+    this.playerSave = newSave;
+    PlayerSaveManager.persist(newSave);
+
+    this.swapState = null;
+    this.dismissTechModal();
+    this.showTechniquesModal(monariId);
   }
 
   private buildTechRow(
@@ -735,7 +964,7 @@ export class OverworldMenuOverlay {
     const typeColor = ELEM_CSS[move?.damageType ?? 'neutral'] ?? ELEM_CSS.neutral;
     const auraCost  = move?.auraCost ?? 0;
     const accStr    = (move?.accuracy != null) ? `${move.accuracy}%` : '100%';
-    const desc      = MOVE_DESCRIPTIONS[moveId] ?? '';
+    const desc      = move?.description ?? '';
     const name      = move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const typeLabel = (move?.damageType ?? 'neutral');
     const typeStr   = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
@@ -778,6 +1007,7 @@ export class OverworldMenuOverlay {
   // ── Public close ──────────────────────────────────────────────────────────
 
   close(): void {
+    this.swapState = null;
     this.dismissMovePopup();
     this.dismissDetailModal();
     this.dismissTechModal();
@@ -785,6 +1015,7 @@ export class OverworldMenuOverlay {
   }
 
   destroy(): void {
+    this.swapState = null;
     this.dismissMovePopup();
     this.dismissDetailModal();
     this.dismissTechModal();

@@ -48,6 +48,8 @@ export interface ClassicMoveConfig {
    * Used for Guard and future defensive stances.
    */
   holdsStance?: boolean;
+  /** Short flavour description shown in menus. */
+  description?: string;
 }
 
 export interface PendingAction {

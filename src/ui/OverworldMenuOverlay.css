@@ -1074,6 +1074,213 @@
   .owmenu-tech__col--library { border-left: none; border-top: 1px solid rgba(68, 78, 168, 0.25); }
 }
 
+/* ── Ability banner ───────────────────────────────────────────────────────── */
+
+.owmenu-tech__ability {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 8px 48px 8px 20px;
+  background: rgba(139, 92, 255, 0.08);
+  border-bottom: 1px solid rgba(139, 92, 255, 0.20);
+  flex-shrink: 0;
+}
+
+.owmenu-tech__ability-label {
+  font-family: "Orbitron", monospace;
+  font-size: 8px;
+  font-weight: 700;
+  color: #6b21a8;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.owmenu-tech__ability-name {
+  font-family: "Orbitron", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #a855f7;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.owmenu-tech__ability-desc {
+  font-family: "Rajdhani", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(200, 180, 255, 0.65);
+  line-height: 1.45;
+  flex: 1;
+  min-width: 160px;
+}
+
+/* ── Swap hint ────────────────────────────────────────────────────────────── */
+
+.owmenu-tech__swap-hint {
+  padding: 7px 20px;
+  background: rgba(255, 200, 80, 0.08);
+  border-bottom: 1px solid rgba(255, 200, 80, 0.20);
+  font-family: "Rajdhani", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffe39a;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* ── Permanent actions heading ────────────────────────────────────────────── */
+
+.owmenu-tech__col-heading--perm {
+  margin-top: 14px;
+  color: #443c6a;
+  border-top: 1px solid rgba(68, 78, 168, 0.15);
+  padding-top: 10px;
+}
+
+/* Permanent (non-swappable) move rows */
+.owmenu-tech__move-row--perm {
+  opacity: 0.45;
+  cursor: default !important;
+}
+
+/* ── Swap source highlight ────────────────────────────────────────────────── */
+
+.owmenu-tech__move-row--swap-source {
+  border-color: rgba(255, 200, 80, 0.70) !important;
+  background: rgba(40, 30, 0, 0.88) !important;
+  box-shadow: 0 0 0 2px rgba(255, 200, 80, 0.18);
+}
+
+/* ── Library rows active in swap mode ────────────────────────────────────── */
+
+.owmenu-tech__move-row--lib-active {
+  border-color: rgba(139, 92, 255, 0.45) !important;
+  background: rgba(20, 14, 48, 0.90) !important;
+}
+.owmenu-tech__move-row--lib-active:hover {
+  background: rgba(60, 30, 120, 0.70) !important;
+  border-color: rgba(139, 92, 255, 0.80) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Player Page
+   Rendered inside .owmenu__panel → CSS vars resolve here
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.owmenu__player-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.owmenu__player-portrait {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.owmenu__player-portrait-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 50%;
+  border: 2px solid rgba(68, 78, 168, 0.45);
+  background: rgba(10, 12, 30, 0.90);
+}
+
+.owmenu__player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.owmenu__player-name-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.owmenu__player-name {
+  font-family: var(--owmenu-font-hud);
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+}
+
+.owmenu__player-rank {
+  font-family: var(--owmenu-font-stat);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--owmenu-c-gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.owmenu__player-starter {
+  font-family: var(--owmenu-font-stat);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  letter-spacing: 0.02em;
+}
+
+.owmenu__player-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.owmenu__player-bar-track {
+  height: 5px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.owmenu__player-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.owmenu__player-bar-label {
+  font-family: var(--owmenu-font-stat);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  letter-spacing: 0.02em;
+}
+
+.owmenu__player-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.owmenu__pstat {
+  font-family: var(--owmenu-font-stat);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--owmenu-c-muted);
+  background: rgba(10, 12, 30, 0.88);
+  border: 1px solid rgba(68, 78, 168, 0.30);
+  border-radius: 6px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.owmenu__pstat b {
+  color: #f0ecff;
+  font-weight: 700;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Mobile landscape — short screens (max-height ≤ 480px)
    ═══════════════════════════════════════════════════════════════════════════ */

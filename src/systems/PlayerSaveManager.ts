@@ -1,3 +1,5 @@
+import { getCommandSet, CLASSIC_TECHNIQUE_SLOTS } from '../data/classicMoveData';
+
 export type MonariOwnership = 'bonded' | 'released';
 
 export interface OverworldSave {
@@ -12,9 +14,13 @@ export interface OverworldSave {
   potionCount: number;
   // Ownership registry: monariId → ownership status
   ownedMonari: Record<string, MonariOwnership>;
+  // Per-Monari custom technique slots (4 ids each, excludes basic_attack/guard)
+  customMovesets?: Record<string, [string, string, string, string]>;
 }
 
 const SAVE_KEY = 'monarium_overworld_save';
+
+const BOND_LEVEL_CAP = 10;
 
 const DEFAULTS: OverworldSave = {
   starterMonariId: 'flarepaw',
@@ -53,7 +59,7 @@ export class PlayerSaveManager {
     return { save: { ...save, monariLevel: level, monariXp: xp }, levelsGained };
   }
 
-  // ── Bond XP ─────────────────────────────────────────────────────────────────
+  // ── Bond XP (cap = 10) ──────────────────────────────────────────────────────
 
   static bondXpToNextLevel(level: number): number {
     return level * 50;
@@ -67,17 +73,17 @@ export class PlayerSaveManager {
     let level = save.bondLevel ?? 1;
     let xp = (save.bondXp ?? 0) + gain;
     let levelsGained = 0;
-    while (level < 100 && xp >= this.bondXpToNextLevel(level)) {
+    while (level < BOND_LEVEL_CAP && xp >= this.bondXpToNextLevel(level)) {
       xp -= this.bondXpToNextLevel(level);
       level++;
       levelsGained++;
     }
+    if (level >= BOND_LEVEL_CAP) xp = 0;
     return { save: { ...save, bondLevel: level, bondXp: xp }, levelsGained };
   }
 
   // ── Bond chance formula ──────────────────────────────────────────────────────
 
-  /** Returns a 0–1 bond chance. Lower HP and lower rarity → higher chance. */
   static calcBondChance(
     enemyHpRatio: number,
     enemyLevel: number,
@@ -92,6 +98,38 @@ export class PlayerSaveManager {
     const hpBonus   = (1 - enemyHpRatio) * 0.32;
     const lvPenalty = Math.max(0, (enemyLevel - playerLevel) * 0.03);
     return Math.max(0.05, Math.min(0.95, base + hpBonus - lvPenalty));
+  }
+
+  // ── Technique movesets ───────────────────────────────────────────────────────
+
+  /** Returns the full command list (basic_attack, guard, + 4 technique slots) for battle / UI. */
+  static getMonariMoveset(save: OverworldSave, monariId: string): string[] {
+    const custom = save.customMovesets?.[monariId];
+    return getCommandSet(monariId, custom ?? undefined);
+  }
+
+  /** Saves a custom 4-slot technique selection for a given Monari. */
+  static setCustomSlots(
+    save: OverworldSave,
+    monariId: string,
+    slots: [string, string, string, string],
+  ): OverworldSave {
+    return {
+      ...save,
+      customMovesets: {
+        ...(save.customMovesets ?? {}),
+        [monariId]: slots,
+      },
+    };
+  }
+
+  /** Returns the 4 active technique slots for a given Monari (custom or default). */
+  static getTechniqueSlots(save: OverworldSave, monariId: string): [string, string, string, string] {
+    return (
+      save.customMovesets?.[monariId] ??
+      (CLASSIC_TECHNIQUE_SLOTS[monariId] as [string, string, string, string]) ??
+      ['basic_attack', 'basic_attack', 'basic_attack', 'basic_attack']
+    );
   }
 
   // ── Ownership ────────────────────────────────────────────────────────────────
@@ -111,7 +149,6 @@ export class PlayerSaveManager {
   static getBondedTeam(save: OverworldSave): string[] {
     const owned = save.ownedMonari ?? {};
     const bonded = Object.keys(owned).filter(id => owned[id] === 'bonded');
-    // Ensure starter is included
     if (save.starterMonariId && !bonded.includes(save.starterMonariId)) {
       bonded.unshift(save.starterMonariId);
     }
@@ -140,7 +177,6 @@ export class PlayerSaveManager {
     } catch { /* storage unavailable */ }
   }
 
-  /** Create a brand-new save for a given starter, initialising ownership. */
   static createFreshSave(
     starterMonariId: string,
     playerName: string,

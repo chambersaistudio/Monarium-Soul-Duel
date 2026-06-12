@@ -1,16 +1,14 @@
 import type { ClassicMoveConfig } from '../types/classic';
 
 // ── Move definitions ───────────────────────────────────────────────────────────
-// animFolder maps to existing Phaser animation keys: '${charId}_${animFolder}'.
-// When an 'actions/<moveName>' folder is added under public/assets/monari/<charId>/actions/
-// and gen:manifest is re-run, just update animFolder here and the engine picks it up.
 export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
 
-  // ── Universal ──────────────────────────────────────────────────────────────
+  // ── Universal permanent actions ────────────────────────────────────────────
 
   basic_attack: {
     id: 'basic_attack',
     displayName: 'Basic Attack',
+    description: 'A reliable strike that costs no Aura.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -30,6 +28,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   guard: {
     id: 'guard',
     displayName: 'Guard',
+    description: 'Brace for the next hit — significantly reduces incoming damage.',
     animFolder: 'guard',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -51,6 +50,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   flame_paw_barrage: {
     id: 'flame_paw_barrage',
     displayName: 'Flame Paw Barrage',
+    description: 'Relentless fire claw combo that overwhelms the opponent.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -70,6 +70,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   ember_shot: {
     id: 'ember_shot',
     displayName: 'Ember Shot',
+    description: 'A focused burst of flame launched at range.',
     animFolder: 'attack',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -89,6 +90,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   heat_guard: {
     id: 'heat_guard',
     displayName: 'Heat Guard',
+    description: 'Fire aura shield that burns enemies who strike Flarepaw.',
     animFolder: 'guard',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -108,6 +110,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   blinding_flare: {
     id: 'blinding_flare',
     displayName: 'Blinding Flare',
+    description: 'Bright flash disrupts the opponent, draining their Soul Sync.',
     animFolder: 'attack',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -125,11 +128,52 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     syncDamage: -12,
   },
 
+  fire_punch: {
+    id: 'fire_punch',
+    displayName: 'Fire Punch',
+    description: 'A blazing punch that ignites on contact.',
+    animFolder: 'attack',
+    approachAnim: 'run',
+    returnAnim: 'run',
+    targetReaction: 'hurt',
+    movementType: 'dash_to_target',
+    hitFrameIndex: 1,
+    power:      60,
+    damageType: 'fire',
+    category:   'physical',
+    accuracy:   90,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: true,
+    auraCost:   18,
+  },
+
+  ember_burst: {
+    id: 'ember_burst',
+    displayName: 'Ember Burst',
+    description: 'A wide wave of superheated embers engulfs the target.',
+    animFolder: 'attack',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'hurt',
+    movementType: 'stay',
+    hitFrameIndex: 2,
+    power:      48,
+    damageType: 'fire',
+    category:   'special',
+    accuracy:   95,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: false,
+    auraCost:   16,
+  },
+
   // ── Droplet moves ──────────────────────────────────────────────────────────
 
   aqua_ripple: {
     id: 'aqua_ripple',
     displayName: 'Aqua Ripple',
+    description: 'A surging water projectile that hits hard at range.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -149,6 +193,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   crystal_knuckle: {
     id: 'crystal_knuckle',
     displayName: 'Crystal Knuckle',
+    description: 'A hardened water-crystal punch delivered up close.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -168,6 +213,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   shell_guard: {
     id: 'shell_guard',
     displayName: 'Shell Guard',
+    description: 'Surround the body in water armor to absorb the next hit.',
     animFolder: 'guard',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -187,6 +233,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   tidal_feint: {
     id: 'tidal_feint',
     displayName: 'Tidal Feint',
+    description: 'A deceptive water feint that saps the opponent\'s Soul Sync.',
     animFolder: 'attack',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -204,11 +251,32 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     syncDamage: -10,
   },
 
+  aqua_slam: {
+    id: 'aqua_slam',
+    displayName: 'Aqua Slam',
+    description: 'A powerful slam wrapped in raging water energy.',
+    animFolder: 'attack',
+    approachAnim: 'run',
+    returnAnim: 'run',
+    targetReaction: 'hurt',
+    movementType: 'dash_to_target',
+    hitFrameIndex: 1,
+    power:      58,
+    damageType: 'water',
+    category:   'physical',
+    accuracy:   88,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: true,
+    auraCost:   20,
+  },
+
   // ── Sproutodon moves ──────────────────────────────────────────────────────
 
   vine_snap: {
     id: 'vine_snap',
     displayName: 'Vine Snap',
+    description: 'A whipping vine strike that stings on contact.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -228,6 +296,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   root_pulse: {
     id: 'root_pulse',
     displayName: 'Root Pulse',
+    description: 'Shockwaves sent through earth roots erupt beneath the enemy.',
     animFolder: 'attack',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -247,6 +316,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   bark_guard: {
     id: 'bark_guard',
     displayName: 'Bark Guard',
+    description: 'Hardens bark plating to absorb the next incoming hit.',
     animFolder: 'guard',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -266,6 +336,7 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
   pollen_haze: {
     id: 'pollen_haze',
     displayName: 'Pollen Haze',
+    description: 'Releases a status cloud that steadily drains Soul Sync.',
     animFolder: 'attack',
     approachAnim: 'idle',
     returnAnim: 'idle',
@@ -283,11 +354,52 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     syncDamage: -10,
   },
 
+  vine_strike: {
+    id: 'vine_strike',
+    displayName: 'Vine Strike',
+    description: 'Thick vines lash out with tremendous force.',
+    animFolder: 'attack',
+    approachAnim: 'run',
+    returnAnim: 'run',
+    targetReaction: 'hurt',
+    movementType: 'dash_to_target',
+    hitFrameIndex: 1,
+    power:      50,
+    damageType: 'flora',
+    category:   'physical',
+    accuracy:   95,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: true,
+    auraCost:   14,
+  },
+
+  thorn_volley: {
+    id: 'thorn_volley',
+    displayName: 'Thorn Volley',
+    description: 'A rapid burst of razor-sharp thorns fired at range.',
+    animFolder: 'attack',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'hurt',
+    movementType: 'stay',
+    hitFrameIndex: 2,
+    power:      46,
+    damageType: 'flora',
+    category:   'special',
+    accuracy:   92,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: false,
+    auraCost:   18,
+  },
+
   // ── Umbravine moves ────────────────────────────────────────────────────────
 
   shadow_coil: {
     id: 'shadow_coil',
     displayName: 'Shadow Coil',
+    description: 'Dark energy coils around the opponent and constricts.',
     animFolder: 'attack',
     approachAnim: 'run',
     returnAnim: 'run',
@@ -303,16 +415,182 @@ export const CLASSIC_MOVES: Record<string, ClassicMoveConfig> = {
     returnToAnchor: true,
     auraCost:   18,
   },
+
+  crystal_beam: {
+    id: 'crystal_beam',
+    displayName: 'Crystal Beam',
+    description: 'A piercing beam of dark crystal energy cuts through defenses.',
+    animFolder: 'attack',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'hurt',
+    movementType: 'stay',
+    hitFrameIndex: 2,
+    power:      50,
+    damageType: 'dark',
+    category:   'special',
+    accuracy:   88,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: false,
+    auraCost:   20,
+  },
+
+  // ── Shared demo moves ──────────────────────────────────────────────────────
+
+  stone_bash: {
+    id: 'stone_bash',
+    displayName: 'Stone Bash',
+    description: 'A heavy earth-powered slam that shakes the ground.',
+    animFolder: 'attack',
+    approachAnim: 'run',
+    returnAnim: 'run',
+    targetReaction: 'hurt',
+    movementType: 'dash_to_target',
+    hitFrameIndex: 1,
+    power:      55,
+    damageType: 'stone',
+    category:   'physical',
+    accuracy:   90,
+    canCrit:    true,
+    priority:   0,
+    returnToAnchor: true,
+    auraCost:   16,
+  },
+
+  focus: {
+    id: 'focus',
+    displayName: 'Focus',
+    description: 'Sharpens the mind — boosts Accuracy and critical hit rate next turn.',
+    animFolder: 'guard',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'none',
+    movementType: 'stay',
+    hitFrameIndex: 0,
+    power:      0,
+    damageType: 'none',
+    category:   'status',
+    accuracy:   100,
+    canCrit:    false,
+    priority:   1,
+    returnToAnchor: false,
+    auraCost:   0,
+  },
+
+  harden: {
+    id: 'harden',
+    displayName: 'Harden',
+    description: 'Toughens the body — raises Defense and Sp. Def for several turns.',
+    animFolder: 'guard',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'none',
+    movementType: 'stay',
+    hitFrameIndex: 0,
+    power:      0,
+    damageType: 'none',
+    category:   'status',
+    accuracy:   100,
+    canCrit:    false,
+    priority:   1,
+    returnToAnchor: false,
+    auraCost:   0,
+  },
+
+  quick_step: {
+    id: 'quick_step',
+    displayName: 'Quick Step',
+    description: 'Dashes with blinding speed — raises Speed and Evasion.',
+    animFolder: 'guard',
+    approachAnim: 'run',
+    returnAnim: 'idle',
+    targetReaction: 'none',
+    movementType: 'stay',
+    hitFrameIndex: 0,
+    power:      0,
+    damageType: 'none',
+    category:   'status',
+    accuracy:   100,
+    canCrit:    false,
+    priority:   2,
+    returnToAnchor: false,
+    auraCost:   8,
+  },
+
+  aura_charge: {
+    id: 'aura_charge',
+    displayName: 'Aura Charge',
+    description: 'Channels ambient Soul energy — restores a chunk of Aura.',
+    animFolder: 'guard',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'none',
+    movementType: 'stay',
+    hitFrameIndex: 0,
+    power:      0,
+    damageType: 'none',
+    category:   'status',
+    accuracy:   100,
+    canCrit:    false,
+    priority:   1,
+    returnToAnchor: false,
+    auraGain:   30,
+    auraCost:   0,
+  },
+
+  soul_pulse: {
+    id: 'soul_pulse',
+    displayName: 'Soul Pulse',
+    description: 'Fires a burst of raw Soul energy that disrupts the opponent\'s Soul Sync.',
+    animFolder: 'attack',
+    approachAnim: 'idle',
+    returnAnim: 'idle',
+    targetReaction: 'hurt',
+    movementType: 'stay',
+    hitFrameIndex: 2,
+    power:      36,
+    damageType: 'neutral',
+    category:   'special',
+    accuracy:   90,
+    canCrit:    false,
+    priority:   0,
+    returnToAnchor: false,
+    auraCost:   12,
+    syncDamage: -8,
+  },
 };
 
-// ── Per-character command menus ────────────────────────────────────────────────
-// Ordered list of move IDs shown in the command menu for each character.
-export const CLASSIC_COMMAND_SETS: Record<string, string[]> = {
-  flarepaw:   ['basic_attack', 'guard', 'flame_paw_barrage', 'ember_shot',      'heat_guard'],
-  droplet:    ['basic_attack', 'guard', 'aqua_ripple',       'crystal_knuckle', 'shell_guard'],
-  sproutodon: ['basic_attack', 'guard', 'vine_snap',         'bark_guard',      'pollen_haze'],
-  umbravine:  ['basic_attack', 'guard', 'shadow_coil'],
+// ── Per-character default technique slots (4 slots, excluding basic_attack / guard) ──
+export const CLASSIC_TECHNIQUE_SLOTS: Record<string, [string, string, string, string]> = {
+  flarepaw:   ['flame_paw_barrage', 'ember_shot',      'heat_guard',  'blinding_flare'],
+  droplet:    ['aqua_ripple',       'crystal_knuckle', 'shell_guard', 'tidal_feint'],
+  sproutodon: ['vine_snap',         'root_pulse',       'bark_guard',  'pollen_haze'],
+  umbravine:  ['shadow_coil',       'crystal_beam',    'focus',       'soul_pulse'],
 };
 
-// Sentinel value for the Back / do-nothing menu slot (handled by the scene, not engine)
+// ── Per-character learnable technique library ──────────────────────────────────
+export const CLASSIC_TECHNIQUE_LIBRARY: Record<string, string[]> = {
+  flarepaw:   ['flame_paw_barrage', 'ember_shot', 'heat_guard', 'blinding_flare',
+               'fire_punch', 'ember_burst', 'focus', 'aura_charge'],
+  droplet:    ['aqua_ripple', 'crystal_knuckle', 'shell_guard', 'tidal_feint',
+               'aqua_slam', 'quick_step', 'focus', 'soul_pulse'],
+  sproutodon: ['vine_snap', 'root_pulse', 'bark_guard', 'pollen_haze',
+               'vine_strike', 'thorn_volley', 'harden', 'aura_charge'],
+  umbravine:  ['shadow_coil', 'crystal_beam', 'focus', 'soul_pulse',
+               'stone_bash', 'quick_step', 'harden'],
+};
+
+// ── Build a full command set: basic_attack + guard + 4 technique slots ─────────
+export function getCommandSet(monariId: string, customSlots?: string[]): string[] {
+  const slots = customSlots ?? CLASSIC_TECHNIQUE_SLOTS[monariId] ?? [];
+  return ['basic_attack', 'guard', ...slots];
+}
+
+// ── Per-character command menus (backward-compatible) ─────────────────────────
+export const CLASSIC_COMMAND_SETS: Record<string, string[]> = Object.fromEntries(
+  Object.keys(CLASSIC_TECHNIQUE_SLOTS).map(id => [id, getCommandSet(id)]),
+);
+
+// Sentinel value for the Back / do-nothing menu slot
 export const BACK_COMMAND = '__back__';

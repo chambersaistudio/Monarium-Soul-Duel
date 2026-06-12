@@ -336,7 +336,7 @@ export class StoryOverworldScene extends Phaser.Scene {
       battleType:     'wild',
       playerLevel,
       enemyLevel,
-      bondable:       false,
+      bondable:       true,
     };
     this.registry.set('classic_battle_context', ctx);
     applyHighDpiCanvas(this.game, 'story:wild-encounter:sync-now');
