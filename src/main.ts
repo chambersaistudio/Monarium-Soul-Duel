@@ -9,6 +9,7 @@ import { ClassicSoulDuelScene } from './scenes/ClassicSoulDuelScene';
 import { ClassicOverworldScene } from './scenes/ClassicOverworldScene';
 import { BattleLabScene } from './scenes/BattleLabScene';
 import { BattleLabSetupScene } from './scenes/BattleLabSetupScene';
+import { applyHighDpiCanvas, getRenderDpr } from './config/highDpi';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -57,20 +58,37 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// ── Mobile orientation / resize reliability ──────────────────────────────────
-// iOS Safari fires `resize` during rotation but sometimes reports stale
-// dimensions.  Refreshing the Scale Manager at +100 ms and +300 ms catches the
-// final stabilised viewport size.  body { position:fixed; inset:0 } (index.html)
-// ensures body.offsetWidth/Height are correct at those points.
-function scheduleScaleRefresh(): void {
-  setTimeout(() => { try { game.scale.refresh(); } catch { /* ok */ } }, 100);
-  setTimeout(() => { try { game.scale.refresh(); } catch { /* ok */ } }, 300);
+// ── DPR-aware canvas sync ─────────────────────────────────────────────────────
+// Keeps the canvas drawing buffer at CSS × DPR pixels while the Phaser
+// coordinate system stays in CSS pixels.  The camera zoom shim (zoom = DPR)
+// ensures all scenes render at native resolution without changing any scene
+// coordinate code.  See src/config/highDpi.ts for implementation details.
+let viewportSyncTimer: ReturnType<typeof setTimeout> | undefined;
+
+function syncViewport(reason: string): void {
+  applyHighDpiCanvas(game, reason);
 }
-window.addEventListener('resize',            scheduleScaleRefresh, { passive: true });
-window.addEventListener('orientationchange', scheduleScaleRefresh, { passive: true });
-if (typeof window.visualViewport !== 'undefined') {
-  window.visualViewport?.addEventListener('resize', scheduleScaleRefresh, { passive: true });
+
+function scheduleViewportSync(reason: string): void {
+  syncViewport(reason);
+  requestAnimationFrame(() => syncViewport(`${reason}:raf`));
+  clearTimeout(viewportSyncTimer);
+  viewportSyncTimer = setTimeout(() => syncViewport(`${reason}:settled`), 250);
 }
+
+game.events.once(Phaser.Core.Events.READY, () => {
+  syncViewport('ready');
+  console.info('[render]', { dpr: getRenderDpr(), buf: `${game.canvas.width}x${game.canvas.height}` });
+});
+
+// Sync on every frame — lightweight guard inside applyHighDpiCanvas skips
+// camera updates when renderer dimensions haven't changed.
+game.events.on(Phaser.Core.Events.PRE_RENDER, () => syncViewport('pre-render'));
+
+window.addEventListener('resize',            () => scheduleViewportSync('window-resize'),       { passive: true });
+window.addEventListener('orientationchange', () => scheduleViewportSync('orientationchange'),    { passive: true });
+window.visualViewport?.addEventListener('resize', () => scheduleViewportSync('vvp-resize'),      { passive: true });
+window.visualViewport?.addEventListener('scroll', () => scheduleViewportSync('vvp-scroll'),      { passive: true });
 
 // ── Web Audio unlock (required by iOS Safari) ──────────────────────────────────
 function tryUnlockAudio(): void {
