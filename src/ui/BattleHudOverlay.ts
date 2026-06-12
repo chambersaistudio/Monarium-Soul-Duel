@@ -95,10 +95,6 @@ export class BattleHudOverlay {
   private pAuVal!:   HTMLSpanElement;
   private pSyncVal!: HTMLSpanElement;
 
-  // Bottom sync strips
-  private bpSyncFill!: HTMLDivElement;
-  private beSyncFill!: HTMLDivElement;
-
   // Turn badge
   private turnNumEl!: HTMLSpanElement;
 
@@ -134,7 +130,6 @@ export class BattleHudOverlay {
     spacer.className = 'bhud__spacer';
     this.root.appendChild(spacer);
     this.root.appendChild(this.buildCommandArea());
-    this.root.appendChild(this.buildBottomBars());
   }
 
   private buildTop(): HTMLDivElement {
@@ -156,7 +151,6 @@ export class BattleHudOverlay {
         <span class="bhud__name"     id="bhud-p-name">---</span>
         <img  class="bhud__gender"   id="bhud-p-gender" src="" alt="" draggable="false" style="display:none">
         <span class="bhud__level"    id="bhud-p-level">Lv.1</span>
-        <span class="bhud__bond-pill" id="bhud-p-bond">B.1</span>
       </div>
       <div class="bhud__bar-row">
         <span class="bhud__bar-label">HP</span>
@@ -307,48 +301,11 @@ export class BattleHudOverlay {
     });
   }
 
-  private buildBottomBars(): HTMLDivElement {
-    const bottom = document.createElement('div');
-    bottom.className = 'bhud__bottom';
-
-    const pStrip = document.createElement('div');
-    pStrip.className = 'bhud__sync-strip';
-    pStrip.innerHTML = `
-      <span class="bhud__sync-label">SOUL SYNC</span>
-      <div class="bhud__sync-track">
-        <div class="bhud__sync-fill" id="bhud-bp-sync" style="width:0%"></div>
-      </div>
-    `;
-    this.bpSyncFill = pStrip.querySelector<HTMLDivElement>('#bhud-bp-sync')!;
-
-    const eStrip = document.createElement('div');
-    eStrip.className = 'bhud__sync-strip bhud__sync-strip--enemy';
-    eStrip.innerHTML = `
-      <div class="bhud__sync-track">
-        <div class="bhud__sync-fill" id="bhud-be-sync" style="width:0%"></div>
-      </div>
-      <span class="bhud__sync-label">SOUL SYNC</span>
-    `;
-    this.beSyncFill = eStrip.querySelector<HTMLDivElement>('#bhud-be-sync')!;
-
-    bottom.appendChild(pStrip);
-    bottom.appendChild(eStrip);
-    return bottom;
-  }
-
   // ── State update ────────────────────────────────────────────────────────────
 
   update(data: BattleHUDData, playerLevel: number, enemyLevel: number): void {
     this.updateCard('player', data, playerLevel);
     this.updateCard('enemy',  data, enemyLevel);
-
-    // Bottom strips
-    const bpPct = Math.max(0, Math.min(100, data.playerSync));
-    const bePct = Math.max(0, Math.min(100, data.enemySync));
-    this.bpSyncFill.style.width      = `${bpPct}%`;
-    this.bpSyncFill.style.background  = syncFillColor(data.playerSyncTier);
-    this.beSyncFill.style.width       = `${bePct}%`;
-    this.beSyncFill.style.background  = syncFillColor(data.enemySyncTier);
   }
 
   private updateCard(side: 'player' | 'enemy', data: BattleHUDData, level: number): void {
@@ -361,7 +318,6 @@ export class BattleHudOverlay {
     const maxA = p ? data.playerMaxAura       : data.enemyMaxAura;
     const sync = p ? data.playerSync         : data.enemySync;
     const tier = p ? data.playerSyncTier     : data.enemySyncTier;
-    const bond = p ? data.playerBondLevel    : 1;
     const px   = p ? 'p' : 'e';
 
     // Monari data
@@ -398,10 +354,6 @@ export class BattleHudOverlay {
         genderEl.style.display = 'none';
       }
     }
-
-    // Bond tag (player only)
-    const bondEl = document.getElementById(`bhud-${px}-bond`);
-    if (bondEl && p) bondEl.textContent = `B.${bond}`;
 
     // HP bar
     const hpFill = p ? this.pHpFill : this.eHpFill;
@@ -500,9 +452,10 @@ export class BattleHudOverlay {
         btn.setAttribute('aria-label', move?.displayName ?? id);
         if (dimmed) btn.disabled = true;
 
-        const nameStr  = id === 'basic_attack' ? 'BASIC ATK' : (move?.displayName?.toUpperCase() ?? id.toUpperCase());
+        const catSym   = move?.category === 'special' ? '✦ ' : '⚔ ';
+        const nameStr  = id === 'basic_attack' ? `${catSym}BASIC ATK` : `${catSym}${move?.displayName?.toUpperCase() ?? id.toUpperCase()}`;
         const metaStr  = id === 'basic_attack'
-          ? `PWR ${move?.power ?? 0}  +${move?.auraGain ?? 0}AU  ${move?.accuracy ?? 100}%`
+          ? `PWR ${move?.power ?? 0} · +${move?.auraGain ?? 0}AU · ${move?.accuracy ?? 100}%`
           : (isGuard ? 'Priority +4' : (cost > 0 ? `${cost} AU` : ''));
         btn.innerHTML  = `<span class="bhud__move-name">${nameStr}${blocked ? ' <span class="bhud__move-locked">LOCKED</span>' : ''}</span>`
           + (metaStr ? `<span class="bhud__move-meta">${metaStr}</span>` : '');
@@ -551,13 +504,14 @@ export class BattleHudOverlay {
         if (dimmed) btn.disabled = true;
         btn.style.setProperty('--move-accent', accent);
 
-        const nameStr = move?.displayName?.toUpperCase() ?? id.toUpperCase();
+        const catSym  = move?.category === 'special' ? '✦ ' : '⚔ ';
+        const nameStr = `${catSym}${move?.displayName?.toUpperCase() ?? id.toUpperCase()}`;
         const hasSyncDmg = (move?.syncDamage ?? 0) !== 0;
         const costStr = hasSyncDmg
-          ? `SYNC ${move!.syncDamage}  ${cost > 0 ? cost + 'AU' : 'Free'}  ${move?.accuracy ?? 100}%`
+          ? `SYNC ${move!.syncDamage} · ${cost > 0 ? cost + 'AU' : 'Free'} · ${move?.accuracy ?? 100}%`
           : (move?.holdsStance
             ? `Stance · ${cost > 0 ? cost + 'AU' : 'Free'}`
-            : `PWR ${move?.power ?? 0}  ${cost > 0 ? cost + 'AU' : 'Free'}  ${move?.accuracy ?? 100}%`);
+            : `PWR ${move?.power ?? 0} · ${cost > 0 ? cost + 'AU' : 'Free'} · ${move?.accuracy ?? 100}%`);
         btn.innerHTML = `<span class="bhud__move-name">${nameStr}</span>`
           + `<span class="bhud__move-meta">${costStr}</span>`;
 

@@ -28,6 +28,10 @@ export class OverworldScene extends Phaser.Scene {
 
     this.dialogueState = 'none';
 
+    // Pin physics world bounds to CSS viewport dimensions so setCollideWorldBounds
+    // cannot be constrained by stale initial-config values.
+    this.physics.world.setBounds(0, 0, w, h);
+
     this.bgGfx = this.add.graphics();
     this.drawTrainingField(w, h);
 

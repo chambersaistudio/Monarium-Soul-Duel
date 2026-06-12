@@ -113,8 +113,8 @@ export function getEffectivenessLabel(modifier: number): 'effective' | 'resisted
  *   ×1.0  → null
  */
 export function getEffectivenessMessage(modifier: number): string | null {
-  if (modifier > 1.0) return 'It was effective!';
-  if (modifier < 1.0) return 'It was resisted!';
+  if (modifier > 1.0) return 'Super Effective!';
+  if (modifier < 1.0) return 'Not Very Effective...';
   return null;
 }
 

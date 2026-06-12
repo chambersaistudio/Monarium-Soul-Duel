@@ -171,8 +171,8 @@ export class ClassicBattleEngine {
           const isBlocked = defender.isGuarding;
           const { damage: dmg, isCrit, typeModifier, typeAdvantage, typeResisted } = this.calcDamageFull(attacker, defender, move, action.role);
           defender.hp = Math.max(0, defender.hp - dmg);
-          this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
           this.callbacks.onHitMeta?.(targetRole, { isCrit, typeModifier, typeAdvantage, typeResisted });
+          this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
           if (!isBlocked) defender.flashDamage();
           if (isBlocked) this.gainAura(defender, AURA_GAIN_GUARD_BLOCK);
         }
@@ -215,8 +215,8 @@ export class ClassicBattleEngine {
               attacker, defender, move, action.role,
             );
             defender.hp = Math.max(0, defender.hp - dmg);
-            this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
             this.callbacks.onHitMeta?.(targetRole, { isCrit, typeModifier, typeAdvantage, typeResisted });
+            this.callbacks.onDamageDealt(targetRole, dmg, isBlocked, defender.x, defender.y - 40);
             if (!isBlocked) defender.flashDamage();
           }
 
