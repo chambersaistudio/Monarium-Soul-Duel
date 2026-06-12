@@ -7,6 +7,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS, BACK_COMMAND } from '../data/classicMoveData';
 import { MINARI_ROSTER } from '../data/minariData';
 import { PLAYER_PROFILE } from '../data/playerProfile';
+import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 import { CLASSIC_BATTLE_CONFIG } from '../config/classicBattleConfig';
 import { DAMAGE_FORMULA } from '../config/combatFormulaConfig';
 import { UI_THEME, elementColor } from '../config/uiTheme';
@@ -372,6 +373,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
             this.domHud.showMovesPanel(this.menuCommandIds, this.playerActor.aura, this.playerActor.usedGuardLastTurn);
             break;
+          case 'bag':
+            this.audio.playUi(AUDIO_KEYS.ui.confirm);
+            this.handleBag();
+            break;
           case 'capture':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
             this.handleCaptureAttempt();
@@ -380,9 +385,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
             this.handleRun();
             break;
-          default:
-            this.audio.playUi(AUDIO_KEYS.ui.move);
-            this.showPlaceholderOverlay(key.toUpperCase(), 'Coming soon!');
         }
       },
       onMoveSelect: (id) => {
@@ -1095,6 +1097,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.showMovesPanel();
         break;
+      case 'bag':
+        this.audio.playUi(AUDIO_KEYS.ui.confirm);
+        this.handleBag();
+        break;
       case 'capture':
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.handleCaptureAttempt();
@@ -1102,10 +1108,6 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       case 'run':
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.handleRun();
-        break;
-      default:
-        this.audio.playUi(AUDIO_KEYS.ui.move);
-        this.showPlaceholderOverlay(key.toUpperCase(), 'Coming soon!');
         break;
     }
   }
@@ -1122,25 +1124,82 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.engine.submitPlayerMove(id);
   }
 
-  // ── Capture ────────────────────────────────────────────────────────────────
+  // ── Bag ────────────────────────────────────────────────────────────────────
+
+  private handleBag(): void {
+    const save = PlayerSaveManager.load();
+    const potionCount = save.potionCount ?? 0;
+    this.domHud.showBagPanel(
+      potionCount,
+      () => {
+        // Use Potion: heal 15 HP, deduct from save, end player turn
+        const s = PlayerSaveManager.load();
+        if ((s.potionCount ?? 0) <= 0) return;
+        const healed = Math.min(this.playerActor.maxHp - this.playerActor.hp, 15);
+        this.playerActor.hp = Math.min(this.playerActor.maxHp, this.playerActor.hp + 15);
+        PlayerSaveManager.persist({ ...s, potionCount: Math.max(0, (s.potionCount ?? 0) - 1) });
+        this.domHud.hideBagPanel();
+        this.showBattleCallout(`+${healed} HP`, '#44dd88');
+        this.engine.submitCaptureFailed();
+      },
+      () => {
+        this.domHud.hideBagPanel();
+        this.domHud.showMainPanel();
+      },
+    );
+  }
+
+  // ── Capture / Bond ─────────────────────────────────────────────────────────
 
   private handleCaptureAttempt(): void {
     if (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild') {
-      this.showInfoOverlay('CAPTURE', "Can't capture a rival's Monari!");
+      this.showInfoOverlay('BOND', "You can only bond wild Monari!");
       return;
     }
+
+    const enemyId   = this.battleCtx.enemyMinariId ?? 'droplet';
+    const enemyData = MINARI_ROSTER[enemyId];
+    const save      = PlayerSaveManager.load();
+    const alreadyOwned = PlayerSaveManager.isOwned(save, enemyId);
+
     const hpRatio     = this.enemyActor.hp / this.enemyActor.maxHp;
-    const catchChance = Math.max(0.05, 0.85 - 0.7 * hpRatio);
-    if (Math.random() < catchChance) {
-      this.captureSuccess();
-    } else {
-      this.captureFail();
-    }
+    const playerLevel = this.playerLevel;
+    const enemyLevel  = this.enemyLevel;
+    const rarity      = enemyData?.rarity ?? 'rare';
+    const chance      = PlayerSaveManager.calcBondChance(hpRatio, enemyLevel, playerLevel, rarity);
+
+    this.domHud.showBondPanel(
+      enemyData?.name ?? enemyId,
+      chance,
+      alreadyOwned,
+      () => {
+        this.domHud.hideBondPanel();
+        if (alreadyOwned) {
+          this.domHud.showMainPanel();
+          return;
+        }
+        if (Math.random() < chance) {
+          this.captureSuccess();
+        } else {
+          this.captureFail();
+        }
+      },
+      () => {
+        this.domHud.hideBondPanel();
+        this.domHud.showMainPanel();
+      },
+    );
   }
 
   private captureSuccess(): void {
     const minariId   = this.battleCtx?.enemyMinariId ?? 'droplet';
     const minariName = MINARI_ROSTER[minariId]?.name ?? minariId;
+
+    // Persist bonded status to save
+    const save    = PlayerSaveManager.load();
+    const newSave = PlayerSaveManager.bondMonari(save, minariId);
+    PlayerSaveManager.persist(newSave);
+
     const party = (this.registry.get('classic_party') as string[] | null) ?? [];
     if (!party.includes(minariId)) {
       party.push(minariId);

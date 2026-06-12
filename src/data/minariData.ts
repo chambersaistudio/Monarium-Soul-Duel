@@ -35,6 +35,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     name: 'Umbravine',
     element: 'dark',
     rarity: 'uncommon',
+    gender: 'female' as const,
     stats: {
       maxHp: 300,
       hp: 300,
@@ -64,6 +65,7 @@ export const MINARI_ROSTER: Record<string, MinariData> = {
     name: 'Sproutodon',
     element: 'flora',
     rarity: 'rare',
+    gender: 'female' as const,
     stats: {
       maxHp: 340,
       hp: 340,

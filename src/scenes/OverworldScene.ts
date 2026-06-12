@@ -350,7 +350,8 @@ export class OverworldScene extends Phaser.Scene {
       });
     }
 
-    this.menuOverlay.showBonderMenu([this.saveData.starterMonariId], this.saveData);
+    const teamIds = PlayerSaveManager.getBondedTeam(this.saveData);
+    this.menuOverlay.showBonderMenu(teamIds, this.saveData);
   }
 
   shutdown(): void {

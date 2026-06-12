@@ -313,6 +313,90 @@
   border-radius: 3px;
 }
 
+/* ── Detail modal — name row (name + gender icon) ─────────────────────────── */
+
+.owmenu-dmodal__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.owmenu-dmodal__gender {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* ── Bond level + bar ─────────────────────────────────────────────────────── */
+
+.owmenu-dmodal__bond-wrap {
+  margin-bottom: 10px;
+}
+
+.owmenu-dmodal__bond-label {
+  font-family: "Rajdhani", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #a855f7;
+  margin-bottom: 3px;
+  letter-spacing: 0.03em;
+}
+
+.owmenu-dmodal__bond-track {
+  height: 5px;
+  background: rgba(14, 14, 30, 0.95);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.owmenu-dmodal__bond-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6b21a8, #a855f7);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.owmenu-dmodal__bond-text {
+  font-family: "Rajdhani", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8b5cf6;
+  letter-spacing: 0.03em;
+}
+
+/* ── Techniques button in detail modal ────────────────────────────────────── */
+
+.owmenu-dmodal__tech-btn {
+  display: block;
+  margin-top: 14px;
+  width: 100%;
+  background: rgba(68, 78, 168, 0.20);
+  border: 1px solid rgba(68, 78, 168, 0.50);
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-family: "Orbitron", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #f0ecff;
+  letter-spacing: 0.08em;
+  text-align: center;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, border-color 0.10s;
+  user-select: none;
+}
+
+.owmenu-dmodal__tech-btn:hover,
+.owmenu-dmodal__tech-btn:focus-visible {
+  background: rgba(139, 92, 255, 0.28);
+  border-color: rgba(139, 92, 255, 0.65);
+}
+
 /* ── Detail action buttons ────────────────────────────────────────────────── */
 
 .owmenu__detail-actions {
@@ -799,6 +883,195 @@
   margin: 0;
   padding-top: 10px;
   border-top: 1px solid rgba(68, 78, 168, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Techniques Modal
+   Appended to document.body → all colours HARDCODED (no CSS vars)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.owmenu-tech-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 10, 0.68);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.owmenu-tech {
+  position: relative;
+  background: rgba(8, 9, 24, 0.97);
+  border: 1px solid rgba(68, 78, 168, 0.55);
+  border-radius: 14px;
+  box-shadow: 0 20px 70px rgba(0, 0, 16, 0.88);
+  display: flex;
+  flex-direction: column;
+  width: min(740px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.owmenu-tech__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  background: rgba(10, 12, 30, 0.85);
+  border: 1px solid rgba(68, 78, 168, 0.40);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #7a7498;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, color 0.10s;
+  user-select: none;
+}
+.owmenu-tech__close:hover,
+.owmenu-tech__close:focus-visible { background: rgba(139, 92, 255, 0.30); color: #ffffff; }
+
+.owmenu-tech__title {
+  font-family: "Orbitron", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffe39a;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 14px 48px 12px 20px;
+  border-bottom: 1px solid rgba(255, 200, 80, 0.18);
+  flex-shrink: 0;
+}
+
+.owmenu-tech__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.owmenu-tech__col {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 90, 180, 0.35) transparent;
+}
+
+.owmenu-tech__col--library {
+  border-left: 1px solid rgba(68, 78, 168, 0.25);
+}
+
+.owmenu-tech__col-heading {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #7a7498;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.owmenu-tech__move-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(10, 12, 30, 0.80);
+  border: 1px solid rgba(68, 78, 168, 0.28);
+  border-radius: 6px;
+  padding: 7px 10px;
+  margin-bottom: 5px;
+}
+
+.owmenu-tech__slot-num {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffe39a;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.owmenu-tech__move-name {
+  font-family: "Orbitron", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #f0ecff;
+  letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owmenu-tech__move-meta {
+  font-family: "Rajdhani", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7a7498;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.owmenu-tech__info-btn {
+  flex-shrink: 0;
+  background: rgba(68, 78, 168, 0.25);
+  border: 1px solid rgba(68, 78, 168, 0.45);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #7a7498;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.10s, color 0.10s;
+  user-select: none;
+}
+.owmenu-tech__info-btn:hover,
+.owmenu-tech__info-btn:focus-visible { background: rgba(139, 92, 255, 0.35); color: #ffffff; }
+
+.owmenu-tech__lib-footer {
+  font-family: "Rajdhani", monospace;
+  font-size: 10px;
+  color: #443c6a;
+  margin-top: 10px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Short landscape */
+@media (max-height: 480px) {
+  .owmenu-tech { max-height: calc(100vh - 12px); }
+  .owmenu-tech__title { padding: 10px 44px 8px 14px; font-size: 9px; }
+  .owmenu-tech__col { padding: 10px 12px; }
+}
+
+/* Portrait: stack columns */
+@media (max-width: 500px) {
+  .owmenu-tech__body { flex-direction: column; }
+  .owmenu-tech__col--library { border-left: none; border-top: 1px solid rgba(68, 78, 168, 0.25); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

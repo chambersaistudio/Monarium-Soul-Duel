@@ -357,8 +357,8 @@ export class StoryOverworldScene extends Phaser.Scene {
     if (!this.state.starter) return PlayerSaveManager.load();
     const existing = PlayerSaveManager.load();
     if (existing.starterMonariId === this.state.starter) return existing;
-    // New or mismatched — start fresh for this starter
-    const fresh: OverworldSave = { starterMonariId: this.state.starter, playerName: PLAYER_NAME, monariLevel: 7, monariXp: 0 };
+    // New or mismatched — start fresh for this starter at level 7
+    const fresh = PlayerSaveManager.createFreshSave(this.state.starter, PLAYER_NAME, 7);
     PlayerSaveManager.persist(fresh);
     return fresh;
   }
@@ -377,8 +377,9 @@ export class StoryOverworldScene extends Phaser.Scene {
         onSave: () => this.saveGame(),
       });
     }
-    const starterIds = this.state.starter ? [this.state.starter] : [];
-    this.menuOverlay.showBonderMenu(starterIds, this.state.starter ? this.getOrInitSave() : undefined);
+    const save = this.state.starter ? this.getOrInitSave() : undefined;
+    const teamIds = save ? PlayerSaveManager.getBondedTeam(save) : [];
+    this.menuOverlay.showBonderMenu(teamIds, save);
   }
 
   private showXpNotification(xpGain: number, levelsGained: number, newLevel: number): void {

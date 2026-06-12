@@ -101,6 +101,8 @@ export class BattleHudOverlay {
   // Command panels
   private mainPanel!:  HTMLDivElement;
   private movesPanel!: HTMLDivElement;
+  private bagPanel!:   HTMLDivElement;
+  private bondPanel!:  HTMLDivElement;
   private mainBtns:    HTMLButtonElement[] = [];
   private moveBtns:    HTMLButtonElement[] = [];
 
@@ -250,8 +252,16 @@ export class BattleHudOverlay {
     this.movesPanel = document.createElement('div');
     this.movesPanel.className = 'bhud__moves-panel';
 
+    this.bagPanel = document.createElement('div');
+    this.bagPanel.className = 'bhud__bag-panel';
+
+    this.bondPanel = document.createElement('div');
+    this.bondPanel.className = 'bhud__bond-panel';
+
     bg.appendChild(this.mainPanel);
     bg.appendChild(this.movesPanel);
+    bg.appendChild(this.bagPanel);
+    bg.appendChild(this.bondPanel);
     cmd.appendChild(bg);
     return cmd;
   }
@@ -408,7 +418,137 @@ export class BattleHudOverlay {
     this.mainCursor = 0;
     this.mainPanel.classList.add('bhud--active');
     this.movesPanel.classList.remove('bhud--active');
+    this.bagPanel.classList.remove('bhud--active');
+    this.bondPanel.classList.remove('bhud--active');
     this.refreshMainCursor();
+  }
+
+  // ── Bag panel ──────────────────────────────────────────────────────────────
+
+  showBagPanel(potionCount: number, onUsePotion: () => void, onBack: () => void): void {
+    this.inMoves = false;
+    this.mainPanel.classList.remove('bhud--active');
+    this.movesPanel.classList.remove('bhud--active');
+    this.bondPanel.classList.remove('bhud--active');
+    this.bagPanel.classList.add('bhud--active');
+    this.bagPanel.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'bhud__sub-title';
+    title.textContent = 'BAG';
+    this.bagPanel.appendChild(title);
+
+    const items = document.createElement('div');
+    items.className = 'bhud__bag-items';
+
+    if (potionCount > 0) {
+      const row = document.createElement('div');
+      row.className = 'bhud__bag-item';
+
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'bhud__bag-item-info';
+      infoDiv.innerHTML = `<span class="bhud__bag-item-name">Potion</span><span class="bhud__bag-item-desc">+15 HP · Uses turn</span>`;
+      row.appendChild(infoDiv);
+
+      const countEl = document.createElement('span');
+      countEl.className = 'bhud__bag-item-count';
+      countEl.textContent = `×${potionCount}`;
+      row.appendChild(countEl);
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'bhud__bag-use-btn';
+      useBtn.textContent = 'USE';
+      useBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onUsePotion(); });
+      row.appendChild(useBtn);
+
+      items.appendChild(row);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'bhud__bag-empty';
+      empty.textContent = 'Bag is empty.';
+      items.appendChild(empty);
+    }
+
+    this.bagPanel.appendChild(items);
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'bhud__sub-back';
+    backBtn.textContent = '← Back';
+    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onBack(); });
+    this.bagPanel.appendChild(backBtn);
+  }
+
+  hideBagPanel(): void {
+    this.bagPanel.classList.remove('bhud--active');
+  }
+
+  // ── Bond panel ──────────────────────────────────────────────────────────────
+
+  showBondPanel(
+    monariName: string,
+    chance: number,
+    alreadyOwned: boolean,
+    onConfirm: () => void,
+    onBack: () => void,
+  ): void {
+    this.inMoves = false;
+    this.mainPanel.classList.remove('bhud--active');
+    this.movesPanel.classList.remove('bhud--active');
+    this.bagPanel.classList.remove('bhud--active');
+    this.bondPanel.classList.add('bhud--active');
+    this.bondPanel.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'bhud__sub-title';
+    title.textContent = 'BOND';
+    this.bondPanel.appendChild(title);
+
+    if (alreadyOwned) {
+      const msg = document.createElement('div');
+      msg.className = 'bhud__bond-owned';
+      msg.textContent = `${monariName} is already bonded to you!`;
+      this.bondPanel.appendChild(msg);
+    } else {
+      const pct   = Math.round(chance * 100);
+      const color = pct >= 60 ? '#44dd88' : pct >= 30 ? '#ffaa22' : '#ff6644';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'bhud__bond-target';
+      nameEl.textContent = monariName;
+      this.bondPanel.appendChild(nameEl);
+
+      const chanceEl = document.createElement('div');
+      chanceEl.className = 'bhud__bond-chance';
+      chanceEl.innerHTML = `Bond Chance: <span style="color:${color};font-weight:700">${pct}%</span>`;
+      this.bondPanel.appendChild(chanceEl);
+
+      if (pct < 40) {
+        const hint = document.createElement('div');
+        hint.className = 'bhud__bond-hint';
+        hint.textContent = 'Lower HP improves your chance.';
+        this.bondPanel.appendChild(hint);
+      }
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.type = 'button';
+      confirmBtn.className = 'bhud__bond-confirm';
+      confirmBtn.textContent = 'BOND';
+      confirmBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onConfirm(); });
+      this.bondPanel.appendChild(confirmBtn);
+    }
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'bhud__sub-back';
+    backBtn.textContent = '← Back';
+    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); onBack(); });
+    this.bondPanel.appendChild(backBtn);
+  }
+
+  hideBondPanel(): void {
+    this.bondPanel.classList.remove('bhud--active');
   }
 
   showMovesPanel(moveIds: string[], playerAura: number, guardBlocked = false): void {

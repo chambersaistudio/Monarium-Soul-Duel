@@ -5,7 +5,7 @@ import { CLASSIC_MOVES, CLASSIC_COMMAND_SETS } from '../data/classicMoveData';
 import type { OverworldSave } from '../systems/PlayerSaveManager';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 
-// ── Element accent colours (CSS hex strings) ──────────────────────────────────
+// ── Element accent colours ─────────────────────────────────────────────────────
 
 const ELEM_CSS: Record<string, string> = {
   fire:    '#ff6b35', water:   '#38c8ff', flora:   '#66c86d',
@@ -30,7 +30,7 @@ function scaleStat(base: number): number {
   return Math.round(base * (1 + (LEVEL_DISPLAY - 1) * LEVEL_GROWTH));
 }
 
-// ── Move category icon ────────────────────────────────────────────────────────
+// ── Move category icon ─────────────────────────────────────────────────────────
 
 function catIcon(move: import('../types/classic').ClassicMoveConfig | undefined): string {
   if (!move) return '◎';
@@ -40,7 +40,7 @@ function catIcon(move: import('../types/classic').ClassicMoveConfig | undefined)
   return '◎';
 }
 
-// ── Move descriptions ─────────────────────────────────────────────────────────
+// ── Move descriptions ──────────────────────────────────────────────────────────
 
 const MOVE_DESCRIPTIONS: Record<string, string> = {
   basic_attack:     'A reliable strike that costs no Aura.',
@@ -60,10 +60,11 @@ const MOVE_DESCRIPTIONS: Record<string, string> = {
   shadow_coil:      'Dark energy coils around the opponent and constricts.',
 };
 
-// ── Menu item definitions ─────────────────────────────────────────────────────
+// ── Menu items ─────────────────────────────────────────────────────────────────
 
 const BONDER_MENU_ITEMS = [
   'Monari',
+  'Techniques',
   'Bag',
   'Codex',
   'Player',
@@ -75,7 +76,7 @@ const BONDER_MENU_ITEMS = [
 
 type BonderMenuItem = typeof BONDER_MENU_ITEMS[number];
 
-// ── Callback interface ────────────────────────────────────────────────────────
+// ── Callback interface ─────────────────────────────────────────────────────────
 
 export interface MenuCallbacks {
   onClose:      () => void;
@@ -95,6 +96,7 @@ export class OverworldMenuOverlay {
   private playerTeamIds: string[] = [];
   private movePopupEl:   HTMLDivElement | null = null;
   private detailModalEl: HTMLDivElement | null = null;
+  private techModalEl:   HTMLDivElement | null = null;
 
   constructor(callbacks: MenuCallbacks) {
     this.cb = callbacks;
@@ -158,6 +160,16 @@ export class OverworldMenuOverlay {
     switch (item) {
       case 'Monari':
         this.showTeamScreen(this.playerTeamIds);
+        break;
+      case 'Techniques':
+        if (this.playerTeamIds.length === 1) {
+          this.showTechniquesModal(this.playerTeamIds[0]);
+        } else if (this.playerTeamIds.length === 0) {
+          this.showComingSoon('Techniques');
+        } else {
+          // multiple Monari: show team to select one
+          this.showTeamScreen(this.playerTeamIds);
+        }
         break;
       case 'Save':
         if (this.cb.onSave) {
@@ -262,9 +274,9 @@ export class OverworldMenuOverlay {
   }
 
   private buildMonariCard(id: string): HTMLDivElement {
-    const monari  = MINARI_ROSTER[id];
-    const elem    = monari?.element ?? 'neutral';
-    const color   = elemCss(elem);
+    const monari = MINARI_ROSTER[id];
+    const elem   = monari?.element ?? 'neutral';
+    const color  = elemCss(elem);
 
     const card = document.createElement('div');
     card.className = 'owmenu__monari-card';
@@ -272,7 +284,7 @@ export class OverworldMenuOverlay {
     card.setAttribute('tabindex', '0');
     card.setAttribute('aria-label', monari?.name ?? id);
 
-    // Avatar — fullbody first, then portrait, then hide
+    // Avatar — fullbody first, portrait fallback
     const img = document.createElement('img');
     img.className = 'owmenu__card-avatar';
     img.src = `assets/monari/${id}/reference/fullbody.png`;
@@ -281,11 +293,8 @@ export class OverworldMenuOverlay {
     let cardImgFallback = 0;
     img.addEventListener('error', () => {
       cardImgFallback++;
-      if (cardImgFallback === 1) {
-        img.src = `assets/monari/${id}/portraits/neutral.png`;
-      } else {
-        img.style.display = 'none';
-      }
+      if (cardImgFallback === 1) img.src = `assets/monari/${id}/portraits/neutral.png`;
+      else img.style.display = 'none';
     });
     card.appendChild(img);
 
@@ -314,14 +323,11 @@ export class OverworldMenuOverlay {
     if (monari) {
       const bars = document.createElement('div');
       bars.className = 'owmenu__mini-bars';
-
       const hp   = scaleStat(monari.stats.maxHp);
       const aura = scaleStat(monari.stats.maxAura);
-
       bars.appendChild(this.buildMiniBar('HP',  hp  / 600, '#3be071'));
       bars.appendChild(this.buildMiniBar('AU',  aura / 400, '#36ccff'));
       bars.appendChild(this.buildMiniBar('PWR', monari.stats.power / 150, color));
-
       info.appendChild(bars);
     }
 
@@ -332,10 +338,7 @@ export class OverworldMenuOverlay {
       this.showMonariDetail(id);
     });
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.showMonariDetail(id);
-      }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.showMonariDetail(id); }
     });
 
     return card;
@@ -344,20 +347,16 @@ export class OverworldMenuOverlay {
   private buildMiniBar(label: string, ratio: number, color: string): HTMLDivElement {
     const row = document.createElement('div');
     row.className = 'owmenu__mini-bar';
-
     const lbl = document.createElement('span');
     lbl.className = 'owmenu__mini-bar-label';
     lbl.textContent = label;
     row.appendChild(lbl);
-
     const track = document.createElement('div');
     track.className = 'owmenu__mini-bar-track';
-
     const fill = document.createElement('div');
     fill.className = 'owmenu__mini-bar-fill';
     fill.style.width = `${Math.min(100, Math.max(0, ratio * 100)).toFixed(1)}%`;
     fill.style.background = color;
-
     track.appendChild(fill);
     row.appendChild(track);
     return row;
@@ -382,7 +381,7 @@ export class OverworldMenuOverlay {
     const modal = document.createElement('div');
     modal.className = 'owmenu-dmodal';
 
-    // ── Close button ──
+    // Close button
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'owmenu-dmodal__close';
@@ -391,10 +390,9 @@ export class OverworldMenuOverlay {
     closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.dismissDetailModal(); });
     modal.appendChild(closeBtn);
 
-    // ── Image column ──
+    // Image column
     const imgCol = document.createElement('div');
     imgCol.className = 'owmenu-dmodal__img-col';
-
     const imgEl = document.createElement('img');
     imgEl.className = 'owmenu-dmodal__img';
     imgEl.alt = monari.name;
@@ -409,40 +407,64 @@ export class OverworldMenuOverlay {
     imgCol.appendChild(imgEl);
     modal.appendChild(imgCol);
 
-    // ── Info column ──
+    // Info column
     const infoCol = document.createElement('div');
     infoCol.className = 'owmenu-dmodal__info-col';
 
+    // ── Name row (name + gender icon) ──
+    const nameRow = document.createElement('div');
+    nameRow.className = 'owmenu-dmodal__name-row';
     const nameEl = document.createElement('div');
     nameEl.className = 'owmenu-dmodal__name';
     nameEl.textContent = monari.name;
-    infoCol.appendChild(nameEl);
+    nameRow.appendChild(nameEl);
+    if (monari.gender && monari.gender !== 'unknown') {
+      const gIcon = document.createElement('img');
+      gIcon.className = 'owmenu-dmodal__gender';
+      gIcon.src = `assets/ui/icons/gender_${monari.gender}.png`;
+      gIcon.alt = monari.gender;
+      gIcon.draggable = false;
+      nameRow.appendChild(gIcon);
+    }
+    infoCol.appendChild(nameRow);
 
     const levelEl = document.createElement('div');
     levelEl.className = 'owmenu-dmodal__level';
     levelEl.textContent = `Lv.${realLevel}`;
     infoCol.appendChild(levelEl);
 
-    // XP bar — only for player's own starter
-    if (isPlayerStarter) {
-      const save = this.playerSave!;
+    // XP bar
+    if (isPlayerStarter && this.playerSave) {
+      const save = this.playerSave;
       const xpToNext = PlayerSaveManager.xpToNextLevel(save.monariLevel);
       const xpPct = save.monariLevel >= 100 ? 100 : Math.min(100, (save.monariXp / xpToNext) * 100);
+      infoCol.appendChild(this.buildXpBar(
+        save.monariLevel >= 100 ? 'MAX LEVEL' : `XP  ${save.monariXp} / ${xpToNext}`,
+        xpPct,
+        'owmenu-dmodal__xp-track',
+        'owmenu-dmodal__xp-fill',
+        'owmenu-dmodal__xp-text',
+      ));
 
-      const xpWrap = document.createElement('div');
-      xpWrap.className = 'owmenu-dmodal__xp-wrap';
-      const xpTrack = document.createElement('div');
-      xpTrack.className = 'owmenu-dmodal__xp-track';
-      const xpFill = document.createElement('div');
-      xpFill.className = 'owmenu-dmodal__xp-fill';
-      xpFill.style.width = `${xpPct.toFixed(1)}%`;
-      xpTrack.appendChild(xpFill);
-      xpWrap.appendChild(xpTrack);
-      const xpText = document.createElement('div');
-      xpText.className = 'owmenu-dmodal__xp-text';
-      xpText.textContent = save.monariLevel >= 100 ? 'MAX LEVEL' : `XP ${save.monariXp} / ${xpToNext}`;
-      xpWrap.appendChild(xpText);
-      infoCol.appendChild(xpWrap);
+      // Bond level + XP bar (purple)
+      const bondLevel = save.bondLevel ?? 1;
+      const bondXp    = save.bondXp ?? 0;
+      const bondToNext = PlayerSaveManager.bondXpToNextLevel(bondLevel);
+      const bondPct   = bondLevel >= 100 ? 100 : Math.min(100, (bondXp / bondToNext) * 100);
+      const bondWrap = document.createElement('div');
+      bondWrap.className = 'owmenu-dmodal__bond-wrap';
+      const bondLabel = document.createElement('div');
+      bondLabel.className = 'owmenu-dmodal__bond-label';
+      bondLabel.textContent = `Bond Lv. ${bondLevel}`;
+      bondWrap.appendChild(bondLabel);
+      bondWrap.appendChild(this.buildXpBar(
+        bondLevel >= 100 ? 'MAX' : `Bond XP  ${bondXp} / ${bondToNext}`,
+        bondPct,
+        'owmenu-dmodal__bond-track',
+        'owmenu-dmodal__bond-fill',
+        'owmenu-dmodal__bond-text',
+      ));
+      infoCol.appendChild(bondWrap);
     }
 
     // Element + rarity badges
@@ -459,7 +481,7 @@ export class OverworldMenuOverlay {
     badgesRow.appendChild(rarBadge);
     infoCol.appendChild(badgesRow);
 
-    // ── Stats ──
+    // Stats heading + rows
     const statsH = document.createElement('div');
     statsH.className = 'owmenu-dmodal__section-heading';
     statsH.textContent = 'Base Stats';
@@ -468,8 +490,7 @@ export class OverworldMenuOverlay {
     const s = monari.stats;
     const lvScale = (base: number): number =>
       Math.round(base * (1 + (realLevel - 1) * LEVEL_GROWTH));
-
-    const statDefs: Array<{ label: string; value: number }> = [
+    const statDefs = [
       { label: 'HP',      value: lvScale(s.maxHp)    },
       { label: 'Attack',  value: lvScale(s.power)     },
       { label: 'Sp.Atk',  value: Math.round(lvScale(s.power) * 0.88)  },
@@ -478,7 +499,6 @@ export class OverworldMenuOverlay {
       { label: 'Speed',   value: lvScale(s.speed)     },
       { label: 'Aura',    value: lvScale(s.maxAura)   },
     ];
-
     const statRows = document.createElement('div');
     statRows.className = 'owmenu-dmodal__stat-rows';
     for (const def of statDefs) {
@@ -486,58 +506,17 @@ export class OverworldMenuOverlay {
     }
     infoCol.appendChild(statRows);
 
-    // ── Moves ──
-    const movesH = document.createElement('div');
-    movesH.className = 'owmenu-dmodal__section-heading';
-    movesH.textContent = 'Moves';
-    infoCol.appendChild(movesH);
-
-    const movesList = document.createElement('div');
-    movesList.className = 'owmenu-dmodal__moves-list';
-
-    const battleMoveIds: string[] = CLASSIC_COMMAND_SETS[id] ?? [];
-
-    for (const moveId of battleMoveIds) {
-      const move = CLASSIC_MOVES[moveId];
-      const row  = document.createElement('div');
-      row.className = 'owmenu-dmodal__move-row';
-
-      const icon = catIcon(move);
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'owmenu-dmodal__move-name';
-      nameSpan.textContent = `${icon} ${move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
-      row.appendChild(nameSpan);
-
-      if (move) {
-        const metaSpan = document.createElement('span');
-        metaSpan.className = 'owmenu-dmodal__move-meta';
-        const auraCost = move.auraCost ?? 0;
-        const parts: string[] = [
-          `<span style="color:#ff8844">PWR ${move.power}</span>`,
-          `<span style="color:#44aaff">AU ${auraCost}</span>`,
-        ];
-        if (move.accuracy != null) {
-          parts.push(`<span style="color:#aac8dd">ACC ${move.accuracy}%</span>`);
-        }
-        metaSpan.innerHTML = parts.join(' <span style="color:#445">|</span> ');
-        row.appendChild(metaSpan);
-      }
-
-      const infoBtn = document.createElement('button');
-      infoBtn.type = 'button';
-      infoBtn.className = 'owmenu-dmodal__move-info-btn';
-      infoBtn.setAttribute('aria-label', `Info: ${move?.displayName ?? moveId}`);
-      infoBtn.textContent = 'ℹ';
-      infoBtn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.showMovePopup(moveId, move);
-      });
-      row.appendChild(infoBtn);
-
-      movesList.appendChild(row);
-    }
-    infoCol.appendChild(movesList);
+    // Techniques button
+    const techBtn = document.createElement('button');
+    techBtn.type = 'button';
+    techBtn.className = 'owmenu-dmodal__tech-btn';
+    techBtn.textContent = '⚔ Techniques →';
+    techBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.dismissDetailModal();
+      this.showTechniquesModal(id);
+    });
+    infoCol.appendChild(techBtn);
 
     modal.appendChild(infoCol);
     bg.appendChild(modal);
@@ -549,15 +528,36 @@ export class OverworldMenuOverlay {
     });
   }
 
+  private buildXpBar(
+    text: string,
+    pct: number,
+    trackClass: string,
+    fillClass: string,
+    textClass: string,
+  ): HTMLDivElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'owmenu-dmodal__xp-wrap';
+    const track = document.createElement('div');
+    track.className = trackClass;
+    const fill = document.createElement('div');
+    fill.className = fillClass;
+    fill.style.width = `${pct.toFixed(1)}%`;
+    track.appendChild(fill);
+    wrap.appendChild(track);
+    const label = document.createElement('div');
+    label.className = textClass;
+    label.textContent = text;
+    wrap.appendChild(label);
+    return wrap;
+  }
+
   private buildDetailStatRow(label: string, value: number, barColor: string): HTMLDivElement {
     const row = document.createElement('div');
     row.className = 'owmenu-dmodal__stat-row';
-
     const labelEl = document.createElement('span');
     labelEl.className = 'owmenu-dmodal__stat-label';
     labelEl.textContent = label;
     row.appendChild(labelEl);
-
     const barWrap = document.createElement('div');
     barWrap.className = 'owmenu-dmodal__stat-bar-wrap';
     const fill = document.createElement('div');
@@ -566,12 +566,10 @@ export class OverworldMenuOverlay {
     fill.style.background = barColor;
     barWrap.appendChild(fill);
     row.appendChild(barWrap);
-
     const valEl = document.createElement('span');
     valEl.className = 'owmenu-dmodal__stat-val';
     valEl.textContent = String(value);
     row.appendChild(valEl);
-
     return row;
   }
 
@@ -580,9 +578,147 @@ export class OverworldMenuOverlay {
     this.detailModalEl = null;
   }
 
+  // ── Techniques modal ──────────────────────────────────────────────────────
+
+  showTechniquesModal(id: string): void {
+    const monari = MINARI_ROSTER[id];
+    if (!monari) return;
+
+    this.dismissTechModal();
+
+    const battleMoveIds: string[] = CLASSIC_COMMAND_SETS[id] ?? [];
+
+    const bg = document.createElement('div');
+    bg.className = 'owmenu-tech-bg';
+
+    const modal = document.createElement('div');
+    modal.className = 'owmenu-tech';
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'owmenu-tech__close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.dismissTechModal(); });
+    modal.appendChild(closeBtn);
+
+    // Title bar
+    const titleBar = document.createElement('div');
+    titleBar.className = 'owmenu-tech__title';
+    titleBar.textContent = `TECHNIQUES — ${monari.name}`;
+    modal.appendChild(titleBar);
+
+    // Body (left + right)
+    const body = document.createElement('div');
+    body.className = 'owmenu-tech__body';
+
+    // ── Left: Equipped ──
+    const equippedCol = document.createElement('div');
+    equippedCol.className = 'owmenu-tech__col';
+    const equippedH = document.createElement('div');
+    equippedH.className = 'owmenu-tech__col-heading';
+    equippedH.textContent = `EQUIPPED (${battleMoveIds.length})`;
+    equippedCol.appendChild(equippedH);
+
+    battleMoveIds.forEach((moveId, i) => {
+      const move = CLASSIC_MOVES[moveId];
+      equippedCol.appendChild(this.buildTechRow(moveId, move, i + 1));
+    });
+
+    // ── Right: Library ──
+    const libraryCol = document.createElement('div');
+    libraryCol.className = 'owmenu-tech__col owmenu-tech__col--library';
+    const libraryH = document.createElement('div');
+    libraryH.className = 'owmenu-tech__col-heading';
+    libraryH.textContent = 'MOVE LIBRARY';
+    libraryCol.appendChild(libraryH);
+
+    // For now the library = same as equipped; future will add extra learnable moves
+    battleMoveIds.forEach((moveId) => {
+      const move = CLASSIC_MOVES[moveId];
+      libraryCol.appendChild(this.buildTechRow(moveId, move));
+    });
+
+    // Coming-soon footer in library
+    const libFooter = document.createElement('div');
+    libFooter.className = 'owmenu-tech__lib-footer';
+    libFooter.textContent = 'New techniques unlock as you level up.';
+    libraryCol.appendChild(libFooter);
+
+    body.appendChild(equippedCol);
+    body.appendChild(libraryCol);
+    modal.appendChild(body);
+
+    bg.appendChild(modal);
+    document.body.appendChild(bg);
+    this.techModalEl = bg;
+
+    bg.addEventListener('pointerdown', (e) => {
+      if (e.target === bg) this.dismissTechModal();
+    });
+  }
+
+  private buildTechRow(
+    moveId: string,
+    move: import('../types/classic').ClassicMoveConfig | undefined,
+    slot?: number,
+  ): HTMLDivElement {
+    const row = document.createElement('div');
+    row.className = 'owmenu-tech__move-row';
+
+    if (slot !== undefined) {
+      const num = document.createElement('span');
+      num.className = 'owmenu-tech__slot-num';
+      num.textContent = `${slot}`;
+      row.appendChild(num);
+    }
+
+    const icon = catIcon(move);
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'owmenu-tech__move-name';
+    nameSpan.textContent = `${icon} ${move?.displayName ?? moveId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`;
+    row.appendChild(nameSpan);
+
+    if (move) {
+      const metaSpan = document.createElement('span');
+      metaSpan.className = 'owmenu-tech__move-meta';
+      const au = move.auraCost ?? 0;
+      const parts: string[] = [
+        `<span style="color:#ff8844">PWR ${move.power}</span>`,
+        `<span style="color:#44aaff">AU ${au}</span>`,
+      ];
+      if (move.accuracy != null) parts.push(`<span style="color:#aac8dd">ACC ${move.accuracy}%</span>`);
+      metaSpan.innerHTML = parts.join(' <span style="color:#445">|</span> ');
+      row.appendChild(metaSpan);
+    }
+
+    const infoBtn = document.createElement('button');
+    infoBtn.type = 'button';
+    infoBtn.className = 'owmenu-tech__info-btn';
+    infoBtn.textContent = 'ℹ';
+    infoBtn.setAttribute('aria-label', `Details: ${move?.displayName ?? moveId}`);
+    infoBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showMovePopup(moveId, move);
+    });
+    row.appendChild(infoBtn);
+
+    return row;
+  }
+
+  private dismissTechModal(): void {
+    this.techModalEl?.remove();
+    this.techModalEl = null;
+  }
+
   // ── Move detail popup ─────────────────────────────────────────────────────
 
-  private showMovePopup(moveId: string, move: import('../types/classic').ClassicMoveConfig | undefined): void {
+  private showMovePopup(
+    moveId: string,
+    move: import('../types/classic').ClassicMoveConfig | undefined,
+  ): void {
     this.dismissMovePopup();
 
     const bg = document.createElement('div');
@@ -591,7 +727,7 @@ export class OverworldMenuOverlay {
     const card = document.createElement('div');
     card.className = 'owmenu-mpop';
 
-    const icon    = catIcon(move);
+    const icon     = catIcon(move);
     const catLabel = move?.holdsStance ? 'Guard'
       : move?.category === 'special'  ? 'Special'
       : move?.category === 'physical' ? 'Physical'
@@ -639,19 +775,19 @@ export class OverworldMenuOverlay {
     this.movePopupEl = null;
   }
 
-  // ── Public close (called by external scene) ───────────────────────────────
+  // ── Public close ──────────────────────────────────────────────────────────
 
   close(): void {
     this.dismissMovePopup();
     this.dismissDetailModal();
+    this.dismissTechModal();
     this.hide();
   }
-
-  // ── Cleanup ───────────────────────────────────────────────────────────────
 
   destroy(): void {
     this.dismissMovePopup();
     this.dismissDetailModal();
+    this.dismissTechModal();
     this.root.remove();
   }
 }
