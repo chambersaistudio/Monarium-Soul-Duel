@@ -119,7 +119,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private mainCursor     = 0;
   private mainBtnImgs:   Phaser.GameObjects.Image[]    = [];
   private mainBtnGfxs:   Phaser.GameObjects.Graphics[] = [];
-  private mainBtnTexts:  Phaser.GameObjects.Text[]     = [];
+  private mainBtnTexts:  Array<Phaser.GameObjects.Text | null> = [];
   private mainBtnW       = 0;
   private mainBtnH       = 0;
   private readonly MAIN_BTNS = [
@@ -248,8 +248,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.resizeTimer?.remove(false);
     this.resizeTimer = this.time.delayedCall(220, () => {
       if (this.isShuttingDown || !this.scene.isActive()) return;
-      this.registry.set('classic_battle_context', this.battleCtx);
-      this.scene.restart();
+      // Mobile browser chrome can emit RESIZE while the player is tapping battle
+      // controls or while attack tweens/timers are running. Restarting the scene
+      // here resets the duel mid-turn and can leave animation callbacks racing
+      // against teardown, so keep the active battle alive and only resync the
+      // renderer/camera to the current canvas dimensions.
+      applyHighDpiCanvas(this.game, 'battle:resize');
+      this.syncBattleCamera();
+      this.debugBattleLayout('resize');
     });
   };
 
@@ -948,7 +954,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         hitArea.on('pointerdown',  () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
         this.mainPanel.add(hitArea);
         // Push null placeholder so mainBtnTexts index stays aligned
-        this.mainBtnTexts.push(null as unknown as Phaser.GameObjects.Text);
+        this.mainBtnTexts.push(null);
       } else {
         // Graphics fallback — label is necessary
         const gfx = this.add.graphics();
