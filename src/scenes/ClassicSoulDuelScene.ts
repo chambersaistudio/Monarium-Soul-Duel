@@ -186,10 +186,15 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private playerLevel = 1;
   private enemyLevel  = 1;
   private resizeTimer?: Phaser.Time.TimerEvent;
+  private battleStartTimer?: Phaser.Time.TimerEvent;
+  private isShuttingDown = false;
 
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
   shutdown(): void {
+    this.isShuttingDown = true;
+    this.resizeTimer?.remove(false);
+    this.battleStartTimer?.remove(false);
     this.audio?.stopBgm();
     this.domHud?.destroy();
   }
@@ -239,8 +244,10 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private relayoutBattle = (): void => {
+    if (this.isShuttingDown) return;
     this.resizeTimer?.remove(false);
     this.resizeTimer = this.time.delayedCall(220, () => {
+      if (this.isShuttingDown || !this.scene.isActive()) return;
       this.registry.set('classic_battle_context', this.battleCtx);
       this.scene.restart();
     });
@@ -270,6 +277,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.isShuttingDown = false;
     this.turnNumber = 0;
     this.sound.stopAll();
     this.domHud?.destroy();
@@ -371,6 +379,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.domHud = new BattleHudOverlay({
       onMainCommand: (key) => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         switch (key) {
           case 'fight':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
@@ -391,10 +400,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         }
       },
       onMoveSelect: (id) => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.engine.submitPlayerMove(id);
       },
       onBack: () => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         this.audio.playUi(AUDIO_KEYS.ui.move);
         this.domHud.showMainPanel();
       },
@@ -414,15 +425,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.relayoutBattle, this);
       this.resizeTimer?.remove(false);
+      this.battleStartTimer?.remove(false);
     });
 
     this.debugBattleLayout('create');
     this.updateLabDebugRegistry();
     this.cameras.main.fadeIn(500);
-    this.time.delayedCall(800, () => this.engine.startBattle());
+    this.battleStartTimer = this.time.delayedCall(800, () => {
+      if (this.isShuttingDown || !this.scene.isActive()) return;
+      this.engine.startBattle();
+    });
   }
 
   update(): void {
+    if (this.isShuttingDown || !this.playerActor || !this.enemyActor || !this.domHud) return;
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
     this.domHud.update(this.getHUDData(), this.playerLevel, this.enemyLevel);
