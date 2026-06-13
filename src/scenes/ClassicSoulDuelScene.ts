@@ -204,14 +204,21 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   preload(): void {
     const { background } = CLASSIC_BATTLE_CONFIG;
     this.load.image(`bg_${background}`, `assets/backgrounds/classic/${background}.png`);
-    ['flarepaw', 'droplet', 'sproutodon', 'umbravine', 'umbrelette', 'uvee'].forEach(id => {
+
+    const ctx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
+    const playerMinId = ctx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId = ctx?.enemyMinariId ?? 'droplet';
+    const battleMonariIds = new Set([playerMinId, enemyMinId]);
+
+    // Mobile was running out of memory as battle preload queued every roster image
+    // on top of the normalized animation frames already prepared by PreloadScene.
+    // The battle HUD only needs the two combatants plus the player's trainer plate.
+    battleMonariIds.forEach(id => {
       preloadVisualCandidates(this, 'monari', id, visualCandidates(getMonariVisualPaths(id)));
     });
-    ['player', 'renzo', 'warren_ellis'].forEach(id => {
-      preloadVisualCandidates(this, 'character', id, visualCandidates(getCharacterVisualPaths(id)));
-    });
+    preloadVisualCandidates(this, 'character', 'player', visualCandidates(getCharacterVisualPaths('player')));
 
-    // UI panel frames, buttons, icons
+    // UI panel frames and command buttons
     this.load.image('ui_panel_left',   'assets/ui/battle/frames/panel_monari_left_empty.png');
     this.load.image('ui_panel_right',  'assets/ui/battle/frames/panel_monari_right_empty.png');
     this.load.image('ui_soulsync_bar', 'assets/ui/battle/frames/soulsync_bar_empty.png');
@@ -220,12 +227,22 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.load.image('ui_btn_bag',      'assets/ui/battle/buttons/btn_bag.png');
     this.load.image('ui_btn_bond',     'assets/ui/battle/buttons/btn_bond.png');
     this.load.image('ui_btn_run',      'assets/ui/battle/buttons/btn_run.png');
-    (['fire','water','flora','wind','thunder','stone','steel','light','dark','aether','ice','neutral'] as const).forEach(el =>
-      this.load.image(`ui_elem_${el}`, `assets/ui/elements/${el}.png`)
+
+    const elementIds = new Set(
+      [...battleMonariIds].map(id => MINARI_ROSTER[id]?.element ?? 'neutral'),
     );
-    (['male','female','unknown'] as const).forEach(g =>
-      this.load.image(`ui_gender_${g}`, `assets/ui/icons/gender_${g}.png`)
+    elementIds.add('neutral');
+    elementIds.forEach(el => {
+      this.load.image(`ui_elem_${el}`, `assets/ui/elements/${el}.png`);
+    });
+
+    const genderIds = new Set(
+      [...battleMonariIds].map(id => MINARI_ROSTER[id]?.gender ?? 'unknown'),
     );
+    genderIds.add('unknown');
+    genderIds.forEach(g => {
+      this.load.image(`ui_gender_${g}`, `assets/ui/icons/gender_${g}.png`);
+    });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
