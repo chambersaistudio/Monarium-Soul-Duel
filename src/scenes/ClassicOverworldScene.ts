@@ -890,6 +890,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
       bondable:       false,
       battleType:     'rival',
     };
+    this.audio?.stopBgm();
     this.registry.set('classic_battle_context', ctx);
     this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p === 1) this.scene.start('ClassicSoulDuelScene');
@@ -908,6 +909,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
       bondable:       orb.bondable,
       battleType:     'wild',
     };
+    this.audio?.stopBgm();
     this.registry.set('classic_battle_context', ctx);
     this.cameras.main.fade(400, 0, 0, 0, false, (_: unknown, p: number) => {
       if (p === 1) this.scene.start('ClassicSoulDuelScene');

@@ -271,6 +271,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
   create(): void {
     this.turnNumber = 0;
+    this.sound.stopAll();
     this.domHud?.destroy();
     applyHighDpiCanvas(this.game, 'battle:create');
     this.syncBattleCamera();
