@@ -1054,6 +1054,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       });
     }
     this.mainBtnTexts.forEach((t, i) => {
+      if (!t) return;  // null placeholder used when PNG button images are loaded
       const locked = this.MAIN_BTNS[i].key === 'capture' && (!this.battleCtx?.bondable || this.battleCtx?.battleType !== 'wild');
       t.setColor(locked ? '#6f6a90' : i === this.mainCursor ? '#ffffff' : '#b8b2dc');
     });
