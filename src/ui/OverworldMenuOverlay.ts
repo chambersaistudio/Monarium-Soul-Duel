@@ -95,6 +95,8 @@ export class OverworldMenuOverlay {
   private movePopupEl:   HTMLDivElement | null = null;
   private detailModalEl: HTMLDivElement | null = null;
   private techModalEl:   HTMLDivElement | null = null;
+  private codexSelectedIndex = 0;
+  private readonly codexKeyHandler = (e: KeyboardEvent): void => this.handleCodexKeydown(e);
 
   // Technique swap state
   private swapState: SwapState | null = null;
@@ -124,6 +126,8 @@ export class OverworldMenuOverlay {
 
   private hide(): void {
     this.root.classList.remove('owmenu--visible');
+    this.root.classList.remove('owmenu--codex-modal');
+    window.removeEventListener('keydown', this.codexKeyHandler);
   }
 
   // ── Bonder Menu ───────────────────────────────────────────────────────────
@@ -131,6 +135,9 @@ export class OverworldMenuOverlay {
   showBonderMenu(teamIds?: string[], save?: OverworldSave): void {
     if (teamIds) this.playerTeamIds = [...teamIds];
     if (save)    this.playerSave    = save;
+    this.root.classList.remove('owmenu--codex-modal');
+    window.removeEventListener('keydown', this.codexKeyHandler);
+    this.panel.className = 'owmenu__panel';
     this.panel.innerHTML = '';
 
     const title = document.createElement('div');
@@ -289,23 +296,72 @@ export class OverworldMenuOverlay {
   }
 
 
-  // ── Codex Page ───────────────────────────────────────────────────────────
+  // ── Codex Modal ──────────────────────────────────────────────────────────
 
-  private showCodexPage(): void {
+  private showCodexPage(selectedSlug?: string): void {
+    const entries = getAllCodexEntries();
+    const selectedIndex = Math.max(0, entries.findIndex(entry => entry.slug === selectedSlug));
+    this.codexSelectedIndex = selectedIndex === -1 ? 0 : selectedIndex;
+    this.root.classList.add('owmenu--codex-modal');
+    this.renderCodexModal();
+    this.show();
+    window.removeEventListener('keydown', this.codexKeyHandler);
+    window.addEventListener('keydown', this.codexKeyHandler);
+  }
+
+  private renderCodexModal(): void {
+    const entries = getAllCodexEntries();
+    const selected = entries[this.codexSelectedIndex] ?? entries[0];
+    if (!selected) return;
+
     this.panel.innerHTML = '';
+    this.panel.className = 'owmenu__panel owmenu__codex-modal';
 
+    const header = document.createElement('div');
+    header.className = 'owmenu__codex-modal-header';
     const title = document.createElement('div');
-    title.className = 'owmenu__title';
+    title.className = 'owmenu__codex-modal-title';
     title.textContent = 'Monari Codex';
-    this.panel.appendChild(title);
+    header.appendChild(title);
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'owmenu__codex-header-actions';
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'owmenu__back-btn';
+    menuBtn.textContent = '← Menu';
+    menuBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.showBonderMenu(); });
+    headerActions.appendChild(menuBtn);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'owmenu__close-btn';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.close(); });
+    headerActions.appendChild(closeBtn);
+    header.appendChild(headerActions);
+    this.panel.appendChild(header);
+
+    const shell = document.createElement('div');
+    shell.className = 'owmenu__codex-shell';
+    shell.appendChild(this.buildCodexList(entries));
+    shell.appendChild(this.buildCodexDetail(selected));
+    this.panel.appendChild(shell);
+  }
+
+  private buildCodexList(entries: MonariCodexEntry[]): HTMLDivElement {
+    const listPanel = document.createElement('div');
+    listPanel.className = 'owmenu__codex-list-panel';
+    const label = document.createElement('div');
+    label.className = 'owmenu__codex-panel-label';
+    label.textContent = 'Entries';
+    listPanel.appendChild(label);
 
     const list = document.createElement('div');
     list.className = 'owmenu__codex-list';
-
-    for (const entry of getAllCodexEntries()) {
+    entries.forEach((entry, index) => {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'owmenu__codex-row';
+      row.className = 'owmenu__codex-row' + (index === this.codexSelectedIndex ? ' owmenu__codex-row--active' : '');
       row.setAttribute('aria-label', `${entry.dexNo} ${entry.name}`);
 
       const img = document.createElement('img');
@@ -323,62 +379,116 @@ export class OverworldMenuOverlay {
       info.appendChild(name);
       const meta = document.createElement('div');
       meta.className = 'owmenu__codex-row-meta';
-      meta.textContent = `Stage ${entry.stage} · ${entry.rarity} · ${entry.elements.join(' / ')}`;
+      meta.textContent = `${entry.elements.join(' / ')} · ${entry.rarity} · Stage ${entry.stage}`;
       info.appendChild(meta);
       row.appendChild(info);
 
       row.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        this.showCodexDetail(entry);
+        this.codexSelectedIndex = index;
+        this.renderCodexModal();
       });
       list.appendChild(row);
-    }
-
-    this.panel.appendChild(list);
-
-    const actions = document.createElement('div');
-    actions.className = 'owmenu__detail-actions';
-    const backBtn = document.createElement('button');
-    backBtn.type = 'button';
-    backBtn.className = 'owmenu__back-btn';
-    backBtn.textContent = '← Menu';
-    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.showBonderMenu(); });
-    actions.appendChild(backBtn);
-    this.panel.appendChild(actions);
-    this.show();
+    });
+    listPanel.appendChild(list);
+    return listPanel;
   }
 
-  private showCodexDetail(entry: MonariCodexEntry): void {
-    this.panel.innerHTML = '';
-
-    const title = document.createElement('div');
-    title.className = 'owmenu__title';
-    title.textContent = `#${entry.dexNo} ${entry.name}`;
-    this.panel.appendChild(title);
-
+  private buildCodexDetail(entry: MonariCodexEntry): HTMLDivElement {
     const detail = document.createElement('div');
     detail.className = 'owmenu__codex-detail';
 
+    const detailHeader = document.createElement('div');
+    detailHeader.className = 'owmenu__codex-detail-header';
+    const hgroup = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'owmenu__codex-detail-title';
+    title.textContent = `#${entry.dexNo} ${entry.name}`;
+    hgroup.appendChild(title);
+    const badges = document.createElement('div');
+    badges.className = 'owmenu__codex-badges';
+    [...entry.elements, entry.rarity, `Stage ${entry.stage}`].forEach(text => {
+      const badge = document.createElement('span');
+      badge.textContent = text;
+      badges.appendChild(badge);
+    });
+    hgroup.appendChild(badges);
+    detailHeader.appendChild(hgroup);
+
+    const nav = document.createElement('div');
+    nav.className = 'owmenu__codex-nav';
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.setAttribute('aria-label', 'Previous Codex entry');
+    prev.textContent = '←';
+    prev.addEventListener('pointerdown', (e) => { e.preventDefault(); this.stepCodex(-1); });
+    nav.appendChild(prev);
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.setAttribute('aria-label', 'Next Codex entry');
+    next.textContent = '→';
+    next.addEventListener('pointerdown', (e) => { e.preventDefault(); this.stepCodex(1); });
+    nav.appendChild(next);
+    detailHeader.appendChild(nav);
+    detail.appendChild(detailHeader);
+
+    const body = document.createElement('div');
+    body.className = 'owmenu__codex-detail-grid';
+
+    const imageCard = document.createElement('div');
+    imageCard.className = 'owmenu__codex-image-card';
     const img = document.createElement('img');
     img.className = 'owmenu__codex-full-img';
     img.alt = entry.name;
     img.draggable = false;
     this.applyImageFallbacks(img, getCodexImageCandidates(entry, 'full'));
-    detail.appendChild(img);
+    imageCard.appendChild(img);
+    body.appendChild(imageCard);
 
-    const body = document.createElement('div');
-    body.className = 'owmenu__codex-detail-body';
-    body.appendChild(this.buildCodexMetaGrid(entry));
+    const info = document.createElement('div');
+    info.className = 'owmenu__codex-info-stack';
+    info.appendChild(this.buildCodexProfileSection(entry));
 
-    const desc = document.createElement('p');
-    desc.className = 'owmenu__codex-desc';
-    desc.textContent = entry.description;
-    body.appendChild(desc);
+    const desc = document.createElement('section');
+    desc.className = 'owmenu__codex-section';
+    desc.innerHTML = '<h3>Description</h3>';
+    const p = document.createElement('p');
+    p.textContent = entry.description;
+    desc.appendChild(p);
+    info.appendChild(desc);
 
-    const statsHeading = document.createElement('div');
-    statsHeading.className = 'owmenu__codex-heading';
-    statsHeading.textContent = `Base Stats · Total ${getBaseStatTotal(entry.baseStats)} / 1000`;
-    body.appendChild(statsHeading);
+    info.appendChild(this.buildCodexStatsSection(entry));
+    info.appendChild(this.buildCodexAbilitySection(entry));
+    info.appendChild(this.buildCodexTechniqueSection(entry));
+    body.appendChild(info);
+
+    detail.appendChild(body);
+    return detail;
+  }
+
+  private buildCodexProfileSection(entry: MonariCodexEntry): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'owmenu__codex-section';
+    section.innerHTML = '<h3>Profile</h3>';
+    const grid = document.createElement('div');
+    grid.className = 'owmenu__codex-profile-grid';
+    const items: Array<[string, string]> = [
+      ['Evolution Line', getEvolutionNames(entry)],
+      ['Role', entry.role],
+      ['Taxonomy', [entry.primaryTaxonomy, entry.secondaryTaxonomy].filter(Boolean).join(' / ')],
+      ['Height', entry.height],
+      ['Weight', entry.weight],
+    ];
+    for (const [label, value] of items) grid.appendChild(this.buildCodexTextBlock(label, value));
+    section.appendChild(grid);
+    return section;
+  }
+
+  private buildCodexStatsSection(entry: MonariCodexEntry): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'owmenu__codex-section';
+    const total = getBaseStatTotal(entry.baseStats);
+    section.innerHTML = `<h3>Base Stats <span>${total} / 1000</span></h3>`;
     const stats = document.createElement('div');
     stats.className = 'owmenu__codex-stats';
     const statDefs = [
@@ -391,63 +501,56 @@ export class OverworldMenuOverlay {
       ['Speed', entry.baseStats.speed],
     ] as const;
     for (const [label, value] of statDefs) stats.appendChild(this.buildCodexStat(label, value));
-    body.appendChild(stats);
+    section.appendChild(stats);
+    return section;
+  }
 
-    const abilityNames = entry.abilityIds.map(id => getCodexAbility(id)?.name ?? id);
-    body.appendChild(this.buildCodexTextBlock('Ability', abilityNames.length ? abilityNames.join(', ') : 'None assigned'));
+  private buildCodexAbilitySection(entry: MonariCodexEntry): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'owmenu__codex-section';
+    section.innerHTML = '<h3>Ability</h3>';
+    if (entry.abilityIds.length === 0) {
+      const none = document.createElement('div');
+      none.className = 'owmenu__codex-muted';
+      none.textContent = 'No ability assigned';
+      section.appendChild(none);
+      return section;
+    }
+    for (const id of entry.abilityIds) {
+      const ability = getCodexAbility(id);
+      const card = document.createElement('div');
+      card.className = 'owmenu__codex-ability-card';
+      const name = ability?.name ?? id;
+      const desc = ability?.description ?? 'Ability details pending.';
+      card.innerHTML = `<b>${name}</b><p>${desc}</p>`;
+      section.appendChild(card);
+    }
+    return section;
+  }
 
+  private buildCodexTechniqueSection(entry: MonariCodexEntry): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'owmenu__codex-section';
+    section.innerHTML = '<h3>Signature Techniques</h3>';
     const sigs = entry.signatureTechniqueIds.map(id => getCodexTechnique(id)).filter(Boolean);
-    const techBlock = document.createElement('div');
-    techBlock.className = 'owmenu__codex-techs';
-    const techTitle = document.createElement('div');
-    techTitle.className = 'owmenu__codex-heading';
-    techTitle.textContent = 'Signature Techniques';
-    techBlock.appendChild(techTitle);
     if (sigs.length === 0) {
       const none = document.createElement('div');
       none.className = 'owmenu__codex-muted';
-      none.textContent = 'None assigned';
-      techBlock.appendChild(none);
-    } else {
-      for (const tech of sigs) {
-        if (!tech) continue;
-        const row = document.createElement('div');
-        row.className = 'owmenu__codex-tech';
-        row.innerHTML = `<b>${tech.name}</b> <span>${tech.element} · ${tech.category} · AU ${tech.auraCost}</span><p>${tech.description}</p>`;
-        techBlock.appendChild(row);
-      }
+      none.textContent = 'No signature techniques assigned';
+      section.appendChild(none);
+      return section;
     }
-    body.appendChild(techBlock);
-
-    detail.appendChild(body);
-    this.panel.appendChild(detail);
-
-    const actions = document.createElement('div');
-    actions.className = 'owmenu__detail-actions';
-    const backBtn = document.createElement('button');
-    backBtn.type = 'button';
-    backBtn.className = 'owmenu__back-btn';
-    backBtn.textContent = '← Codex';
-    backBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.showCodexPage(); });
-    actions.appendChild(backBtn);
-    this.panel.appendChild(actions);
-  }
-
-  private buildCodexMetaGrid(entry: MonariCodexEntry): HTMLDivElement {
-    const grid = document.createElement('div');
-    grid.className = 'owmenu__codex-meta-grid';
-    const items: Array<[string, string]> = [
-      ['Stage', String(entry.stage)],
-      ['Evolution', getEvolutionNames(entry)],
-      ['Rarity', entry.rarity],
-      ['Elements', entry.elements.join(' / ')],
-      ['Role', entry.role],
-      ['Taxonomy', [entry.primaryTaxonomy, entry.secondaryTaxonomy].filter(Boolean).join(' / ')],
-      ['Height', entry.height],
-      ['Weight', entry.weight],
-    ];
-    for (const [label, value] of items) grid.appendChild(this.buildCodexTextBlock(label, value));
-    return grid;
+    const cards = document.createElement('div');
+    cards.className = 'owmenu__codex-techs';
+    for (const tech of sigs) {
+      if (!tech) continue;
+      const row = document.createElement('div');
+      row.className = 'owmenu__codex-tech';
+      row.innerHTML = `<b>${tech.name}</b><span>${tech.element} · ${tech.category} · AU ${tech.auraCost} · POW ${tech.power} · ACC ${tech.accuracy}%</span><p>${tech.description}</p>`;
+      cards.appendChild(row);
+    }
+    section.appendChild(cards);
+    return section;
   }
 
   private buildCodexTextBlock(label: string, value: string): HTMLDivElement {
@@ -479,6 +582,20 @@ export class OverworldMenuOverlay {
     val.textContent = String(value);
     row.appendChild(val);
     return row;
+  }
+
+  private stepCodex(delta: number): void {
+    const entries = getAllCodexEntries();
+    if (entries.length === 0) return;
+    this.codexSelectedIndex = (this.codexSelectedIndex + delta + entries.length) % entries.length;
+    this.renderCodexModal();
+  }
+
+  private handleCodexKeydown(e: KeyboardEvent): void {
+    if (!this.root.classList.contains('owmenu--codex-modal')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); this.stepCodex(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); this.stepCodex(1); }
+    else if (e.key === 'Escape') { e.preventDefault(); this.close(); }
   }
 
   private applyImageFallbacks(img: HTMLImageElement, candidates: string[]): void {
@@ -1317,6 +1434,7 @@ export class OverworldMenuOverlay {
   }
 
   destroy(): void {
+    window.removeEventListener('keydown', this.codexKeyHandler);
     this.swapState = null;
     this.dismissMovePopup();
     this.dismissDetailModal();

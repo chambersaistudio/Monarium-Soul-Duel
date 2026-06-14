@@ -31,13 +31,20 @@ export function getBaseStatTotal(stats: CodexBaseStats): number {
 }
 
 export function getCodexImageCandidates(entry: MonariCodexEntry, size: 'icon' | 'full' = 'full'): string[] {
-  const primary = size === 'icon' ? entry.assetPaths.icon : entry.assetPaths.codex;
-  return [
-    primary,
-    entry.assetPaths.codex,
-    entry.assetPaths.fullbody,
-    entry.assetPaths.portrait,
-    entry.assetPaths.icon,
-    ...(entry.assetPaths.legacy ?? []),
-  ].filter((path, index, arr) => arr.indexOf(path) === index);
+  const ordered = size === 'icon'
+    ? [
+        entry.assetPaths.portrait,
+        entry.assetPaths.icon,
+        entry.assetPaths.codex,
+        entry.assetPaths.fullbody,
+        ...(entry.assetPaths.legacy ?? []),
+      ]
+    : [
+        entry.assetPaths.codex,
+        entry.assetPaths.fullbody,
+        entry.assetPaths.portrait,
+        entry.assetPaths.icon,
+        ...(entry.assetPaths.legacy ?? []),
+      ];
+  return ordered.filter((path, index, arr) => arr.indexOf(path) === index);
 }
