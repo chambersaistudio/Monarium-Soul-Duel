@@ -202,8 +202,7 @@ export class OverworldMenuOverlay {
         this.cb.onModeSelect();
         break;
       case 'Back / Close':
-        this.cb.onClose();
-        this.hide();
+        this.close();
         break;
       case 'Bag':
         this.showBagPage();
@@ -420,8 +419,7 @@ export class OverworldMenuOverlay {
       info.appendChild(meta);
       card.appendChild(info);
 
-      card.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
+      this.bindTapActivation(card, () => {
         this.codexSelectedIndex = index;
         this.codexView = 'detail';
         this.renderCodexModal();
@@ -430,6 +428,56 @@ export class OverworldMenuOverlay {
     });
     view.appendChild(grid);
     return view;
+  }
+
+
+  private bindTapActivation(el: HTMLElement, onTap: () => void): void {
+    const moveThresholdPx = 10;
+    const maxTapMs = 650;
+    let startX = 0;
+    let startY = 0;
+    let startTime = 0;
+    let dragging = false;
+    let pointerId: number | null = null;
+
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      startX = e.clientX;
+      startY = e.clientY;
+      startTime = performance.now();
+      dragging = false;
+      pointerId = e.pointerId;
+    });
+
+    el.addEventListener('pointermove', (e) => {
+      if (pointerId !== e.pointerId) return;
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      if (dx > moveThresholdPx || dy > moveThresholdPx) dragging = true;
+    });
+
+    el.addEventListener('pointercancel', () => {
+      dragging = true;
+      pointerId = null;
+    });
+
+    el.addEventListener('pointerup', (e) => {
+      if (pointerId !== e.pointerId) return;
+      const elapsed = performance.now() - startTime;
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      const isTap = !dragging && dx <= moveThresholdPx && dy <= moveThresholdPx && elapsed <= maxTapMs;
+      pointerId = null;
+      if (!isTap) return;
+      e.preventDefault();
+      onTap();
+    });
+
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      onTap();
+    });
   }
 
   private buildCodexEntryCard(entry: MonariCodexEntry): HTMLDivElement {
@@ -1425,11 +1473,13 @@ export class OverworldMenuOverlay {
   // ── Public close ──────────────────────────────────────────────────────────
 
   close(): void {
+    const wasVisible = this.isVisible();
     this.swapState = null;
     this.dismissMovePopup();
     this.dismissDetailModal();
     this.dismissTechModal();
     this.hide();
+    if (wasVisible) this.cb.onClose();
   }
 
   destroy(): void {
