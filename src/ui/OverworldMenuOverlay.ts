@@ -5,6 +5,7 @@ import { CLASSIC_MOVES, CLASSIC_TECHNIQUE_LIBRARY } from '../data/classicMoveDat
 import { MONARI_ABILITIES } from '../data/abilities';
 import type { OverworldSave } from '../systems/PlayerSaveManager';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
+import { bindSafeTapActivation } from './safeTap';
 import {
   getAllCodexEntries,
   getBaseStatTotal,
@@ -419,7 +420,7 @@ export class OverworldMenuOverlay {
       info.appendChild(meta);
       card.appendChild(info);
 
-      this.bindTapActivation(card, () => {
+      bindSafeTapActivation(card, () => {
         this.codexSelectedIndex = index;
         this.codexView = 'detail';
         this.renderCodexModal();
@@ -428,56 +429,6 @@ export class OverworldMenuOverlay {
     });
     view.appendChild(grid);
     return view;
-  }
-
-
-  private bindTapActivation(el: HTMLElement, onTap: () => void): void {
-    const moveThresholdPx = 10;
-    const maxTapMs = 650;
-    let startX = 0;
-    let startY = 0;
-    let startTime = 0;
-    let dragging = false;
-    let pointerId: number | null = null;
-
-    el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-      startX = e.clientX;
-      startY = e.clientY;
-      startTime = performance.now();
-      dragging = false;
-      pointerId = e.pointerId;
-    });
-
-    el.addEventListener('pointermove', (e) => {
-      if (pointerId !== e.pointerId) return;
-      const dx = Math.abs(e.clientX - startX);
-      const dy = Math.abs(e.clientY - startY);
-      if (dx > moveThresholdPx || dy > moveThresholdPx) dragging = true;
-    });
-
-    el.addEventListener('pointercancel', () => {
-      dragging = true;
-      pointerId = null;
-    });
-
-    el.addEventListener('pointerup', (e) => {
-      if (pointerId !== e.pointerId) return;
-      const elapsed = performance.now() - startTime;
-      const dx = Math.abs(e.clientX - startX);
-      const dy = Math.abs(e.clientY - startY);
-      const isTap = !dragging && dx <= moveThresholdPx && dy <= moveThresholdPx && elapsed <= maxTapMs;
-      pointerId = null;
-      if (!isTap) return;
-      e.preventDefault();
-      onTap();
-    });
-
-    el.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      e.preventDefault();
-      onTap();
-    });
   }
 
   private buildCodexEntryCard(entry: MonariCodexEntry): HTMLDivElement {
