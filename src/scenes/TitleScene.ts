@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { hideBootOverlay, layoutDomOverlays, showStartOverlay } from '../ui/bootOverlay';
+import { stopGameplayScenes } from '../utils/sceneHygiene';
 
 /**
  * Title scene — the user's first tap gesture unlocks audio for all subsequent
@@ -20,6 +21,8 @@ export class TitleScene extends Phaser.Scene {
   constructor() { super({ key: 'TitleScene' }); }
 
   create(): void {
+    stopGameplayScenes(this);
+    this.sound.stopAll();
     this.phase = 'start';
     this.videoEl = null;
 
