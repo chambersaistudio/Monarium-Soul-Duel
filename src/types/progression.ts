@@ -116,6 +116,9 @@ export interface BattleHUDData {
   playerMaxAura:     number;
   playerSync:        number;        // 0–100
   playerSyncTier:    SoulSyncTier;
+  playerSpecialCharge: number;    // Burst gauge 0–100
+  playerSpecialReady: boolean;
+  playerSpecialName?: string;
   playerBondLevel:   number;        // 1–10
   // ── Bonder ──
   bonderSoulRankLevel: number;      // 1–100 cumulative rank

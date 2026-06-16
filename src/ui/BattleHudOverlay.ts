@@ -59,6 +59,7 @@ const MAIN_BTNS = [
   { key: 'fight'  , label: 'FIGHT', asset: 'assets/ui/battle/buttons/btn_fight.png' },
   { key: 'bag'    , label: 'BAG'  , asset: 'assets/ui/battle/buttons/btn_bag.png'   },
   { key: 'capture', label: 'BOND' , asset: 'assets/ui/battle/buttons/btn_bond.png'  },
+  { key: 'special', label: 'SPECIAL', asset: '' },
   { key: 'run'    , label: 'RUN'  , asset: 'assets/ui/battle/buttons/btn_run.png'   },
 ] as const;
 
@@ -76,6 +77,7 @@ export interface HudOverlayCallbacks {
 
 export class BattleHudOverlay {
   private root:      HTMLDivElement;
+  private destroyed = false;
 
   // Status bar fills — player
   private pHpFill!:   HTMLDivElement;
@@ -103,6 +105,8 @@ export class BattleHudOverlay {
   private movesPanel!: HTMLDivElement;
   private bagPanel!:   HTMLDivElement;
   private bondPanel!:  HTMLDivElement;
+  private burstFill!:  HTMLDivElement;
+  private burstLabel!: HTMLDivElement;
   private mainBtns:    HTMLButtonElement[] = [];
   private moveBtns:    HTMLButtonElement[] = [];
 
@@ -119,6 +123,7 @@ export class BattleHudOverlay {
   private readonly cb: HudOverlayCallbacks;
 
   constructor(callbacks: HudOverlayCallbacks) {
+    document.querySelectorAll('.bhud').forEach(node => node.remove());
     this.cb   = callbacks;
     this.root = document.createElement('div');
     this.root.className = 'bhud';
@@ -266,6 +271,20 @@ export class BattleHudOverlay {
     bg.appendChild(this.bagPanel);
     bg.appendChild(this.bondPanel);
     cmd.appendChild(bg);
+
+    const burst = document.createElement('div');
+    burst.className = 'bhud__burst';
+    this.burstLabel = document.createElement('div');
+    this.burstLabel.className = 'bhud__burst-label';
+    this.burstLabel.textContent = 'BURST 0/100';
+    const burstTrack = document.createElement('div');
+    burstTrack.className = 'bhud__burst-track';
+    this.burstFill = document.createElement('div');
+    this.burstFill.className = 'bhud__burst-fill';
+    burstTrack.appendChild(this.burstFill);
+    burst.appendChild(this.burstLabel);
+    burst.appendChild(burstTrack);
+    cmd.appendChild(burst);
     return cmd;
   }
 
@@ -281,11 +300,12 @@ export class BattleHudOverlay {
       // PNG image — baked-in text; no extra label rendered
       const img = document.createElement('img');
       img.className = 'bhud__btn-img';
-      img.src = cfg.asset;
+      if (cfg.asset) img.src = cfg.asset;
       img.alt = '';
       img.draggable = false;
       img.addEventListener('load', () => img.classList.add('bhud--loaded'));
       img.addEventListener('error', () => { img.style.display = 'none'; });
+      if (!cfg.asset) img.style.display = 'none';
 
       // Fallback label shown only when PNG is absent
       const fb = document.createElement('span');
@@ -317,8 +337,25 @@ export class BattleHudOverlay {
   // ── State update ────────────────────────────────────────────────────────────
 
   update(data: BattleHUDData, playerLevel: number, enemyLevel: number): void {
+    if (this.destroyed || !this.root.isConnected) return;
     this.updateCard('player', data, playerLevel);
     this.updateCard('enemy',  data, enemyLevel);
+    this.updateBurst(data);
+  }
+
+
+  private updateBurst(data: BattleHUDData): void {
+    const charge = Math.max(0, Math.min(100, Math.round(data.playerSpecialCharge ?? 0)));
+    if (this.burstFill) this.burstFill.style.width = `${charge}%`;
+    if (this.burstLabel) this.burstLabel.textContent = `BURST ${charge}/100`;
+    this.root.classList.toggle('bhud--burst-ready', !!data.playerSpecialReady);
+    this.mainBtns.forEach(btn => {
+      if (btn.dataset.cmd !== 'special') return;
+      btn.classList.toggle('bhud__cmd-btn--disabled', !data.playerSpecialReady);
+      btn.title = data.playerSpecialReady
+        ? `${data.playerSpecialName ?? 'Special'} ready`
+        : 'Burst is not ready.';
+    });
   }
 
   private updateCard(side: 'player' | 'enemy', data: BattleHUDData, level: number): void {
@@ -339,26 +376,26 @@ export class BattleHudOverlay {
     const gender   = minData?.gender;
 
     // Name & level
-    const nameEl = document.getElementById(`bhud-${px}-name`);
+    const nameEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-name`);
     if (nameEl) nameEl.textContent = name;
-    const lvEl = document.getElementById(`bhud-${px}-level`);
+    const lvEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-level`);
     if (lvEl) lvEl.textContent = `Lv.${level}`;
 
     // Element dot
-    const dotEl = document.getElementById(`bhud-${px}-dot`) as HTMLElement | null;
+    const dotEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-dot`);
     if (dotEl) {
       dotEl.style.background = elemColor(elem);
       dotEl.style.boxShadow  = `0 0 5px ${elemColor(elem)}`;
     }
 
     // Update card border tint to element
-    const card = document.getElementById(`bhud-${p ? 'player' : 'enemy'}-card`);
+    const card = this.root.querySelector<HTMLElement>(`#bhud-${p ? 'player' : 'enemy'}-card`);
     if (card) {
       card.style.borderColor = ELEM_COLORS_DARK[elem] ?? 'rgba(68,78,168,0.55)';
     }
 
     // Gender icon
-    const genderEl = document.getElementById(`bhud-${px}-gender`) as HTMLImageElement | null;
+    const genderEl = this.root.querySelector<HTMLImageElement>(`#bhud-${px}-gender`);
     if (genderEl) {
       if (gender && gender !== 'unknown') {
         genderEl.src = `assets/ui/icons/gender_${gender}.png`;
@@ -405,12 +442,14 @@ export class BattleHudOverlay {
   // ── Menu show / hide ────────────────────────────────────────────────────────
 
   showMenu(): void {
+    if (this.destroyed) return;
     this.menuOpen = true;
     this.root.classList.add('bhud--menu-visible');
     this.showMainPanel();
   }
 
   hideMenu(): void {
+    if (this.destroyed) return;
     this.menuOpen = false;
     this.inMoves  = false;
     this.dismissMoveInfoPopup();
@@ -418,6 +457,7 @@ export class BattleHudOverlay {
   }
 
   showMainPanel(): void {
+    if (this.destroyed) return;
     this.inMoves    = false;
     this.mainCursor = 0;
     this.mainPanel.classList.add('bhud--active');
@@ -557,6 +597,7 @@ export class BattleHudOverlay {
   }
 
   showMovesPanel(moveIds: string[], playerAura: number, guardBlocked = false): void {
+    if (this.destroyed) return;
     this.inMoves    = true;
     this.moveCursor = 0;
     this.moveIds    = moveIds;
@@ -881,11 +922,17 @@ export class BattleHudOverlay {
   // ── Cleanup ─────────────────────────────────────────────────────────────────
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.dismissMoveInfoPopup();
+    this.root.replaceChildren();
     this.root.remove();
+    this.mainBtns = [];
+    this.moveBtns = [];
   }
 
   hide(): void {
+    if (this.destroyed) return;
     this.root.style.display = 'none';
   }
 }

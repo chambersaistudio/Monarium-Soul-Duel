@@ -18,7 +18,10 @@ export function ensurePlaceholderTexture(scene: Phaser.Scene, key: string, color
 
 export function preloadVisualCandidates(scene: Phaser.Scene, kind: 'monari' | 'character', id: string, paths: string[]): void {
   const names = ['profile', 'fullBody', 'battleIdle', 'portrait', 'icon', 'reference'];
+  const queuedPaths = new Set<string>();
   paths.forEach((path, index) => {
+    if (queuedPaths.has(path)) return;
+    queuedPaths.add(path);
     const key = `${kind}_${id}_${names[index] ?? `candidate${index}`}`;
     if (!scene.textures.exists(key)) scene.load.image(key, path);
   });

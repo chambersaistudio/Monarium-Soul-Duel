@@ -5,6 +5,7 @@ import { ClassicBattleEngine } from '../systems/ClassicBattleEngine';
 import { SoulSyncSystem } from '../systems/SoulSyncSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { CLASSIC_MOVES, BACK_COMMAND } from '../data/classicMoveData';
+import { getSpecialMoveForMonari, type SpecialMoveConfig } from '../data/specialMoveRegistry';
 import { MINARI_ROSTER } from '../data/minariData';
 import { PLAYER_PROFILE } from '../data/playerProfile';
 import { PlayerSaveManager } from '../systems/PlayerSaveManager';
@@ -119,13 +120,14 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private mainCursor     = 0;
   private mainBtnImgs:   Phaser.GameObjects.Image[]    = [];
   private mainBtnGfxs:   Phaser.GameObjects.Graphics[] = [];
-  private mainBtnTexts:  Phaser.GameObjects.Text[]     = [];
+  private mainBtnTexts:  Array<Phaser.GameObjects.Text | null> = [];
   private mainBtnW       = 0;
   private mainBtnH       = 0;
   private readonly MAIN_BTNS = [
     { key: 'fight',   label: 'FIGHT' },
     { key: 'bag',     label: 'BAG'   },
     { key: 'capture', label: 'BOND'  },
+    { key: 'special', label: 'SPECIAL' },
     { key: 'run',     label: 'RUN'   },
   ] as const;
 
@@ -186,10 +188,18 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   private playerLevel = 1;
   private enemyLevel  = 1;
   private resizeTimer?: Phaser.Time.TimerEvent;
+  private battleStartTimer?: Phaser.Time.TimerEvent;
+  private isShuttingDown = false;
+  private playerSpecialCharge = 0;
+  private enemySpecialCharge = 0;
+  private lastMoveByRole: Partial<Record<ClassicActorRole, string>> = {};
 
   constructor() { super({ key: 'ClassicSoulDuelScene' }); }
 
   shutdown(): void {
+    this.isShuttingDown = true;
+    this.resizeTimer?.remove(false);
+    this.battleStartTimer?.remove(false);
     this.audio?.stopBgm();
     this.domHud?.destroy();
   }
@@ -199,14 +209,21 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   preload(): void {
     const { background } = CLASSIC_BATTLE_CONFIG;
     this.load.image(`bg_${background}`, `assets/backgrounds/classic/${background}.png`);
-    ['flarepaw', 'droplet', 'sproutodon', 'umbravine', 'umbrelette', 'uvee'].forEach(id => {
+
+    const ctx = this.registry.get('classic_battle_context') as ClassicBattleContext | null;
+    const playerMinId = ctx?.playerMinariId ?? 'flarepaw';
+    const enemyMinId = ctx?.enemyMinariId ?? 'droplet';
+    const battleMonariIds = new Set([playerMinId, enemyMinId]);
+
+    // Mobile was running out of memory as battle preload queued every roster image
+    // on top of the normalized animation frames already prepared by PreloadScene.
+    // The battle HUD only needs the two combatants plus the player's trainer plate.
+    battleMonariIds.forEach(id => {
       preloadVisualCandidates(this, 'monari', id, visualCandidates(getMonariVisualPaths(id)));
     });
-    ['player', 'renzo', 'warren_ellis'].forEach(id => {
-      preloadVisualCandidates(this, 'character', id, visualCandidates(getCharacterVisualPaths(id)));
-    });
+    preloadVisualCandidates(this, 'character', 'player', visualCandidates(getCharacterVisualPaths('player')));
 
-    // UI panel frames, buttons, icons
+    // UI panel frames and command buttons
     this.load.image('ui_panel_left',   'assets/ui/battle/frames/panel_monari_left_empty.png');
     this.load.image('ui_panel_right',  'assets/ui/battle/frames/panel_monari_right_empty.png');
     this.load.image('ui_soulsync_bar', 'assets/ui/battle/frames/soulsync_bar_empty.png');
@@ -215,12 +232,22 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.load.image('ui_btn_bag',      'assets/ui/battle/buttons/btn_bag.png');
     this.load.image('ui_btn_bond',     'assets/ui/battle/buttons/btn_bond.png');
     this.load.image('ui_btn_run',      'assets/ui/battle/buttons/btn_run.png');
-    (['fire','water','flora','wind','thunder','stone','steel','light','dark','aether','ice','neutral'] as const).forEach(el =>
-      this.load.image(`ui_elem_${el}`, `assets/ui/elements/${el}.png`)
+
+    const elementIds = new Set(
+      [...battleMonariIds].map(id => MINARI_ROSTER[id]?.element ?? 'neutral'),
     );
-    (['male','female','unknown'] as const).forEach(g =>
-      this.load.image(`ui_gender_${g}`, `assets/ui/icons/gender_${g}.png`)
+    elementIds.add('neutral');
+    elementIds.forEach(el => {
+      this.load.image(`ui_elem_${el}`, `assets/ui/elements/${el}.png`);
+    });
+
+    const genderIds = new Set(
+      [...battleMonariIds].map(id => MINARI_ROSTER[id]?.gender ?? 'unknown'),
     );
+    genderIds.add('unknown');
+    genderIds.forEach(g => {
+      this.load.image(`ui_gender_${g}`, `assets/ui/icons/gender_${g}.png`);
+    });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -239,10 +266,18 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private relayoutBattle = (): void => {
+    if (this.isShuttingDown) return;
     this.resizeTimer?.remove(false);
     this.resizeTimer = this.time.delayedCall(220, () => {
-      this.registry.set('classic_battle_context', this.battleCtx);
-      this.scene.restart();
+      if (this.isShuttingDown || !this.scene.isActive()) return;
+      // Mobile browser chrome can emit RESIZE while the player is tapping battle
+      // controls or while attack tweens/timers are running. Restarting the scene
+      // here resets the duel mid-turn and can leave animation callbacks racing
+      // against teardown, so keep the active battle alive and only resync the
+      // renderer/camera to the current canvas dimensions.
+      applyHighDpiCanvas(this.game, 'battle:resize');
+      this.syncBattleCamera();
+      this.debugBattleLayout('resize');
     });
   };
 
@@ -270,6 +305,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.isShuttingDown = false;
     this.turnNumber = 0;
     this.sound.stopAll();
     this.domHud?.destroy();
@@ -338,7 +374,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         const sys = role === 'player' ? this.playerSyncSys : this.enemySyncSys;
         return sys.getTier();
       },
-      onMoveAnnounce: (role, _moveId, moveName) => {
+      onMoveAnnounce: (role, moveId, moveName) => {
+        this.lastMoveByRole[role] = moveId;
         const actor = role === 'player' ? this.playerActor : this.enemyActor;
         const name  = MINARI_ROSTER[actor.actorId]?.name ?? actor.actorId;
         this.showBattleCallout(`${name} used ${moveName}!`);
@@ -371,6 +408,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     this.domHud = new BattleHudOverlay({
       onMainCommand: (key) => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         switch (key) {
           case 'fight':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
@@ -384,6 +422,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
             this.handleCaptureAttempt();
             break;
+          case 'special':
+            this.handleSpecialAttempt();
+            break;
           case 'run':
             this.audio.playUi(AUDIO_KEYS.ui.confirm);
             this.handleRun();
@@ -391,10 +432,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         }
       },
       onMoveSelect: (id) => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.engine.submitPlayerMove(id);
       },
       onBack: () => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
         this.audio.playUi(AUDIO_KEYS.ui.move);
         this.domHud.showMainPanel();
       },
@@ -414,15 +457,20 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.relayoutBattle, this);
       this.resizeTimer?.remove(false);
+      this.battleStartTimer?.remove(false);
     });
 
     this.debugBattleLayout('create');
     this.updateLabDebugRegistry();
     this.cameras.main.fadeIn(500);
-    this.time.delayedCall(800, () => this.engine.startBattle());
+    this.battleStartTimer = this.time.delayedCall(800, () => {
+      if (this.isShuttingDown || !this.scene.isActive()) return;
+      this.engine.startBattle();
+    });
   }
 
   update(): void {
+    if (this.isShuttingDown || !this.playerActor || !this.enemyActor || !this.domHud) return;
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
     this.domHud.update(this.getHUDData(), this.playerLevel, this.enemyLevel);
@@ -932,7 +980,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         hitArea.on('pointerdown',  () => { this.mainCursor = i; this.refreshMainCursor(); this.activateMainBtn(i); });
         this.mainPanel.add(hitArea);
         // Push null placeholder so mainBtnTexts index stays aligned
-        this.mainBtnTexts.push(null as unknown as Phaser.GameObjects.Text);
+        this.mainBtnTexts.push(null);
       } else {
         // Graphics fallback — label is necessary
         const gfx = this.add.graphics();
@@ -1110,6 +1158,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.handleCaptureAttempt();
         break;
+      case 'special':
+        this.handleSpecialAttempt();
+        break;
       case 'run':
         this.audio.playUi(AUDIO_KEYS.ui.confirm);
         this.handleRun();
@@ -1127,6 +1178,133 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     }
     this.audio.playUi(AUDIO_KEYS.ui.confirm);
     this.engine.submitPlayerMove(id);
+  }
+
+
+  // ── Burst / cinematic special ─────────────────────────────────────────────
+
+  private clampSpecialCharge(value: number): number {
+    return Math.max(0, Math.min(100, Math.round(value)));
+  }
+
+  private addSpecialCharge(role: ClassicActorRole, amount: number): void {
+    if (role === 'player') this.playerSpecialCharge = this.clampSpecialCharge(this.playerSpecialCharge + amount);
+    else                   this.enemySpecialCharge  = this.clampSpecialCharge(this.enemySpecialCharge  + amount);
+  }
+
+  private isPlayerSpecialReady(): boolean {
+    const special = getSpecialMoveForMonari(this.playerActor?.actorId ?? '');
+    return !!special
+      && this.playerSpecialCharge >= special.burstCost
+      && this.playerActor.aura >= special.auraCost
+      && this.playerActor.hp > 0;
+  }
+
+  private handleSpecialAttempt(): void {
+    if (this.isShuttingDown || !this.scene.isActive()) return;
+    if (this.engine.currentPhase !== 'player_command') return;
+    const special = getSpecialMoveForMonari(this.playerActor.actorId);
+    if (!special) {
+      this.showInfoOverlay('SPECIAL', 'No Burst special assigned.');
+      return;
+    }
+    if (this.playerSpecialCharge < special.burstCost) {
+      this.showBattleCallout('Burst is not ready.', '#ffe39a');
+      return;
+    }
+    if (this.playerActor.aura < special.auraCost) {
+      this.showBattleCallout('Not enough Aura!', '#88aaff');
+      return;
+    }
+    this.audio.playUi(AUDIO_KEYS.ui.confirm);
+    this.hideMenu();
+    this.playerSpecialCharge = 0;
+    this.playerActor.aura = Math.max(0, this.playerActor.aura - special.auraCost);
+    this.showBattleCallout(`${MINARI_ROSTER[this.playerActor.actorId]?.name ?? this.playerActor.actorId} used ${special.name}!`, '#ffe39a');
+    this.playSpecialOpener(special);
+  }
+
+  private playSpecialOpener(special: SpecialMoveConfig): void {
+    this.playerActor.setFacing(1);
+    this.playerActor.playAnim('attack', true);
+    this.time.delayedCall(350, () => {
+      if (this.isShuttingDown || !this.scene.isActive()) return;
+      const missed = Math.random() * 100 >= special.accuracy;
+      const guarded = this.enemyActor.isGuarding;
+      if (missed) {
+        this.showBattleCallout('Missed!', '#888899');
+        this.finishSpecialAttempt();
+        return;
+      }
+      if (guarded) {
+        const damage = Math.max(1, Math.round(this.calcSpecialDamage(special) * 0.45));
+        this.enemyActor.hp = Math.max(0, this.enemyActor.hp - damage);
+        this.spawnBlockedDisplay(this.enemyActor.x, this.enemyActor.y - 40, damage);
+        this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
+        this.addSpecialCharge('enemy', 12);
+        this.finishSpecialAttempt();
+        return;
+      }
+      this.playSpecialCinematic(special, () => {
+        const damage = this.calcSpecialDamage(special);
+        this.enemyActor.hp = Math.max(0, this.enemyActor.hp - damage);
+        this.spawnDamageNumber(this.enemyActor.x, this.enemyActor.y - 40, damage, false, false);
+        this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
+        this.audio.playCreatureHurt(this.enemyActor.actorId);
+        this.finishSpecialAttempt();
+      });
+    });
+  }
+
+  private calcSpecialDamage(special: SpecialMoveConfig): number {
+    const atk = special.category === 'Special'
+      ? this.playerActor.computedStats.specialAttack
+      : this.playerActor.computedStats.attack;
+    const def = special.category === 'Special'
+      ? this.enemyActor.computedStats.specialDefense
+      : this.enemyActor.computedStats.defense;
+    return Math.max(1, Math.round(special.power * Math.max(0.5, atk / Math.max(1, def)) * 0.62));
+  }
+
+  private playSpecialCinematic(special: SpecialMoveConfig, onDone: () => void): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'battle-cinematic';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;background:#000;display:flex;align-items:center;justify-content:center;';
+    const video = document.createElement('video');
+    video.src = special.cinematicPath;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.style.cssText = 'width:100%;height:100%;object-fit:cover;background:#000;';
+    overlay.appendChild(video);
+    document.body.appendChild(overlay);
+    let completed = false;
+    const cleanup = (): void => {
+      if (completed) return;
+      completed = true;
+      video.pause();
+      overlay.remove();
+      onDone();
+    };
+    video.addEventListener('ended', cleanup, { once: true });
+    video.addEventListener('error', () => {
+      console.warn(`[battle-special] missing or failed cinematic: ${special.cinematicPath}`);
+      cleanup();
+    }, { once: true });
+    const promise = video.play();
+    if (promise !== undefined) promise.catch(() => {
+      console.warn(`[battle-special] unable to play cinematic: ${special.cinematicPath}`);
+      cleanup();
+    });
+  }
+
+  private finishSpecialAttempt(): void {
+    this.playerActor.playAnim('idle');
+    if (this.enemyActor.hp <= 0) {
+      this.addSpecialCharge('player', 20);
+      this.engine.forfeit();
+      return;
+    }
+    this.engine.submitCaptureFailed();
   }
 
   // ── Bag ────────────────────────────────────────────────────────────────────
@@ -1322,6 +1500,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
 
     if (blocked) {
       defenderSys.onGuardSuccess();
+      this.addSpecialCharge(target, 12);
       this.spawnBlockedDisplay(wx, wy, amount);
       this.audio.playSfx(AUDIO_KEYS.sfx.guardBlock);
     } else {
@@ -1333,6 +1512,12 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
       this.audio.playSfx(AUDIO_KEYS.sfx.hurtImpact, 0.6);
       this.audio.playCreatureHurt(actor.actorId);
+      if (target === 'player') {
+        this.addSpecialCharge('player', 10);
+      } else {
+        const playerMove = this.lastMoveByRole.player;
+        this.addSpecialCharge('player', playerMove === 'basic_attack' ? 10 : 15);
+      }
     }
 
     void attackerSys; // referenced by onHitMeta callback; declared here for symmetry
@@ -1359,6 +1544,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       playerMaxAura:       this.playerActor.maxAura,
       playerSync:          playerSync.sync,
       playerSyncTier:      playerSync.tier,
+      playerSpecialCharge: this.playerSpecialCharge,
+      playerSpecialReady:  this.isPlayerSpecialReady(),
+      playerSpecialName:   getSpecialMoveForMonari(playerMinId)?.name,
       playerBondLevel:     playerBondLv,
       bonderSoulRankLevel: soulRank?.level ?? 1,
       bonderSoulRankTier:  (soulRank?.tier ?? 'novice') as SoulRankTier,
@@ -1413,6 +1601,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   // ── Battle end ─────────────────────────────────────────────────────────────
 
   private onBattleEnd(winner: ClassicActorRole): void {
+    if (winner === 'player') this.addSpecialCharge('player', 20);
     this.domHud.hide();
     this.menuVisible = false;
 

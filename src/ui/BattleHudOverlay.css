@@ -743,3 +743,54 @@
   font-family: "Rajdhani", monospace; font-size: 9px; color: #443c6a;
   text-align: center; font-style: italic;
 }
+
+/* ── Burst gauge / special button ─────────────────────────────────────────── */
+.bhud__burst {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px auto 0;
+  width: min(520px, 92vw);
+  pointer-events: none;
+}
+.bhud__burst-label {
+  flex: 0 0 auto;
+  font-family: var(--bhud-font-hud);
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffe39a;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 8px rgba(255, 204, 68, 0.3);
+}
+.bhud__burst-track {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 224, 138, 0.24);
+}
+.bhud__burst-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff8844, #ffe39a);
+  transition: width 180ms ease;
+}
+.bhud--burst-ready .bhud__burst-track {
+  box-shadow: 0 0 14px rgba(255, 210, 80, 0.55);
+}
+.bhud--burst-ready .bhud__burst-fill {
+  animation: bhud-burst-pulse 0.9s ease-in-out infinite alternate;
+}
+.bhud__cmd-btn--disabled {
+  filter: grayscale(0.8);
+  opacity: 0.45;
+}
+.bhud--burst-ready .bhud__cmd-btn[data-cmd="special"] {
+  box-shadow: 0 0 16px rgba(255, 210, 80, 0.55);
+}
+@keyframes bhud-burst-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.45); }
+}
