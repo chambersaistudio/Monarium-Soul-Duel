@@ -23,6 +23,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
   private playerOverrides: BattleStatOverrides = {};
   private enemyOverrides: BattleStatOverrides = {};
   private debugEnabled = false;
+  private specialTestMode = false;
 
   constructor() { super({ key: 'BattleLabSetupScene' }); }
 
@@ -36,6 +37,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
     this.playerOverrides = {};
     this.enemyOverrides = {};
     this.debugEnabled = false;
+    this.specialTestMode = false;
 
     this.audio = new AudioManager(this);
     this.audio.playBgm(AUDIO_KEYS.bgm.title);
@@ -91,8 +93,8 @@ export class BattleLabSetupScene extends Phaser.Scene {
       return `<section class="blab-panel"><h2>${side === 'player' ? 'Player' : 'Enemy'}</h2><div class="blab-picks">${ids}</div><div class="blab-level"><button data-side="${side}" data-level="-1">−</button><b>Lv. ${level}</b><button data-side="${side}" data-level="1">+</button></div><div class="blab-stats">${stats.map(([key,label]) => `<label><span>${label}</span><input type="range" min="1" max="150" value="${this.statValue(side,key)}" data-side="${side}" data-stat="${key}"><b>${this.statValue(side,key)}</b></label>`).join('')}</div></section>`;
     };
     this.overlay.innerHTML = `<style>
-      .blab-card{width:min(94vw,980px);max-height:92vh;overflow:auto;border:1px solid rgba(255,190,108,.5);border-radius:28px;background:rgba(6,6,18,.96);box-shadow:0 20px 70px rgba(0,0,0,.55),0 0 32px rgba(122,74,255,.18);padding:18px;box-sizing:border-box}.blab-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.blab-head h1{margin:0;font-family:Orbitron, Rajdhani, sans-serif;color:#ffbf72}.blab-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.blab-panel{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:rgba(255,255,255,.055);padding:14px}.blab-panel h2{margin:0 0 10px;color:#fff4c7}.blab-picks{display:grid;grid-template-columns:1fr 1fr;gap:8px}.blab-pill,.blab-actions button,.blab-level button{border:1px solid rgba(255,190,108,.45);border-radius:999px;background:rgba(122,74,255,.18);color:#fff4c7;font-weight:900;min-height:38px}.blab-pill.active{background:rgba(255,142,64,.28);box-shadow:0 0 16px rgba(255,142,64,.25)}.blab-level{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0}.blab-level button{width:42px}.blab-stats{display:grid;gap:8px}.blab-stats label{display:grid;grid-template-columns:92px 1fr 34px;gap:8px;align-items:center}.blab-stats input[type=range]{touch-action:none;width:100%;min-height:34px;margin:0}.blab-stats span{color:#ffcf8a;font-weight:800}.blab-stats b{text-align:right}.blab-actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}.blab-debug{display:flex;gap:8px;align-items:center;color:#cfc7ff}.blab-actions button{padding:0 18px}.blab-note{color:#9e96c9;font-size:14px}@media(max-width:720px){.blab-grid{grid-template-columns:1fr}.blab-card{padding:14px}.blab-head{display:block}.blab-stats label{grid-template-columns:84px 1fr 30px}}
-    </style><div class="blab-card"><div class="blab-head"><div><h1>Battle Lab</h1><div class="blab-note">Choose Monari, levels, stat test values, and enable formula debug.</div></div><label class="blab-debug"><input type="checkbox" id="blab-debug" ${this.debugEnabled ? 'checked' : ''}> Debug formula</label></div><div class="blab-grid">${buildSide('player')}${buildSide('enemy')}</div><div class="blab-actions"><button id="blab-back">Back</button><button id="blab-start">Start Battle</button></div></div>`;
+      .blab-card{width:min(94vw,980px);max-height:92vh;overflow:auto;border:1px solid rgba(255,190,108,.5);border-radius:28px;background:rgba(6,6,18,.96);box-shadow:0 20px 70px rgba(0,0,0,.55),0 0 32px rgba(122,74,255,.18);padding:18px;box-sizing:border-box}.blab-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.blab-head h1{margin:0;font-family:Orbitron, Rajdhani, sans-serif;color:#ffbf72}.blab-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.blab-panel{border:1px solid rgba(255,255,255,.12);border-radius:22px;background:rgba(255,255,255,.055);padding:14px}.blab-panel h2{margin:0 0 10px;color:#fff4c7}.blab-picks{display:grid;grid-template-columns:1fr 1fr;gap:8px}.blab-pill,.blab-actions button,.blab-level button{border:1px solid rgba(255,190,108,.45);border-radius:999px;background:rgba(122,74,255,.18);color:#fff4c7;font-weight:900;min-height:38px}.blab-pill.active{background:rgba(255,142,64,.28);box-shadow:0 0 16px rgba(255,142,64,.25)}.blab-level{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0}.blab-level button{width:42px}.blab-stats{display:grid;gap:8px}.blab-stats label{display:grid;grid-template-columns:92px 1fr 34px;gap:8px;align-items:center}.blab-stats input[type=range]{touch-action:none;width:100%;min-height:34px;margin:0}.blab-stats span{color:#ffcf8a;font-weight:800}.blab-stats b{text-align:right}.blab-actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}.blab-debug{display:flex;gap:8px;align-items:center;color:#cfc7ff}.blab-debug--special{color:#ffe39a}.blab-actions button{padding:0 18px}.blab-note{color:#9e96c9;font-size:14px}@media(max-width:720px){.blab-grid{grid-template-columns:1fr}.blab-card{padding:14px}.blab-head{display:block}.blab-stats label{grid-template-columns:84px 1fr 30px}}
+    </style><div class="blab-card"><div class="blab-head"><div><h1>Battle Lab</h1><div class="blab-note">Choose Monari, levels, stat test values, and enable formula debug.</div></div><div><label class="blab-debug"><input type="checkbox" id="blab-debug" ${this.debugEnabled ? 'checked' : ''}> Debug formula</label><label class="blab-debug blab-debug--special"><input type="checkbox" id="blab-special-test" ${this.specialTestMode ? 'checked' : ''}> Keep Special Ready</label></div></div><div class="blab-grid">${buildSide('player')}${buildSide('enemy')}</div><div class="blab-actions"><button id="blab-back">Back</button><button id="blab-start">Start Battle</button></div></div>`;
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach(btn => btn.onclick = () => { const side = btn.dataset.side as 'player'|'enemy'; if (side === 'player') this.playerIdx = Number(btn.dataset.pick); else this.enemyIdx = Number(btn.dataset.pick); this.audio.playUi(AUDIO_KEYS.ui.move); this.renderDomOverlay(); });
     this.overlay.querySelectorAll<HTMLButtonElement>('[data-level]').forEach(btn => btn.onclick = () => { const side = btn.dataset.side as 'player'|'enemy'; const delta = Number(btn.dataset.level); if (side === 'player') this.playerLevel = Phaser.Math.Clamp(this.playerLevel + delta, MIN_LEVEL, MAX_LEVEL); else this.enemyLevel = Phaser.Math.Clamp(this.enemyLevel + delta, MIN_LEVEL, MAX_LEVEL); this.renderDomOverlay(); });
     this.overlay.querySelectorAll<HTMLInputElement>('[data-stat]').forEach(input => input.oninput = () => {
@@ -101,6 +103,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
       if (label) label.textContent = String(value);
     });
     this.overlay.querySelector<HTMLInputElement>('#blab-debug')!.onchange = (e) => { this.debugEnabled = (e.currentTarget as HTMLInputElement).checked; };
+    this.overlay.querySelector<HTMLInputElement>('#blab-special-test')!.onchange = (e) => { this.specialTestMode = (e.currentTarget as HTMLInputElement).checked; };
     this.overlay.querySelector<HTMLButtonElement>('#blab-back')!.onclick = () => { this.hideDomOverlay(); this.scene.start('ModeSelectScene'); };
     this.overlay.querySelector<HTMLButtonElement>('#blab-start')!.onclick = () => this.startBattle();
     const card = this.overlay.querySelector('.blab-card');
@@ -283,6 +286,7 @@ export class BattleLabSetupScene extends Phaser.Scene {
       enemyLevel:     this.enemyLevel,
       labMode:        true,
       labDebug:       this.debugEnabled,
+      labSpecialTest: this.specialTestMode,
       playerStatOverrides: this.playerOverrides,
       enemyStatOverrides:  this.enemyOverrides,
     };

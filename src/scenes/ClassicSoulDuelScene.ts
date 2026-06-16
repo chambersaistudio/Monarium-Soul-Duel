@@ -474,6 +474,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     if (this.isShuttingDown || !this.playerActor || !this.enemyActor || !this.domHud) return;
     this.playerActor.updateShadow();
     this.enemyActor.updateShadow();
+    this.applyLabSpecialTestMode();
     this.domHud.update(this.getHUDData(), this.playerLevel, this.enemyLevel);
     this.updateGuardLabel();
 
@@ -1228,33 +1229,39 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
   }
 
   private playSpecialOpener(special: SpecialMoveConfig): void {
-    this.playerActor.setFacing(1);
-    this.playerActor.playAnim('run');
+    console.log('[battle-special] opener started');
+    const openerMove = CLASSIC_MOVES.basic_attack;
+    const anchorX = this.pAnchorX;
     const contactX = this.enemyActor.x - 100;
+
+    this.playerActor.setFacing(1);
+    this.playerActor.playAnim(openerMove.approachAnim);
+    const travelMs = Math.max(150, Math.abs(this.playerActor.x - contactX) / 380 * 1000);
+
     this.tweens.add({
       targets: this.playerActor,
       x: contactX,
-      duration: Math.max(150, Math.abs(this.playerActor.x - contactX) / 380 * 1000),
+      duration: travelMs,
       ease: 'Linear',
       onComplete: () => {
         if (this.isShuttingDown || !this.scene.isActive()) return;
-        this.playerActor.playAnim('attack', true);
+        this.playerActor.playAnim(openerMove.animFolder, true);
       },
     });
-    this.time.delayedCall(650, () => {
+
+    this.time.delayedCall(travelMs + this.getMoveHitDelayMs(openerMove, this.playerActor.actorId), () => {
       if (this.isShuttingDown || !this.scene.isActive()) return;
+      console.log('[battle-special] opener impact confirmed');
       const missed = Math.random() * 100 >= special.accuracy;
       const guarded = this.enemyActor.isGuarding;
       if (missed) {
-        this.playerSpecialCharge = Math.max(0, this.playerSpecialCharge - special.burstCost);
-        this.playerActor.aura = Math.max(0, this.playerActor.aura - special.auraCost);
+        this.spendSpecialResources(special);
         this.showBattleCallout('Missed!', '#888899');
         this.finishSpecialAttempt();
         return;
       }
       if (guarded) {
-        this.playerSpecialCharge = Math.max(0, this.playerSpecialCharge - special.burstCost);
-        this.playerActor.aura = Math.max(0, this.playerActor.aura - special.auraCost);
+        this.spendSpecialResources(special);
         const damage = Math.max(1, Math.round(this.calcSpecialDamage(special) * 0.45));
         this.enemyActor.hp = Math.max(0, this.enemyActor.hp - damage);
         this.spawnBlockedDisplay(this.enemyActor.x, this.enemyActor.y - 40, damage);
@@ -1263,20 +1270,89 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
         this.finishSpecialAttempt();
         return;
       }
+
       this.enemyActor.playAnim('hurt', true);
-      this.time.delayedCall(180, () => {
-        this.cameras.main.flash(140, 0, 0, 0);
+      this.cameras.main.flash(120, 0, 0, 0);
+      this.time.delayedCall(220, () => {
+        if (this.isShuttingDown || !this.scene.isActive()) return;
+        this.cameras.main.fadeOut(140, 0, 0, 0);
+        this.playSpecialCinematic(special, () => {
+          this.spendSpecialResources(special);
+          const damage = this.calcSpecialDamage(special);
+          this.playPostCinematicDamageSequence(damage, anchorX);
+        });
       });
-      this.playSpecialCinematic(special, () => {
-        this.playerSpecialCharge = Math.max(0, this.playerSpecialCharge - special.burstCost);
-        this.playerActor.aura = Math.max(0, this.playerActor.aura - special.auraCost);
-        const damage = this.calcSpecialDamage(special);
-        this.enemyActor.hp = Math.max(0, this.enemyActor.hp - damage);
-        this.spawnDamageNumber(this.enemyActor.x, this.enemyActor.y - 40, damage, false, false);
-        this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
-        this.audio.playCreatureHurt(this.enemyActor.actorId);
-        this.finishSpecialAttempt();
-      });
+    });
+  }
+
+  private getMoveHitDelayMs(move: { animFolder: string; hitFrameIndex: number }, actorId: string): number {
+    const animKey = `${actorId}_${move.animFolder}`;
+    const animData = this.anims.get(animKey);
+    return animData
+      ? (1000 / (animData.frameRate || 12)) * (move.hitFrameIndex + 1)
+      : 200;
+  }
+
+  private spendSpecialResources(special: SpecialMoveConfig): void {
+    if (this.battleCtx?.labMode && this.battleCtx.labSpecialTest) return;
+    this.playerSpecialCharge = Math.max(0, this.playerSpecialCharge - special.burstCost);
+    this.playerActor.aura = Math.max(0, this.playerActor.aura - special.auraCost);
+  }
+
+  private applyLabSpecialTestMode(): void {
+    if (!this.battleCtx?.labMode || !this.battleCtx.labSpecialTest || !this.playerActor) return;
+    const special = getSpecialMoveForMonari(this.playerActor.actorId);
+    this.playerSpecialCharge = 100;
+    if (special) this.playerActor.aura = Math.max(this.playerActor.aura, Math.min(this.playerActor.maxAura, special.auraCost));
+  }
+
+  private playPostCinematicDamageSequence(damage: number, anchorX: number): void {
+    console.log('[battle-special] damage visual sequence started');
+    this.cameras.main.fadeIn(120, 0, 0, 0);
+    const startHp = this.enemyActor.hp;
+    const endHp = Math.max(0, startHp - damage);
+    this.enemyActor.playAnim('hurt', true);
+    this.enemyActor.flashDamage();
+    this.spawnDamageNumber(this.enemyActor.x, this.enemyActor.y - 40, damage, false, false);
+    this.audio.playSfx(AUDIO_KEYS.sfx.attackHit);
+    this.audio.playCreatureHurt(this.enemyActor.actorId);
+
+    this.playerActor.setFacing(-1);
+    this.playerActor.playAnim('run');
+    let returnDone = false;
+    let damageDone = false;
+    const maybeDone = (): void => {
+      if (!returnDone || !damageDone) return;
+      if (this.enemyActor.hp > 0 && !this.enemyActor.isGuarding) this.enemyActor.playAnim('idle');
+      console.log('[battle-special] damage visual sequence completed');
+      this.finishSpecialAttempt(false);
+    };
+
+    this.tweens.add({
+      targets: this.playerActor,
+      x: anchorX,
+      duration: Math.max(150, Math.abs(this.playerActor.x - anchorX) / 380 * 1000),
+      ease: 'Linear',
+      onComplete: () => {
+        this.playerActor.setFacing(1);
+        this.playerActor.playAnim('idle');
+        returnDone = true;
+        maybeDone();
+      },
+    });
+
+    const hpTween = { value: startHp };
+    this.tweens.add({
+      targets: hpTween,
+      value: endHp,
+      duration: 700,
+      ease: 'Cubic.Out',
+      onUpdate: () => { this.enemyActor.hp = Math.max(0, Math.round(hpTween.value)); },
+      onComplete: () => {
+        this.enemyActor.hp = endHp;
+        damageDone = true;
+        maybeDone();
+      },
     });
   }
 
@@ -1290,7 +1366,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     return Math.max(1, Math.round(special.power * Math.max(0.5, atk / Math.max(1, def)) * 0.62));
   }
 
-  private playSpecialCinematic(special: SpecialMoveConfig, onDone: () => void): void {
+  private async playSpecialCinematic(special: SpecialMoveConfig, onDone: () => void): Promise<void> {
+    console.log('[battle-special] cinematic start');
+    await this.audio.fadePauseBgm(320);
     const overlay = document.createElement('div');
     overlay.className = 'battle-cinematic';
     overlay.setAttribute('role', 'presentation');
@@ -1300,7 +1378,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     video.src = special.cinematicPath;
     video.preload = 'auto';
     video.playsInline = true;
-    video.muted = true;
+    video.muted = false;
     video.setAttribute('playsinline', '');
     video.style.cssText = 'display:block;width:100vw;height:100vh;max-width:none;max-height:none;object-fit:cover;background:#000;';
     overlay.appendChild(video);
@@ -1313,6 +1391,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       completed = true;
       video.pause();
       overlay.remove();
+      this.audio.resumeBgmFade(520);
       if (shouldApplyDamage) onDone();
       else {
         this.showBattleCallout('Special video failed to load', '#ff7777');
@@ -1328,7 +1407,9 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
       const promise = video.play();
       if (promise !== undefined) promise.catch((err) => {
         warn('play() promise rejected', err);
-        cleanup(false);
+        video.muted = true;
+        const retry = video.play();
+        if (retry !== undefined) retry.catch((retryErr) => { warn('muted play() retry rejected', retryErr); cleanup(false); });
       });
     };
 
@@ -1352,12 +1433,23 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
     this.time.delayedCall(1200, () => {
       if (!completed && !started && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) tryPlay();
     });
+    this.time.delayedCall(7000, () => {
+      if (!completed && !started) {
+        warn('video timed out before playback');
+        cleanup(false);
+      }
+    });
   }
 
-  private finishSpecialAttempt(): void {
+  private finishSpecialAttempt(returnToAnchor = true): void {
     this.specialInProgress = false;
-    this.playerActor.setFacing(-1);
-    this.tweens.add({ targets: this.playerActor, x: 200, duration: Math.max(150, Math.abs(this.playerActor.x - 200) / 380 * 1000), ease: 'Linear', onComplete: () => { this.playerActor.setFacing(1); this.playerActor.playAnim('idle'); } });
+    if (this.battleCtx?.labMode && this.battleCtx.labSpecialTest) this.applyLabSpecialTestMode();
+    if (returnToAnchor) {
+      this.playerActor.setFacing(-1);
+      this.playerActor.playAnim('run');
+      this.tweens.add({ targets: this.playerActor, x: this.pAnchorX, duration: Math.max(150, Math.abs(this.playerActor.x - this.pAnchorX) / 380 * 1000), ease: 'Linear', onComplete: () => { this.playerActor.setFacing(1); this.playerActor.playAnim('idle'); } });
+    }
+    console.log('[battle-special] turn resumed');
     if (this.enemyActor.hp <= 0) {
       this.addSpecialCharge('player', 20);
       this.engine.forfeit();
