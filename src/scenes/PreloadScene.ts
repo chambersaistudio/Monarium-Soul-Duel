@@ -127,6 +127,21 @@ export class PreloadScene extends Phaser.Scene {
       }
     }
 
+
+    // ── Player overworld animations (directional folders; missing dirs are safe) ──
+    const playerOwFrames: Record<string, string[]> = {
+      'idle_down': ['frame_004', 'frame_006', 'frame_010', 'frame_012', 'frame_013', 'frame_014', 'frame_017', 'frame_019'],
+      'walk_down': ['frame_037', 'frame_038', 'frame_039', 'frame_041', 'frame_043', 'frame_044', 'frame_045', 'frame_047', 'frame_048', 'frame_049', 'frame_052', 'frame_053'],
+      'walk_right': ['frame_055', 'frame_056', 'frame_057', 'frame_058', 'frame_059', 'frame_060', 'frame_061'],
+      'walk_up': ['frame_025', 'frame_026', 'frame_027', 'frame_029', 'frame_030', 'frame_031', 'frame_033', 'frame_034', 'frame_035', 'frame_036'],
+    };
+    for (const [anim, frames] of Object.entries(playerOwFrames)) {
+      const [state, dir] = anim.split('_');
+      for (const frame of frames) {
+        this.load.image(`player_ow_${anim}_${frame}`, `assets/characters/player/overworld/${state}/${dir}/${frame}.png`);
+      }
+    }
+
     // ── Overworld backgrounds ──────────────────────────────────────────────
     // Load all 6 maps upfront so scene transitions are instant.
     const owBgs: Array<[string, string]> = [
@@ -201,6 +216,9 @@ export class PreloadScene extends Phaser.Scene {
       this.createCharacter(charId);
     }
 
+
+    this.createPlayerOverworldAnimations();
+
     // Sproutodon has no animation frames — use static fullbody image if it loaded
     if (!this.loadErrors.has('sproutodon_fullbody') && this.textures.exists('sproutodon_fullbody')) {
       this.registry.set('sproutodon_sprite_key', 'sproutodon_fullbody');
@@ -223,6 +241,24 @@ export class PreloadScene extends Phaser.Scene {
       return;
     }
     this.scene.start('TitleScene');
+  }
+
+
+  private createPlayerOverworldAnimations(): void {
+    const configs: Array<{ key: string; frames: string[]; frameRate: number; repeat: number }> = [
+      { key: 'player_ow_idle_down', frames: ['frame_004', 'frame_006', 'frame_010', 'frame_012', 'frame_013', 'frame_014', 'frame_017', 'frame_019'], frameRate: 6, repeat: -1 },
+      { key: 'player_ow_walk_down', frames: ['frame_037', 'frame_038', 'frame_039', 'frame_041', 'frame_043', 'frame_044', 'frame_045', 'frame_047', 'frame_048', 'frame_049', 'frame_052', 'frame_053'], frameRate: 10, repeat: -1 },
+      { key: 'player_ow_walk_right', frames: ['frame_055', 'frame_056', 'frame_057', 'frame_058', 'frame_059', 'frame_060', 'frame_061'], frameRate: 10, repeat: -1 },
+      { key: 'player_ow_walk_up', frames: ['frame_025', 'frame_026', 'frame_027', 'frame_029', 'frame_030', 'frame_031', 'frame_033', 'frame_034', 'frame_035', 'frame_036'], frameRate: 10, repeat: -1 },
+    ];
+    for (const cfg of configs) {
+      const loaded = cfg.frames.map(frame => `player_ow_${cfg.key.replace('player_ow_', '')}_${frame}`).filter(key => this.textures.exists(key) && !this.loadErrors.has(key));
+      if (loaded.length === 0) continue;
+      if (this.anims.exists(cfg.key)) this.anims.remove(cfg.key);
+      this.anims.create({ key: cfg.key, frames: loaded.map(key => ({ key })), frameRate: cfg.frameRate, repeat: cfg.repeat });
+    }
+    const firstIdle = configs[0].frames.map(frame => `player_ow_idle_down_${frame}`).find(key => this.textures.exists(key) && !this.loadErrors.has(key));
+    this.registry.set('player_ow_sprite_key', firstIdle ?? null);
   }
 
   private createCharacter(charId: string): void {
