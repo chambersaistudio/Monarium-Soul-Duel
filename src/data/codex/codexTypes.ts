@@ -38,6 +38,20 @@ export interface CodexAssetPaths {
   legacy?: string[];
 }
 
+
+export interface CodexSpecialMoveRef {
+  id: string;
+  name: string;
+  monariId: string;
+  element: CodexElement;
+  category: TechniqueCategory;
+  auraCost: number;
+  burstCost: number;
+  openerType: string;
+  cinematicPath: string;
+  description: string;
+}
+
 export interface MonariCodexEntry {
   dexNo: string;
   slug: string;
@@ -61,6 +75,7 @@ export interface MonariCodexEntry {
   tags: CodexTags;
   assetFolder: string;
   assetPaths: CodexAssetPaths;
+  specialMove?: CodexSpecialMoveRef;
 }
 
 export interface TechniqueEntry {

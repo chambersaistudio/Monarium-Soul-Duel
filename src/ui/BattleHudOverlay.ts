@@ -59,6 +59,7 @@ const MAIN_BTNS = [
   { key: 'fight'  , label: 'FIGHT', asset: 'assets/ui/battle/buttons/btn_fight.png' },
   { key: 'bag'    , label: 'BAG'  , asset: 'assets/ui/battle/buttons/btn_bag.png'   },
   { key: 'capture', label: 'BOND' , asset: 'assets/ui/battle/buttons/btn_bond.png'  },
+  { key: 'special', label: 'SPECIAL', asset: '' },
   { key: 'run'    , label: 'RUN'  , asset: 'assets/ui/battle/buttons/btn_run.png'   },
 ] as const;
 
@@ -104,6 +105,8 @@ export class BattleHudOverlay {
   private movesPanel!: HTMLDivElement;
   private bagPanel!:   HTMLDivElement;
   private bondPanel!:  HTMLDivElement;
+  private burstFill!:  HTMLDivElement;
+  private burstLabel!: HTMLDivElement;
   private mainBtns:    HTMLButtonElement[] = [];
   private moveBtns:    HTMLButtonElement[] = [];
 
@@ -268,6 +271,20 @@ export class BattleHudOverlay {
     bg.appendChild(this.bagPanel);
     bg.appendChild(this.bondPanel);
     cmd.appendChild(bg);
+
+    const burst = document.createElement('div');
+    burst.className = 'bhud__burst';
+    this.burstLabel = document.createElement('div');
+    this.burstLabel.className = 'bhud__burst-label';
+    this.burstLabel.textContent = 'BURST 0/100';
+    const burstTrack = document.createElement('div');
+    burstTrack.className = 'bhud__burst-track';
+    this.burstFill = document.createElement('div');
+    this.burstFill.className = 'bhud__burst-fill';
+    burstTrack.appendChild(this.burstFill);
+    burst.appendChild(this.burstLabel);
+    burst.appendChild(burstTrack);
+    cmd.appendChild(burst);
     return cmd;
   }
 
@@ -283,11 +300,12 @@ export class BattleHudOverlay {
       // PNG image — baked-in text; no extra label rendered
       const img = document.createElement('img');
       img.className = 'bhud__btn-img';
-      img.src = cfg.asset;
+      if (cfg.asset) img.src = cfg.asset;
       img.alt = '';
       img.draggable = false;
       img.addEventListener('load', () => img.classList.add('bhud--loaded'));
       img.addEventListener('error', () => { img.style.display = 'none'; });
+      if (!cfg.asset) img.style.display = 'none';
 
       // Fallback label shown only when PNG is absent
       const fb = document.createElement('span');
@@ -322,6 +340,22 @@ export class BattleHudOverlay {
     if (this.destroyed || !this.root.isConnected) return;
     this.updateCard('player', data, playerLevel);
     this.updateCard('enemy',  data, enemyLevel);
+    this.updateBurst(data);
+  }
+
+
+  private updateBurst(data: BattleHUDData): void {
+    const charge = Math.max(0, Math.min(100, Math.round(data.playerSpecialCharge ?? 0)));
+    if (this.burstFill) this.burstFill.style.width = `${charge}%`;
+    if (this.burstLabel) this.burstLabel.textContent = `BURST ${charge}/100`;
+    this.root.classList.toggle('bhud--burst-ready', !!data.playerSpecialReady);
+    this.mainBtns.forEach(btn => {
+      if (btn.dataset.cmd !== 'special') return;
+      btn.classList.toggle('bhud__cmd-btn--disabled', !data.playerSpecialReady);
+      btn.title = data.playerSpecialReady
+        ? `${data.playerSpecialName ?? 'Special'} ready`
+        : 'Burst is not ready.';
+    });
   }
 
   private updateCard(side: 'player' | 'enemy', data: BattleHUDData, level: number): void {
