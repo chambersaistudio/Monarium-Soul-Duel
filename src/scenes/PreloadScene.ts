@@ -10,6 +10,7 @@ import {
   NORM_SIZE,
 } from '../config/mobileConfig';
 import { setBootLoading } from '../ui/bootOverlay';
+import { hasActiveGameplayScene } from '../utils/sceneHygiene';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
@@ -209,10 +210,18 @@ export class PreloadScene extends Phaser.Scene {
       this.registry.set('sproutodon_anim_mode',  'none');
     }
 
-    // Complete the DOM progress bar, then hand off to TitleScene.
+    // Complete the DOM progress bar, then hand off to TitleScene only when
+    // PreloadScene owns the foreground boot flow. If this scene is ever launched
+    // in the background while gameplay is already active, do not route back to
+    // TitleScene; that would leave the current battle/overworld running behind it.
+    this.registry.set('preload_complete', true);
     const barEl = document.getElementById('boot-bar') as HTMLDivElement | null;
     if (barEl) barEl.style.width = '100%';
 
+    if (this.scene.isActive('SplashScene') || hasActiveGameplayScene(this)) {
+      this.scene.stop();
+      return;
+    }
     this.scene.start('TitleScene');
   }
 

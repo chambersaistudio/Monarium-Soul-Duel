@@ -76,6 +76,7 @@ export interface HudOverlayCallbacks {
 
 export class BattleHudOverlay {
   private root:      HTMLDivElement;
+  private destroyed = false;
 
   // Status bar fills — player
   private pHpFill!:   HTMLDivElement;
@@ -119,6 +120,7 @@ export class BattleHudOverlay {
   private readonly cb: HudOverlayCallbacks;
 
   constructor(callbacks: HudOverlayCallbacks) {
+    document.querySelectorAll('.bhud').forEach(node => node.remove());
     this.cb   = callbacks;
     this.root = document.createElement('div');
     this.root.className = 'bhud';
@@ -317,6 +319,7 @@ export class BattleHudOverlay {
   // ── State update ────────────────────────────────────────────────────────────
 
   update(data: BattleHUDData, playerLevel: number, enemyLevel: number): void {
+    if (this.destroyed || !this.root.isConnected) return;
     this.updateCard('player', data, playerLevel);
     this.updateCard('enemy',  data, enemyLevel);
   }
@@ -339,26 +342,26 @@ export class BattleHudOverlay {
     const gender   = minData?.gender;
 
     // Name & level
-    const nameEl = document.getElementById(`bhud-${px}-name`);
+    const nameEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-name`);
     if (nameEl) nameEl.textContent = name;
-    const lvEl = document.getElementById(`bhud-${px}-level`);
+    const lvEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-level`);
     if (lvEl) lvEl.textContent = `Lv.${level}`;
 
     // Element dot
-    const dotEl = document.getElementById(`bhud-${px}-dot`) as HTMLElement | null;
+    const dotEl = this.root.querySelector<HTMLElement>(`#bhud-${px}-dot`);
     if (dotEl) {
       dotEl.style.background = elemColor(elem);
       dotEl.style.boxShadow  = `0 0 5px ${elemColor(elem)}`;
     }
 
     // Update card border tint to element
-    const card = document.getElementById(`bhud-${p ? 'player' : 'enemy'}-card`);
+    const card = this.root.querySelector<HTMLElement>(`#bhud-${p ? 'player' : 'enemy'}-card`);
     if (card) {
       card.style.borderColor = ELEM_COLORS_DARK[elem] ?? 'rgba(68,78,168,0.55)';
     }
 
     // Gender icon
-    const genderEl = document.getElementById(`bhud-${px}-gender`) as HTMLImageElement | null;
+    const genderEl = this.root.querySelector<HTMLImageElement>(`#bhud-${px}-gender`);
     if (genderEl) {
       if (gender && gender !== 'unknown') {
         genderEl.src = `assets/ui/icons/gender_${gender}.png`;
@@ -405,12 +408,14 @@ export class BattleHudOverlay {
   // ── Menu show / hide ────────────────────────────────────────────────────────
 
   showMenu(): void {
+    if (this.destroyed) return;
     this.menuOpen = true;
     this.root.classList.add('bhud--menu-visible');
     this.showMainPanel();
   }
 
   hideMenu(): void {
+    if (this.destroyed) return;
     this.menuOpen = false;
     this.inMoves  = false;
     this.dismissMoveInfoPopup();
@@ -418,6 +423,7 @@ export class BattleHudOverlay {
   }
 
   showMainPanel(): void {
+    if (this.destroyed) return;
     this.inMoves    = false;
     this.mainCursor = 0;
     this.mainPanel.classList.add('bhud--active');
@@ -557,6 +563,7 @@ export class BattleHudOverlay {
   }
 
   showMovesPanel(moveIds: string[], playerAura: number, guardBlocked = false): void {
+    if (this.destroyed) return;
     this.inMoves    = true;
     this.moveCursor = 0;
     this.moveIds    = moveIds;
@@ -881,11 +888,17 @@ export class BattleHudOverlay {
   // ── Cleanup ─────────────────────────────────────────────────────────────────
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.dismissMoveInfoPopup();
+    this.root.replaceChildren();
     this.root.remove();
+    this.mainBtns = [];
+    this.moveBtns = [];
   }
 
   hide(): void {
+    if (this.destroyed) return;
     this.root.style.display = 'none';
   }
 }

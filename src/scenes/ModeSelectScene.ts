@@ -3,6 +3,7 @@ import { AudioManager } from '../systems/AudioManager';
 import { AUDIO_KEYS } from '../config/audioConfig';
 import { applyHighDpiCanvas } from '../config/highDpi';
 import { hideModeSelectOverlay, layoutDomOverlays, showModeSelectOverlay, type ModeOverlayOption } from '../ui/bootOverlay';
+import { stopGameplayScenes } from '../utils/sceneHygiene';
 
 const BASE_MODES: ModeOverlayOption[] = [
   {
@@ -45,6 +46,8 @@ export class ModeSelectScene extends Phaser.Scene {
   constructor() { super({ key: 'ModeSelectScene' }); }
 
   create(): void {
+    stopGameplayScenes(this);
+    this.sound.stopAll();
     this.routing = false;
     this.cursor = 0;
 
@@ -68,6 +71,7 @@ export class ModeSelectScene extends Phaser.Scene {
     this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.audio?.stopBgm();
       if (!this.routing) hideModeSelectOverlay();
     });
   }
@@ -95,6 +99,7 @@ export class ModeSelectScene extends Phaser.Scene {
       window.setTimeout(() => {
         layoutDomOverlays();
         applyHighDpiCanvas(this.game, `mode-select:${key}:sync-settled`);
+        stopGameplayScenes(this);
         this.scene.start(key);
       }, 80);
     });
