@@ -15,6 +15,39 @@ const NORM_BASE = 40;  // px of transparent space below feet in normalised canva
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
 
+type PlayerOwFrame = { stem: string; url: string };
+type PlayerOwFrameMap = Record<string, PlayerOwFrame[]>;
+
+const PLAYER_OW_GLOB = import.meta.glob('/public/assets/characters/player/overworld/**/*.{png,PNG}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function playerOwKey(anim: string, stem: string): string {
+  return `player_ow_${anim}_${stem}`;
+}
+
+function buildPlayerOwFrameMap(): PlayerOwFrameMap {
+  const result: PlayerOwFrameMap = {};
+  for (const [path, url] of Object.entries(PLAYER_OW_GLOB)) {
+    const match = path.match(/\/overworld\/(idle|walk)\/(down|up|right|left)\/([^/]+)\.png$/i);
+    if (!match) continue;
+    const [, state, dir, stem] = match;
+    const anim = `${state.toLowerCase()}_${dir.toLowerCase()}`;
+    (result[anim] ??= []).push({ stem, url });
+  }
+  for (const frames of Object.values(result)) {
+    frames.sort((a, b) => naturalCompare(a.stem, b.stem));
+  }
+  return result;
+}
+
+
 function phaserKey(charId: string, folder: string, stem: string): string {
   return `${charId}_${folder}_${stem}`;
 }
@@ -44,6 +77,7 @@ export class PreloadScene extends Phaser.Scene {
   private safeModeText: Phaser.GameObjects.Text | null = null;
   private debugText: Phaser.GameObjects.Text | null = null;
   private progressValue = 0;
+  private playerOwFrames: PlayerOwFrameMap = {};
 
   constructor() {
     super({ key: 'PreloadScene' });
@@ -129,16 +163,10 @@ export class PreloadScene extends Phaser.Scene {
 
 
     // ── Player overworld animations (directional folders; missing dirs are safe) ──
-    const playerOwFrames: Record<string, string[]> = {
-      'idle_down': ['frame_004', 'frame_006', 'frame_010', 'frame_012', 'frame_013', 'frame_014', 'frame_017', 'frame_019'],
-      'walk_down': ['frame_037', 'frame_038', 'frame_039', 'frame_041', 'frame_043', 'frame_044', 'frame_045', 'frame_047', 'frame_048', 'frame_049', 'frame_052', 'frame_053'],
-      'walk_right': ['frame_055', 'frame_056', 'frame_057', 'frame_058', 'frame_059', 'frame_060', 'frame_061'],
-      'walk_up': ['frame_025', 'frame_026', 'frame_027', 'frame_029', 'frame_030', 'frame_031', 'frame_033', 'frame_034', 'frame_035', 'frame_036'],
-    };
-    for (const [anim, frames] of Object.entries(playerOwFrames)) {
-      const [state, dir] = anim.split('_');
+    this.playerOwFrames = buildPlayerOwFrameMap();
+    for (const [anim, frames] of Object.entries(this.playerOwFrames)) {
       for (const frame of frames) {
-        this.load.image(`player_ow_${anim}_${frame}`, `assets/characters/player/overworld/${state}/${dir}/${frame}.png`);
+        this.load.image(playerOwKey(anim, frame.stem), frame.url);
       }
     }
 
@@ -245,19 +273,33 @@ export class PreloadScene extends Phaser.Scene {
 
 
   private createPlayerOverworldAnimations(): void {
-    const configs: Array<{ key: string; frames: string[]; frameRate: number; repeat: number }> = [
-      { key: 'player_ow_idle_down', frames: ['frame_004', 'frame_006', 'frame_010', 'frame_012', 'frame_013', 'frame_014', 'frame_017', 'frame_019'], frameRate: 6, repeat: -1 },
-      { key: 'player_ow_walk_down', frames: ['frame_037', 'frame_038', 'frame_039', 'frame_041', 'frame_043', 'frame_044', 'frame_045', 'frame_047', 'frame_048', 'frame_049', 'frame_052', 'frame_053'], frameRate: 10, repeat: -1 },
-      { key: 'player_ow_walk_right', frames: ['frame_055', 'frame_056', 'frame_057', 'frame_058', 'frame_059', 'frame_060', 'frame_061'], frameRate: 10, repeat: -1 },
-      { key: 'player_ow_walk_up', frames: ['frame_025', 'frame_026', 'frame_027', 'frame_029', 'frame_030', 'frame_031', 'frame_033', 'frame_034', 'frame_035', 'frame_036'], frameRate: 10, repeat: -1 },
+    const configs: Array<{ key: string; anim: string; frameRate: number; repeat: number; required?: boolean }> = [
+      { key: 'player_ow_idle_down',  anim: 'idle_down',  frameRate: 7,  repeat: -1, required: true },
+      { key: 'player_ow_walk_down',  anim: 'walk_down',  frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_walk_right', anim: 'walk_right', frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_walk_up',    anim: 'walk_up',    frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_idle_up',    anim: 'idle_up',    frameRate: 7,  repeat: -1 },
+      { key: 'player_ow_idle_right', anim: 'idle_right', frameRate: 7,  repeat: -1 },
+      { key: 'player_ow_idle_left',  anim: 'idle_left',  frameRate: 7,  repeat: -1 },
     ];
+
     for (const cfg of configs) {
-      const loaded = cfg.frames.map(frame => `player_ow_${cfg.key.replace('player_ow_', '')}_${frame}`).filter(key => this.textures.exists(key) && !this.loadErrors.has(key));
-      if (loaded.length === 0) continue;
+      const frames = this.playerOwFrames[cfg.anim] ?? [];
+      const loaded = frames
+        .map(frame => playerOwKey(cfg.anim, frame.stem))
+        .filter(key => this.textures.exists(key) && !this.loadErrors.has(key));
+      if (loaded.length === 0) {
+        if (cfg.required) console.warn(`[PreloadScene] missing player overworld ${cfg.anim}`);
+        continue;
+      }
       if (this.anims.exists(cfg.key)) this.anims.remove(cfg.key);
       this.anims.create({ key: cfg.key, frames: loaded.map(key => ({ key })), frameRate: cfg.frameRate, repeat: cfg.repeat });
     }
-    const firstIdle = configs[0].frames.map(frame => `player_ow_idle_down_${frame}`).find(key => this.textures.exists(key) && !this.loadErrors.has(key));
+
+    const firstIdle = (this.playerOwFrames.idle_down ?? [])
+      .map(frame => playerOwKey('idle_down', frame.stem))
+      .find(key => this.textures.exists(key) && !this.loadErrors.has(key));
+    if (!firstIdle) console.warn('[PreloadScene] missing player overworld idle_down');
     this.registry.set('player_ow_sprite_key', firstIdle ?? null);
   }
 
