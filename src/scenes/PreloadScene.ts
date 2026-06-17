@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
+import { PLAYER_OVERWORLD_BASE, PLAYER_OVERWORLD_MANIFEST } from '../generated/player-overworld-manifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
@@ -15,15 +16,6 @@ const NORM_BASE = 40;  // px of transparent space below feet in normalised canva
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
 
-type PlayerOwFrame = { stem: string; url: string };
-type PlayerOwFrameMap = Record<string, PlayerOwFrame[]>;
-
-const PLAYER_OW_GLOB = import.meta.glob('/public/assets/characters/player/overworld/**/*.{png,PNG}', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-}) as Record<string, string>;
-
 function naturalCompare(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 }
@@ -31,22 +23,6 @@ function naturalCompare(a: string, b: string): number {
 function playerOwKey(anim: string, stem: string): string {
   return `player_ow_${anim}_${stem}`;
 }
-
-function buildPlayerOwFrameMap(): PlayerOwFrameMap {
-  const result: PlayerOwFrameMap = {};
-  for (const [path, url] of Object.entries(PLAYER_OW_GLOB)) {
-    const match = path.match(/\/overworld\/(idle|walk)\/(down|up|right|left)\/([^/]+)\.png$/i);
-    if (!match) continue;
-    const [, state, dir, stem] = match;
-    const anim = `${state.toLowerCase()}_${dir.toLowerCase()}`;
-    (result[anim] ??= []).push({ stem, url });
-  }
-  for (const frames of Object.values(result)) {
-    frames.sort((a, b) => naturalCompare(a.stem, b.stem));
-  }
-  return result;
-}
-
 
 function phaserKey(charId: string, folder: string, stem: string): string {
   return `${charId}_${folder}_${stem}`;
@@ -77,7 +53,6 @@ export class PreloadScene extends Phaser.Scene {
   private safeModeText: Phaser.GameObjects.Text | null = null;
   private debugText: Phaser.GameObjects.Text | null = null;
   private progressValue = 0;
-  private playerOwFrames: PlayerOwFrameMap = {};
 
   constructor() {
     super({ key: 'PreloadScene' });
@@ -163,10 +138,11 @@ export class PreloadScene extends Phaser.Scene {
 
 
     // ── Player overworld animations (directional folders; missing dirs are safe) ──
-    this.playerOwFrames = buildPlayerOwFrameMap();
-    for (const [anim, frames] of Object.entries(this.playerOwFrames)) {
-      for (const frame of frames) {
-        this.load.image(playerOwKey(anim, frame.stem), frame.url);
+    for (const [anim, frames] of Object.entries(PLAYER_OVERWORLD_MANIFEST)) {
+      const [state, dir] = anim.split('_');
+      const sortedFrames = [...frames].sort(naturalCompare);
+      for (const stem of sortedFrames) {
+        this.load.image(playerOwKey(anim, stem), `${PLAYER_OVERWORLD_BASE}/${state}/${dir}/${stem}.png`);
       }
     }
 
@@ -284,10 +260,12 @@ export class PreloadScene extends Phaser.Scene {
     ];
 
     for (const cfg of configs) {
-      const frames = this.playerOwFrames[cfg.anim] ?? [];
+      const frames = [...(PLAYER_OVERWORLD_MANIFEST[cfg.anim] ?? [])].sort(naturalCompare);
       const loaded = frames
-        .map(frame => playerOwKey(cfg.anim, frame.stem))
-        .filter(key => this.textures.exists(key) && !this.loadErrors.has(key));
+        .map(stem => playerOwKey(cfg.anim, stem))
+        .filter(key => this.textures.exists(key) && !this.loadErrors.has(key))
+        .map(key => this.normalizeToCanvas(key) ?? key)
+        .filter(key => this.textures.exists(key));
       if (loaded.length === 0) {
         if (cfg.required) console.warn(`[PreloadScene] missing player overworld ${cfg.anim}`);
         continue;
@@ -296,8 +274,8 @@ export class PreloadScene extends Phaser.Scene {
       this.anims.create({ key: cfg.key, frames: loaded.map(key => ({ key })), frameRate: cfg.frameRate, repeat: cfg.repeat });
     }
 
-    const firstIdle = (this.playerOwFrames.idle_down ?? [])
-      .map(frame => playerOwKey('idle_down', frame.stem))
+    const firstIdle = [...(PLAYER_OVERWORLD_MANIFEST.idle_down ?? [])].sort(naturalCompare)
+      .map(stem => this.normalizeToCanvas(playerOwKey('idle_down', stem)) ?? playerOwKey('idle_down', stem))
       .find(key => this.textures.exists(key) && !this.loadErrors.has(key));
     if (!firstIdle) console.warn('[PreloadScene] missing player overworld idle_down');
     this.registry.set('player_ow_sprite_key', firstIdle ?? null);

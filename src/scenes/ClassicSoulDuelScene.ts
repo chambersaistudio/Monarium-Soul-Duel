@@ -1799,7 +1799,7 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
             if (p === 1) this.scene.start('BattleLabSetupScene');
           });
         } else if (ctx?.returnMap === 'OverworldScene') {
-          if (isWin && ctx.battleType === 'wild') {
+          if (isWin) {
             this.registry.set('arena_battle_result', { won: true, enemyLevel: ctx.enemyLevel ?? 5 });
           }
           this.registry.remove('classic_battle_context');
@@ -1807,8 +1807,8 @@ export class ClassicSoulDuelScene extends Phaser.Scene {
             if (p === 1) this.scene.start('OverworldScene');
           });
         } else if (ctx?.returnMap) {
-          // Award XP for wild battle wins — picked up by the returning scene
-          if (isWin && ctx.battleType === 'wild') {
+          // Award XP for player wins — picked up by the returning scene
+          if (isWin) {
             this.registry.set('arena_battle_result', { won: true, enemyLevel: ctx.enemyLevel ?? 5 });
           }
           this.registry.set('classic_current_map', ctx.returnMap);

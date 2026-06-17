@@ -13,6 +13,7 @@ import { OVERWORLD_MAPS } from '../data/overworldMaps';
 import { CHALLENGERS } from '../data/challengerData';
 import { PLAYER_PROFILE, renzoCounterPick } from '../data/playerProfile';
 import { MINARI_ROSTER } from '../data/minariData';
+import { PlayerSaveManager } from '../systems/PlayerSaveManager';
 import type { MapDef, NpcDef, MapExit, EncounterOrb, ClassicBattleContext } from '../types/overworld';
 
 // Player visual dimensions at reference viewport width (960 px)
@@ -126,6 +127,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.playerW = Math.round(PLAYER_W_REF * this.scl);
     this.playerH = Math.round(PLAYER_H_REF * this.scl);
     this.walkSpeed = PLAYER_PROFILE.walkSpeed * this.scl;
+
+    this.processBattleResult();
 
     this.drawBackground(w, h);
     this.buildNpcs(w, h);
@@ -863,6 +866,18 @@ export class ClassicOverworldScene extends Phaser.Scene {
     }
   }
 
+
+  private processBattleResult(): void {
+    const battleResult = this.registry.get('arena_battle_result') as { won: boolean; enemyLevel: number } | null;
+    if (!battleResult) return;
+    this.registry.remove('arena_battle_result');
+    if (!battleResult.won) return;
+    const save = PlayerSaveManager.load();
+    const xpGain = PlayerSaveManager.calcXpGain(save.monariLevel, battleResult.enemyLevel);
+    const { save: nextSave } = PlayerSaveManager.addXp(save, xpGain);
+    PlayerSaveManager.persist(nextSave);
+  }
+
   // ── Rival flow ────────────────────────────────────────────────────────────────
 
   private handleRivalInteract(npc: NpcDef): void {
@@ -880,6 +895,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
   private startRivalBattle(challengerId: string): void {
     const playerStarter = (this.registry.get('classic_player_starter') as string) ?? 'flarepaw';
+    const save = PlayerSaveManager.load();
     const renzoStarter  = (this.registry.get('classic_renzo_starter')  as string) ?? renzoCounterPick(playerStarter);
 
     const ctx: ClassicBattleContext = {
@@ -889,6 +905,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
       enemyMinariId:  renzoStarter,
       bondable:       false,
       battleType:     'rival',
+      playerLevel:    save.monariLevel,
+      enemyLevel:     7,
     };
     this.audio?.stopBgm();
     this.registry.set('classic_battle_context', ctx);
@@ -901,6 +919,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
 
   private triggerWildBattle(orb: EncounterOrb): void {
     const playerStarter = (this.registry.get('classic_player_starter') as string) ?? 'flarepaw';
+    const save = PlayerSaveManager.load();
     const ctx: ClassicBattleContext = {
       returnMap:      this.mapId,
       returnSpawn:    'from_battle',
@@ -908,6 +927,8 @@ export class ClassicOverworldScene extends Phaser.Scene {
       enemyMinariId:  orb.minariId,
       bondable:       orb.bondable,
       battleType:     'wild',
+      playerLevel:    save.monariLevel,
+      enemyLevel:     5,
     };
     this.audio?.stopBgm();
     this.registry.set('classic_battle_context', ctx);
@@ -1013,6 +1034,7 @@ export class ClassicOverworldScene extends Phaser.Scene {
     this.registry.set('classic_starter_chosen', true);
     const renzoId = renzoCounterPick(starterId);
     this.registry.set('classic_renzo_starter', renzoId);
+    PlayerSaveManager.persist(PlayerSaveManager.createFreshSave(starterId, PLAYER_PROFILE.displayName, 7));
 
     const myName    = MINARI_ROSTER[starterId]?.name ?? starterId;
     const renzoName = MINARI_ROSTER[renzoId]?.name   ?? renzoId;
