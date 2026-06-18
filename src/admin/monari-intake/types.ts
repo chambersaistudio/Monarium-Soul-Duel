@@ -40,6 +40,8 @@ export interface MonariEntry {
   asset_status: string;
   confidence_score: number;
   image_path: string;
+  image_url: string;
+  pending_image_path: string;
   source_filename: string;
   parent_sheet_filename: string;
   evolution_line_id: string;

@@ -4,7 +4,12 @@ import { requireAdmin } from '../auth.js';
 import { pool } from '../db.js';
 import { createUploadUrl, publicUrl, safeSegment } from '../r2.js';
 
-const requestSchema = z.object({ entryId: z.string().uuid(), filename: z.string().min(1).max(255), contentType: z.enum(['image/png','image/jpeg','image/webp','image/gif']), assetKind: z.string().min(1).max(40).default('profile') });
+const requestSchema = z.object({
+  entryId: z.string().uuid(),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().startsWith('image/').pipe(z.enum(['image/png','image/jpeg','image/webp','image/gif'])),
+  assetKind: z.literal('profile'),
+});
 export const uploadsRouter = Router();
 uploadsRouter.use(requireAdmin);
 uploadsRouter.post('/r2-presign', async (request, response, next) => {

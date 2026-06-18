@@ -2,6 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { pool } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { editablePatch, importBatch } from '../intakeData.js';
+import { publicUrl as r2PublicUrl } from '../r2.js';
 
 export const intakeRouter = Router();
 intakeRouter.use(requireAdmin);
@@ -37,10 +38,21 @@ intakeRouter.patch('/entries/:entryId', updateEntry);
 intakeRouter.put('/entries/:entryId', updateEntry);
 intakeRouter.post('/entries/:entryId/asset', async (request, response, next) => {
   try {
-    const { objectKey, publicUrl } = request.body as { objectKey?: unknown; publicUrl?: unknown };
-    if (typeof objectKey !== 'string' || typeof publicUrl !== 'string') { response.status(400).json({ error: 'objectKey and publicUrl are required' }); return; }
-    const result = await pool.query('UPDATE monari_intake_entries SET image_path=$2,image_url=$3,pending_image_path=NULL,asset_status=$4,updated_at=NOW() WHERE id=$1 RETURNING *', [request.params.entryId, objectKey, publicUrl, 'ready']);
-    if (!result.rowCount) { response.status(404).json({ error: 'Entry not found' }); return; }
+    const { assetKind, objectKey, publicUrl } = request.body as { assetKind?: unknown; objectKey?: unknown; publicUrl?: unknown };
+    if (assetKind !== 'profile' || typeof objectKey !== 'string' || typeof publicUrl !== 'string') {
+      response.status(400).json({ error: 'assetKind profile, objectKey, and publicUrl are required' }); return;
+    }
+    if (publicUrl !== r2PublicUrl(objectKey)) { response.status(400).json({ error: 'publicUrl does not match the R2 object key' }); return; }
+    const result = await pool.query(`UPDATE monari_intake_entries
+      SET image_path=$2,image_url=$3,pending_image_path=NULL,asset_status='ready',
+          raw_json=jsonb_set(jsonb_set(jsonb_set(COALESCE(raw_json,'{}'::jsonb),'{image_path}',to_jsonb($2::text),true),'{image_url}',to_jsonb($3::text),true),'{pending_image_path}','null'::jsonb,true),
+          updated_at=NOW()
+      WHERE id=$1 AND pending_image_path=$2 RETURNING *`, [request.params.entryId, objectKey, publicUrl]);
+    if (!result.rowCount) {
+      const exists = await pool.query('SELECT 1 FROM monari_intake_entries WHERE id=$1', [request.params.entryId]);
+      response.status(exists.rowCount ? 409 : 404).json({ error: exists.rowCount ? 'Upload does not match the pending image for this entry' : 'Entry not found' });
+      return;
+    }
     response.json({ entry: result.rows[0] });
   } catch (error) { next(error); }
 });

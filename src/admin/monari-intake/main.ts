@@ -20,6 +20,7 @@ const ADMIN_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADMIN =
 const API_URL = import.meta.env.VITE_MONARIUM_ADMIN_API_URL?.replace(/\/$/, '') ?? '';
 const BACKEND_MODE = Boolean(API_URL);
 const ADMIN_KEY_STORAGE = 'monarium:admin:session-key';
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const stats = [
   ['hp', 'Health'], ['aura', 'Aura'], ['attack', 'Attack'], ['special_attack', 'Special Attack'],
   ['defense', 'Defense'], ['special_defense', 'Special Defense'], ['speed', 'Speed'],
@@ -71,7 +72,7 @@ async function loadBackendBatch(): Promise<IntakeBatch> {
   if (!key) throw new Error('An admin key is required in backend mode.');
   const list = await apiRequest<{ batches: Array<{ batch_key: string }> }>('/api/intake/batches', {}, key);
   const batchKey = list.batches[0]?.batch_key;
-  if (!batchKey) throw new Error('No intake batches are available in the backend.');
+  if (!batchKey) throw new Error('No backend batches found. Run migration/import first.');
   return normalizeBatch(await apiRequest(`/api/intake/batches/${encodeURIComponent(batchKey)}`, {}, key));
 }
 
@@ -119,7 +120,7 @@ function renderList(): string {
   if (!entries.length) return `<div class="empty-list">No Monari match these filters.</div>`;
   return entries.map(entry => `
     <button class="entry-item ${entry.id === selectedId ? 'selected' : ''}" data-select="${escapeAttr(entry.id)}">
-      <span class="thumb"><img src="${escapeAttr(imageUrl(entry.image_path))}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden title="${escapeAttr(imageUrl(entry.image_path))}">✦</span></span>
+      <span class="thumb"><img src="${escapeAttr(resolveEntryImage(entry))}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden title="${escapeAttr(resolveEntryImage(entry))}">✦</span></span>
       <span class="entry-copy"><b>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</b><small>${escapeHtml(entry.id)} · Stage ${entry.stage_number}</small><span class="badges"><i class="badge status-${entry.status}">${label(entry.status)}</i><i class="badge rarity">${escapeHtml(entry.rarity || 'Unrated')}</i></span></span>
       <span class="chevron">›</span>
     </button>`).join('');
@@ -129,15 +130,16 @@ function renderEditor(entry: MonariEntry): string {
   const total = stats.reduce((sum, [key]) => sum + Number(entry[key] || 0), 0);
   const entries = filteredEntries();
   const selectedIndex = entries.findIndex(candidate => candidate.id === entry.id);
+  const resolvedImage = resolveEntryImage(entry);
   return `
     <div class="review-toolbar"><div class="review-title"><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">Save</button></div></div>
     <div class="review-grid">
       <article class="visual-card">
         <div class="image-stage ${imageMissing ? 'missing' : ''}">
-          <div class="image-grid"></div><img id="preview-image" src="${escapeAttr(imageUrl(entry.image_path))}" alt="${escapeAttr(entry.approved_name)} intake preview"><div class="placeholder"><span>✦</span><b>MONARIUM</b><small>Image preview unavailable</small></div>
+          <div class="image-grid"></div><img id="preview-image" src="${escapeAttr(resolvedImage)}" alt="${escapeAttr(entry.approved_name)} intake preview"><div class="placeholder"><span>✦</span><b>MONARIUM</b><small>Image preview unavailable</small></div>
           <span class="stage-chip">STAGE ${entry.stage_number}</span><span id="image-warning" class="image-warning">⚠ Image missing</span>
         </div>
-        <div class="image-debug"><span>Current image URL</span><code>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</code><div class="image-actions"><a class="button secondary" href="${escapeAttr(imageUrl(entry.image_path))}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">${BACKEND_MODE ? 'Upload New Image' : 'Change Image Path'}</button></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local review only. Export JSON and add the image file to repo/cloud storage to make this permanent online.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</b></p></div>
+        <div class="image-debug"><span>Current image URL / path</span><code>${escapeHtml(resolvedImage || '(empty path)')}</code>${BACKEND_MODE && entry.image_path && entry.image_path !== resolvedImage ? `<small class="object-key">R2 object: ${escapeHtml(entry.image_path)}</small>` : ''}<div class="image-actions"><a class="button secondary" href="${escapeAttr(resolvedImage)}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">${BACKEND_MODE ? 'Change Image' : 'Change Image Path'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local preview only; this is not a permanent online upload. Export JSON and add the image file to repo/cloud storage to publish it.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(resolvedImage || '(empty path)')}</b></p></div>
         <div class="visual-meta"><span><small>ELEMENT</small><b>${escapeHtml(entry.element_1 || '—')}${entry.element_2 ? ` / ${escapeHtml(entry.element_2)}` : ''}</b></span><span><small>RARITY</small><b>${escapeHtml(entry.rarity || '—')}</b></span><span><small>ROLE</small><b>${escapeHtml(entry.role || '—')}</b></span></div>
         <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>${BACKEND_MODE ? 'Cloudflare R2 upload' : 'Path-based replacement'}</b><small>${BACKEND_MODE ? 'Images upload directly with a temporary signed URL; storage secrets remain on Railway.' : 'Local previews are not permanent online. Path edits are included in exported JSON.'}</small></div><button class="button secondary" data-action="change-image">Replace Profile Image</button></div>
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
@@ -215,6 +217,7 @@ function handleAction(action: string): void {
   if (action === 'export') exportJson();
   if (action === 'speak') speakName();
   if (action === 'copy-prompt') void copyPrompt();
+  if (action === 'copy-image-url') void copyImageUrl();
   if (action === 'previous') navigateEntry(-1);
   if (action === 'next') navigateEntry(1);
   if (action === 'change-image') {
@@ -245,6 +248,7 @@ function updateImagePath(value: string): void {
   const entry = getSelected();
   if (!entry) return;
   entry.image_path = imageUrl(value);
+  entry.image_url = '';
   imageMissing = false;
   dirty = true;
   const image = document.querySelector<HTMLImageElement>('#preview-image');
@@ -300,6 +304,12 @@ async function copyPrompt(): Promise<void> {
   const entry = getSelected(); if (!entry) return;
   const prompt = `Suggest 10 original Monarium creature names for this intake entry. Elements: ${entry.element_1}${entry.element_2 ? ` / ${entry.element_2}` : ''}. Taxonomy: ${entry.taxonomy_primary} / ${entry.taxonomy_secondary}. Role: ${entry.role}. Personality: ${entry.personality}. Description: ${entry.description}. Avoid names already implied by: ${entry.approved_name}. Explain pronunciation and naming rationale.`;
   try { await navigator.clipboard.writeText(prompt); showToast('AI rename prompt copied'); } catch { showToast('Clipboard unavailable'); }
+}
+async function copyImageUrl(): Promise<void> {
+  const entry = getSelected();
+  const url = entry ? resolveEntryImage(entry) : '';
+  if (!url) { showToast('No image URL to copy'); return; }
+  try { await navigator.clipboard.writeText(url); showToast('Image URL copied'); } catch { showToast('Clipboard unavailable'); }
 }
 
 function filteredEntries(): MonariEntry[] {
@@ -386,7 +396,9 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
       : notes,
     asset_status: normalizeAssetStatus(entry.asset_status),
     confidence_score: numberValue(entry.confidence_score, numberValue(entry.confidence)),
-    image_path: imageUrl(stringValue(entry.image_url, stringValue(entry.image_path, stringValue(entry.source_path)))),
+    image_url: imageUrl(stringValue(entry.image_url)),
+    image_path: stringValue(entry.image_path, stringValue(entry.source_path)),
+    pending_image_path: stringValue(entry.pending_image_path),
     source_filename: stringValue(entry.source_filename),
     parent_sheet_filename: stringValue(entry.parent_sheet_filename),
     evolution_line_id: stringValue(entry.evolution_line_id),
@@ -416,6 +428,9 @@ function imageUrl(value: string): string {
   if (!publicPath.startsWith('/')) publicPath = `/${publicPath}`;
   return publicPath.split('/').map((part, index) => index === 0 ? '' : encodeURIComponent(decodeURIComponent(part))).join('/');
 }
+function resolveEntryImage(entry: Pick<MonariEntry, 'image_url' | 'image_path'>): string {
+  return imageUrl(entry.image_url) || imageUrl(entry.image_path);
+}
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
 function numberValue(value: unknown, fallback = 0): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function getAdminKey(promptText: string): string {
@@ -443,6 +458,8 @@ function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
 }
 async function uploadImage(file: File): Promise<void> {
   const entry = getSelected(); if (!entry) return;
+  if (!file.type.startsWith('image/')) { showToast('Choose a valid image file'); return; }
+  if (file.size > MAX_IMAGE_BYTES) { showToast('Image is too large. Maximum size is 10 MB.'); return; }
   const key = getAdminKey('Enter the Monarium admin key to upload this image.');
   if (!key) { showToast('Upload cancelled: admin key required'); return; }
   setSaveState('Uploading image…');
@@ -452,11 +469,12 @@ async function uploadImage(file: File): Promise<void> {
     }, key);
     const upload = await fetch(signed.uploadUrl, { method: signed.method, headers: { 'Content-Type': file.type }, body: file });
     if (!upload.ok) throw new Error(`R2 upload failed (${upload.status})`);
-    await apiRequest(`/api/intake/entries/${encodeURIComponent(entry.id)}/asset`, {
-      method: 'POST', body: JSON.stringify({ objectKey: signed.objectKey, publicUrl: signed.publicUrl }),
+    const attached = await apiRequest<{ entry: Record<string, unknown> }>(`/api/intake/entries/${encodeURIComponent(entry.id)}/asset`, {
+      method: 'POST', body: JSON.stringify({ assetKind: 'profile', objectKey: signed.objectKey, publicUrl: signed.publicUrl }),
     }, key);
-    entry.image_path = signed.publicUrl; entry.asset_status = 'ready'; dirty = false;
-    render({ preserveListScroll: true }); showToast('Profile image uploaded to R2');
+    Object.assign(entry, normalizeEntry(attached.entry, 0, new Date().toISOString()));
+    dirty = false; window.onbeforeunload = null;
+    render({ preserveListScroll: true }); setSaveState('Saved to backend'); showToast('Upload complete');
   } catch (error) { setSaveState('Upload failed'); showToast(error instanceof Error ? error.message : 'Image upload failed'); }
 }
 function getSelected(): MonariEntry | undefined { return batch.entries.find(entry => entry.id === selectedId); }
