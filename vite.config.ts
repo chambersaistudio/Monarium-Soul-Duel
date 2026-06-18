@@ -25,7 +25,7 @@ function localIntakeData(): Plugin {
 }
 
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [localIntakeData()],
   build: {
     outDir: 'dist',

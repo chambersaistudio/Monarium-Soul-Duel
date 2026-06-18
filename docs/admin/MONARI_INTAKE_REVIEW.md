@@ -8,13 +8,20 @@ Open the panel at:
 http://localhost:3000/admin/monari-intake
 ```
 
-On a deployed host, append the same exact path to the site origin, for example `https://example.com/admin/monari-intake`.
+The official testing deployment uses:
+
+```text
+https://monarium-soul-duel.vercel.app/admin/monari-intake
+```
+
+Do not include a trailing quotation mark in the URL.
 
 ## Access gate
 
 - Vite development enables the page for local review.
 - A production build requires `VITE_ENABLE_ADMIN=true` at build time. Without it, the route renders **Admin disabled**.
 - The flag must be present in the deployment provider's build environment before running `npm run build`; setting it only after the static bundle has been built will not enable the route.
+- The repository's `vercel.json` enables this flag for the official testing deployment and rewrites the direct admin URL to the SPA entry. A new Vercel deployment is required after changing this configuration.
 - This is a visibility gate, not authentication. Add real authentication before deploying the tool for broader access.
 
 ## Canonical batch data
