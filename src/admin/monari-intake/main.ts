@@ -57,7 +57,10 @@ async function start(): Promise<void> {
     selectedId = batch.entries[0]?.id ?? '';
     render();
   } catch (error) {
-    app.innerHTML = `<section class="disabled"><span>DATA LOAD ERROR</span><h1>Batch 001 unavailable</h1><p>${escapeHtml(error instanceof Error ? error.message : 'Unknown error')}</p><code>${DATA_URL}</code></section>`;
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const noBatches = BACKEND_MODE && message.startsWith('No backend batches found');
+    app.innerHTML = `<section class="disabled"><span>${BACKEND_MODE ? 'BACKEND MODE' : 'DATA LOAD ERROR'}</span><h1>${noBatches ? 'No backend batches found' : BACKEND_MODE ? 'Backend connection failed' : 'Batch 001 unavailable'}</h1><p>${escapeHtml(noBatches ? 'Railway is connected, but no intake batches are available. Run the migration and Batch 001 import before reviewing entries.' : message)}</p><code>${BACKEND_MODE ? escapeHtml(shortUrl(API_URL)) : DATA_URL}</code>${BACKEND_MODE ? '<button class="button secondary" data-retry>Retry connection</button>' : ''}</section>`;
+    document.querySelector('[data-retry]')?.addEventListener('click', () => void start());
   }
 }
 
@@ -85,7 +88,7 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
     <header class="admin-header">
       <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>Intake Review</h1></div>
       <div class="batch-summary"><span class="live-dot"></span><div><b>${escapeHtml(batch.name)}</b><small>${escapeHtml(batch.status)} · ${batch.entries.length} entries</small></div></div>
-      <div class="header-actions"><span class="mode-indicator ${BACKEND_MODE ? 'backend' : 'local'}">${BACKEND_MODE ? 'Railway backend' : 'Local fallback'}</span><span id="save-state">${dirty ? 'Unsaved changes' : BACKEND_MODE ? 'Synced' : 'Saved locally'}</span><button class="button secondary" data-action="export">Export Updated JSON</button></div>
+      <div class="header-actions"><span class="mode-indicator ${BACKEND_MODE ? 'backend' : 'local'}">${BACKEND_MODE ? 'Backend Mode' : 'Local JSON Mode'}</span><span class="connection-state">${BACKEND_MODE ? '<i></i> Connected to Railway' : 'Backend disabled'}</span><span id="save-state">${dirty ? 'Unsaved changes' : BACKEND_MODE ? 'Changes persist after refresh' : 'Saved locally'}</span></div>
     </header>
       <div class="admin-layout">
       <aside class="library-panel">
@@ -99,7 +102,7 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
         </div>
         <div class="result-count"><span>${filteredEntries().length} Monari</span><button data-action="clear-filters">Clear filters</button></div>
         <nav class="entry-list" aria-label="Monari entries">${renderList()}</nav>
-        <section class="source-note"><b>${BACKEND_MODE ? 'Railway API source' : 'Local JSON source'}</b><code>${BACKEND_MODE ? escapeHtml(API_URL) : 'data/monari-intake/batches/batch_001.json'}</code><p>${BACKEND_MODE ? 'Edits save to PostgreSQL. Export remains available as a backup.' : 'Backend is disabled; browser storage and JSON export remain active.'}</p></section>
+        <section class="source-note"><b>${BACKEND_MODE ? 'Connected to Railway' : 'Local JSON source'}</b><code>${BACKEND_MODE ? escapeHtml(shortUrl(API_URL)) : 'data/monari-intake/batches/batch_001.json'}</code><p>${BACKEND_MODE ? 'Edits save to PostgreSQL and persist after refresh.' : 'Backend disabled. Export JSON is required for permanence.'}</p></section>
       </aside>
       <section class="review-pane">
         ${renderPersistenceNotice()}
@@ -132,16 +135,17 @@ function renderEditor(entry: MonariEntry): string {
   const selectedIndex = entries.findIndex(candidate => candidate.id === entry.id);
   const resolvedImage = resolveEntryImage(entry);
   return `
-    <div class="review-toolbar"><div class="review-title"><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">Save</button></div></div>
+    <div class="review-toolbar"><div class="review-title"><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
     <div class="review-grid">
       <article class="visual-card">
         <div class="image-stage ${imageMissing ? 'missing' : ''}">
           <div class="image-grid"></div><img id="preview-image" src="${escapeAttr(resolvedImage)}" alt="${escapeAttr(entry.approved_name)} intake preview"><div class="placeholder"><span>✦</span><b>MONARIUM</b><small>Image preview unavailable</small></div>
           <span class="stage-chip">STAGE ${entry.stage_number}</span><span id="image-warning" class="image-warning">⚠ Image missing</span>
+          ${BACKEND_MODE ? '<button class="image-replace-overlay" data-action="change-image" aria-label="Replace profile image"><span>↑</span> Replace Profile Image</button>' : ''}
         </div>
-        <div class="image-debug"><span>Current image URL / path</span><code>${escapeHtml(resolvedImage || '(empty path)')}</code>${BACKEND_MODE && entry.image_path && entry.image_path !== resolvedImage ? `<small class="object-key">R2 object: ${escapeHtml(entry.image_path)}</small>` : ''}<div class="image-actions"><a class="button secondary" href="${escapeAttr(resolvedImage)}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">${BACKEND_MODE ? 'Change Image' : 'Change Image Path'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local preview only; this is not a permanent online upload. Export JSON and add the image file to repo/cloud storage to publish it.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(resolvedImage || '(empty path)')}</b></p></div>
+        <div class="image-debug"><span>${BACKEND_MODE ? 'Cloud image' : 'Current image URL / path'}</span><code>${escapeHtml(resolvedImage || '(empty path)')}</code><div class="image-actions"><button class="button primary" data-action="change-image">${BACKEND_MODE ? 'Replace Profile Image' : 'Change Image Path'}</button><a class="button secondary" href="${escapeAttr(resolvedImage)}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local preview only; this is not a permanent online upload. Export JSON and add the image file to repo/cloud storage to publish it.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(resolvedImage || '(empty path)')}</b></p></div>
         <div class="visual-meta"><span><small>ELEMENT</small><b>${escapeHtml(entry.element_1 || '—')}${entry.element_2 ? ` / ${escapeHtml(entry.element_2)}` : ''}</b></span><span><small>RARITY</small><b>${escapeHtml(entry.rarity || '—')}</b></span><span><small>ROLE</small><b>${escapeHtml(entry.role || '—')}</b></span></div>
-        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>${BACKEND_MODE ? 'Cloudflare R2 upload' : 'Path-based replacement'}</b><small>${BACKEND_MODE ? 'Images upload directly with a temporary signed URL; storage secrets remain on Railway.' : 'Local previews are not permanent online. Path edits are included in exported JSON.'}</small></div><button class="button secondary" data-action="change-image">Replace Profile Image</button></div>
+        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>${BACKEND_MODE ? 'Upload to Cloudflare' : 'Path-based replacement'}</b><small>${BACKEND_MODE ? 'The backend saves the public R2 URL to this entry.' : 'Local previews are not permanent online. Path edits are included in exported JSON.'}</small></div></div>
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
       </article>
       <article class="editor-card">
@@ -151,7 +155,8 @@ function renderEditor(entry: MonariEntry): string {
         ${section('Stats', `<div class="stat-head"><span>7 Monarium attributes</span><b>Total <strong id="stat-total">${total}</strong></b></div><div class="stats-grid">${stats.map(([key,name]) => statInput(key,name,entry[key])).join('')}</div>`)}
         ${section('Ability & lore', `<div class="field-grid">${input('ability_name','Ability name',entry.ability_name)}${input('signature_moves','Legacy signature moves',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description',entry.ability_description)}${textarea('ability_effect','In-game effect',entry.ability_effect)}<div class="field-grid">${textarea('ability_effect_tags','Ability effect tags (comma separated)',entry.ability_effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div>${textarea('description','Monari description',entry.description)}<div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
         <details class="moveset-section"><summary>Learnable Moves / Moveset <span>Coming Soon</span></summary><div class="field-grid">${textarea('suggested_signature_moves','Suggested signature moves',entry.suggested_signature_moves)}${textarea('suggested_learnable_moves','Suggested learnable moves',entry.suggested_learnable_moves)}</div><p>Future recommendations will use element, taxonomy, tags, role, and evolution stage.</p></details>
-        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>Update status, then save your local review.</span></div><div><button class="button approve" data-status="approved">Approve</button><button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">Save Changes</button></div></div>
+        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Update status, then save the entry to PostgreSQL.' : 'Update status, then save your local review.'}</span></div><div><button class="button approve" data-status="approved">Approve</button><button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
+        <details class="backup-tools"><summary>Advanced / Backup</summary><p>${BACKEND_MODE ? 'Download a portable snapshot for emergency backup or debugging.' : 'Export is required to keep a permanent copy outside this browser.'}</p><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button>${BACKEND_MODE && entry.image_path ? `<details><summary>Debug Image Path</summary><code>${escapeHtml(entry.image_path)}</code></details>` : ''}</details>
       </article>
     </div>`;
 }
@@ -161,7 +166,7 @@ function renderPersistenceNotice(): string {
     ? `<p class="sample-warning"><b>Sample data only:</b> ${batch.entries.length} of approximately ${batch.expected_entry_count ?? 41} expected Batch 001 rows are available. Replace the canonical file with the authoritative spreadsheet conversion before production review.</p>`
     : '';
   return `<aside class="persistence-notice ${BACKEND_MODE ? 'backend' : ''}">
-    <div><b>${BACKEND_MODE ? 'Backend-connected review' : 'Browser-only working copy'}</b><p>${BACKEND_MODE ? 'Save writes this entry to Railway PostgreSQL. Export Updated JSON remains a portable backup.' : 'Save keeps edits only in this browser. Export Updated JSON is the safe, permanent copy.'}</p>${sampleWarning}</div>
+    <div><b>${BACKEND_MODE ? 'Backend Mode · Connected to Railway' : 'Browser-only working copy'}</b><p>${BACKEND_MODE ? 'Save to Backend writes this entry to PostgreSQL. Changes persist after refresh.' : 'Backend disabled. Save keeps edits only in this browser, so JSON export is required for permanence.'}</p>${sampleWarning}</div>
     <code>${BACKEND_MODE ? 'Storage: PostgreSQL + Cloudflare R2' : 'Replace: data/monari-intake/batches/batch_001.json'}</code>
   </aside>`;
 }
@@ -275,7 +280,7 @@ async function saveChanges(): Promise<void> {
     const payload = toBackendEntry(entry);
     const result = await apiRequest<{ entry: Record<string, unknown> }>(`/api/intake/entries/${encodeURIComponent(entry.id)}`, { method: 'PATCH', body: JSON.stringify(payload) }, key);
     Object.assign(entry, normalizeEntry(result.entry, 0, new Date().toISOString()));
-    dirty = false; window.onbeforeunload = null; setSaveState('Synced'); showToast('Entry saved to Railway');
+    dirty = false; window.onbeforeunload = null; setSaveState('Saved to Backend'); showToast('Saved to Backend');
   } catch (error) { setSaveState('Save failed'); showToast(error instanceof Error ? error.message : 'Backend save failed'); }
 }
 
@@ -292,7 +297,7 @@ function exportJson(): void {
   batch = normalizeBatch(batch);
   const blob = new Blob([`${JSON.stringify(batch, null, 2)}\n`], { type: 'application/json' });
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'batch_001.json'; link.click(); URL.revokeObjectURL(link.href);
-  showToast('Permanent batch_001.json copy exported');
+  showToast(BACKEND_MODE ? 'JSON backup exported' : 'Permanent batch_001.json copy exported');
 }
 
 function speakName(): void {
@@ -445,7 +450,10 @@ async function apiRequest<T>(path: string, init: RequestInit = {}, key = getAdmi
     ...init,
     headers: { 'Content-Type': 'application/json', 'x-admin-secret': key, ...init.headers },
   });
-  if (response.status === 401) sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+  if (response.status === 401) {
+    sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+    throw new Error('Admin key rejected. Enter the correct key and try again.');
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as { message?: string; error?: string };
     throw new Error(payload.message ?? payload.error ?? `Backend request failed (${response.status})`);
@@ -460,12 +468,13 @@ async function uploadImage(file: File): Promise<void> {
   const entry = getSelected(); if (!entry) return;
   if (!file.type.startsWith('image/')) { showToast('Choose a valid image file'); return; }
   if (file.size > MAX_IMAGE_BYTES) { showToast('Image is too large. Maximum size is 10 MB.'); return; }
+  const safeFilename = sanitizeFilename(file.name);
   const key = getAdminKey('Enter the Monarium admin key to upload this image.');
   if (!key) { showToast('Upload cancelled: admin key required'); return; }
   setSaveState('Uploading image…');
   try {
     const signed = await apiRequest<{ uploadUrl: string; method: string; objectKey: string; publicUrl: string }>('/api/uploads/r2-presign', {
-      method: 'POST', body: JSON.stringify({ entryId: entry.id, filename: file.name, contentType: file.type, assetKind: 'profile' }),
+      method: 'POST', body: JSON.stringify({ entryId: entry.id, filename: safeFilename, contentType: file.type, assetKind: 'profile' }),
     }, key);
     const upload = await fetch(signed.uploadUrl, { method: signed.method, headers: { 'Content-Type': file.type }, body: file });
     if (!upload.ok) throw new Error(`R2 upload failed (${upload.status})`);
@@ -474,7 +483,7 @@ async function uploadImage(file: File): Promise<void> {
     }, key);
     Object.assign(entry, normalizeEntry(attached.entry, 0, new Date().toISOString()));
     dirty = false; window.onbeforeunload = null;
-    render({ preserveListScroll: true }); setSaveState('Saved to backend'); showToast('Upload complete');
+    render({ preserveListScroll: true }); setSaveState('Image saved to Cloud Storage'); showToast('Image uploaded and saved');
   } catch (error) { setSaveState('Upload failed'); showToast(error instanceof Error ? error.message : 'Image upload failed'); }
 }
 function getSelected(): MonariEntry | undefined { return batch.entries.find(entry => entry.id === selectedId); }
@@ -497,3 +506,13 @@ function label(value: string): string { return value.replace(/_/g,' ').replace(/
 function formatDate(value: string): string { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value)); }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char] ?? char)); }
 function escapeAttr(value: string): string { return escapeHtml(value); }
+function shortUrl(value: string): string {
+  try { const url = new URL(value); return `${url.host}${url.pathname === '/' ? '' : url.pathname}`; }
+  catch { return value; }
+}
+function sanitizeFilename(value: string): string {
+  const parts = value.trim().split('.');
+  const extension = parts.length > 1 ? `.${parts.pop()!.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+  const stem = parts.join('.').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
+  return `${stem.slice(0, 100)}${extension}`;
+}
