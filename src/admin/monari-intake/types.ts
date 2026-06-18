@@ -2,8 +2,8 @@ export const MONARI_STATUSES = ['incoming', 'drafted', 'needs_review', 'approved
 export type MonariStatus = typeof MONARI_STATUSES[number];
 export const MONARI_RARITIES = ['Common', 'Rare', 'Super Rare', 'Ultra Rare', 'Legendary'] as const;
 // Mirrors the current Codex registries without importing gameplay-owned modules into the admin bundle.
-export const MONARI_ELEMENTS = ['Neutral', 'Fire', 'Water', 'Flora', 'Wind', 'Thunder', 'Stone', 'Steel', 'Light', 'Dark', 'Aether', 'Ice', 'Void', 'Spirit'] as const;
-export const MONARI_TAXONOMIES = ['Wisp', 'Drake', 'Feral', 'Sylph', 'Golem', 'Seraph', 'Brute', 'Tempest', 'Chitin', 'Astral'] as const;
+export const MONARI_ELEMENTS = ['Neutral', 'Fire', 'Water', 'Flora', 'Wind', 'Thunder', 'Stone', 'Steel', 'Light', 'Dark', 'Aether', 'Ice'] as const;
+export const MONARI_TAXONOMIES = ['Wisp', 'Drake', 'Feral', 'Sylph', 'Golem', 'Seraph', 'Brute', 'Tempest', 'Chitin', 'Astral', 'Curio'] as const;
 export const MONARI_ASSET_STATUSES = ['needs_individual_render', 'temporary_concept', 'ready', 'needs_cleanup', 'missing', 'final'] as const;
 
 export interface MonariEntry {
@@ -27,7 +27,7 @@ export interface MonariEntry {
   ability_name: string;
   ability_description: string;
   ability_effect: string;
-  effect_tags: string;
+  ability_effect_tags: string;
   status_condition_suggestions: string;
   signature_moves: string;
   suggested_signature_moves: string;

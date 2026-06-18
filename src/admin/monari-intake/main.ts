@@ -31,6 +31,7 @@ let elementFilter = '';
 let imageMissing = false;
 let dirty = false;
 let sourceSignature = '';
+let entryListScrollTop = 0;
 
 const app = document.createElement('main');
 app.id = 'monari-admin';
@@ -58,7 +59,10 @@ async function start(): Promise<void> {
   }
 }
 
-function render(): void {
+function render(options: { preserveListScroll?: boolean } = {}): void {
+  const previousScrollTop = options.preserveListScroll
+    ? document.querySelector<HTMLElement>('.entry-list')?.scrollTop ?? entryListScrollTop
+    : 0;
   const selected = getSelected();
   app.innerHTML = `
     <header class="admin-header">
@@ -87,6 +91,11 @@ function render(): void {
     </div>
     <div id="toast" role="status" aria-live="polite"></div>`;
   bindEvents();
+  const list = document.querySelector<HTMLElement>('.entry-list');
+  if (list) {
+    list.scrollTop = previousScrollTop;
+    entryListScrollTop = list.scrollTop;
+  }
 }
 
 function renderList(): string {
@@ -102,17 +111,19 @@ function renderList(): string {
 
 function renderEditor(entry: MonariEntry): string {
   const total = stats.reduce((sum, [key]) => sum + Number(entry[key] || 0), 0);
+  const entries = filteredEntries();
+  const selectedIndex = entries.findIndex(candidate => candidate.id === entry.id);
   return `
-    <div class="review-toolbar"><div><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">Save</button></div></div>
+    <div class="review-toolbar"><div class="review-title"><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">Save</button></div></div>
     <div class="review-grid">
       <article class="visual-card">
         <div class="image-stage ${imageMissing ? 'missing' : ''}">
           <div class="image-grid"></div><img id="preview-image" src="${escapeAttr(imageUrl(entry.image_path))}" alt="${escapeAttr(entry.approved_name)} intake preview"><div class="placeholder"><span>✦</span><b>MONARIUM</b><small>Image preview unavailable</small></div>
           <span class="stage-chip">STAGE ${entry.stage_number}</span><span id="image-warning" class="image-warning">⚠ Image missing</span>
         </div>
-        <div class="image-debug"><span>Current image URL</span><code>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</code><a class="button secondary" href="${escapeAttr(imageUrl(entry.image_path))}" target="_blank" rel="noreferrer">Open Image</a><p class="image-failure">Failed URL: <b>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</b></p></div>
+        <div class="image-debug"><span>Current image URL</span><code>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</code><div class="image-actions"><a class="button secondary" href="${escapeAttr(imageUrl(entry.image_path))}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">Change Image Path</button></div><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local review only. Export JSON and add the image file to repo/cloud storage to make this permanent online.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</b></p></div>
         <div class="visual-meta"><span><small>ELEMENT</small><b>${escapeHtml(entry.element_1 || '—')}${entry.element_2 ? ` / ${escapeHtml(entry.element_2)}` : ''}</b></span><span><small>RARITY</small><b>${escapeHtml(entry.rarity || '—')}</b></span><span><small>ROLE</small><b>${escapeHtml(entry.role || '—')}</b></span></div>
-        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>Asset tools coming soon</b><small>Replace · Clean profile · Generate portrait · Update Codex image</small></div><button disabled>Manage image</button></div>
+        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>Path-based replacement</b><small>No cloud upload yet. Path edits are saved locally and included in exported JSON.</small></div><button class="button secondary" data-action="change-image">Replace Profile Image</button></div>
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
       </article>
       <article class="editor-card">
@@ -120,7 +131,7 @@ function renderEditor(entry: MonariEntry): string {
         ${section('Profile', `<div class="read-grid">${readField('Source filename',entry.source_filename)}${readField('Parent sheet',entry.parent_sheet_filename)}${readField('Evolution line ID',entry.evolution_line_id)}${readField('Stage',String(entry.stage_number))}${readField('Evolves from',entry.evolves_from || '—')}${readField('Evolves to',entry.evolves_to || '—')}</div><div class="field-grid three">${selectField('asset_status','Asset status',MONARI_ASSET_STATUSES,entry.asset_status)}${input('habitat','Habitat',entry.habitat)}${input('personality','Personality',entry.personality)}</div>`)}
         ${section('Classification', `<div class="field-grid three">${selectField('element_1','Element 1',MONARI_ELEMENTS,entry.element_1)}${selectField('element_2','Element 2',['', ...MONARI_ELEMENTS],entry.element_2)}${input('role','Role',entry.role)}${selectField('taxonomy_primary','Primary taxonomy',MONARI_TAXONOMIES,entry.taxonomy_primary)}${selectField('taxonomy_secondary','Secondary taxonomy',['', ...MONARI_TAXONOMIES],entry.taxonomy_secondary)}</div>`)}
         ${section('Stats', `<div class="stat-head"><span>7 Monarium attributes</span><b>Total <strong id="stat-total">${total}</strong></b></div><div class="stats-grid">${stats.map(([key,name]) => statInput(key,name,entry[key])).join('')}</div>`)}
-        ${section('Ability & lore', `<div class="field-grid">${input('ability_name','Ability name',entry.ability_name)}${input('signature_moves','Legacy signature moves',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description',entry.ability_description)}${textarea('ability_effect','In-game effect',entry.ability_effect)}<div class="field-grid">${textarea('effect_tags','Effect tags (comma separated)',entry.effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div>${textarea('description','Monari description',entry.description)}<div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
+        ${section('Ability & lore', `<div class="field-grid">${input('ability_name','Ability name',entry.ability_name)}${input('signature_moves','Legacy signature moves',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description',entry.ability_description)}${textarea('ability_effect','In-game effect',entry.ability_effect)}<div class="field-grid">${textarea('ability_effect_tags','Ability effect tags (comma separated)',entry.ability_effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div>${textarea('description','Monari description',entry.description)}<div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
         <details class="moveset-section"><summary>Learnable Moves / Moveset <span>Coming Soon</span></summary><div class="field-grid">${textarea('suggested_signature_moves','Suggested signature moves',entry.suggested_signature_moves)}${textarea('suggested_learnable_moves','Suggested learnable moves',entry.suggested_learnable_moves)}</div><p>Future recommendations will use element, taxonomy, tags, role, and evolution stage.</p></details>
         <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>Update status, then save your local review.</span></div><div><button class="button approve" data-status="approved">Approve</button><button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">Save Changes</button></div></div>
       </article>
@@ -138,7 +149,9 @@ function renderPersistenceNotice(): string {
 }
 
 function bindEvents(): void {
-  document.querySelectorAll<HTMLElement>('[data-select]').forEach(node => node.addEventListener('click', () => { selectedId = node.dataset.select ?? ''; imageMissing = false; render(); }));
+  const list = document.querySelector<HTMLElement>('.entry-list');
+  list?.addEventListener('scroll', () => { entryListScrollTop = list.scrollTop; }, { passive: true });
+  document.querySelectorAll<HTMLElement>('[data-select]').forEach(node => node.addEventListener('click', () => selectEntry(node.dataset.select ?? '')));
   bindFilter('search', value => query = value);
   bindFilter('status-filter', value => statusFilter = value);
   bindFilter('rarity-filter', value => rarityFilter = value);
@@ -153,6 +166,7 @@ function bindEvents(): void {
   const image = document.querySelector<HTMLImageElement>('#preview-image');
   image?.addEventListener('error', () => { imageMissing = true; image.closest('.image-stage')?.classList.add('missing'); });
   image?.addEventListener('load', () => { imageMissing = false; image.closest('.image-stage')?.classList.remove('missing'); });
+  document.querySelector<HTMLInputElement>('#image-path-input')?.addEventListener('input', event => updateImagePath((event.target as HTMLInputElement).value));
   const speaker = document.querySelector<HTMLButtonElement>('[data-action="speak"]');
   if (!('speechSynthesis' in window) && speaker) speaker.disabled = true;
   window.onbeforeunload = dirty ? () => 'You have unsaved intake edits.' : null;
@@ -181,7 +195,42 @@ function handleAction(action: string): void {
   if (action === 'export') exportJson();
   if (action === 'speak') speakName();
   if (action === 'copy-prompt') void copyPrompt();
-  if (action === 'clear-filters') { query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = ''; render(); }
+  if (action === 'previous') navigateEntry(-1);
+  if (action === 'next') navigateEntry(1);
+  if (action === 'change-image') {
+    const field = document.querySelector<HTMLElement>('.image-path-field');
+    if (field) { field.hidden = false; field.querySelector<HTMLInputElement>('input')?.focus(); }
+  }
+  if (action === 'clear-filters') { query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = ''; entryListScrollTop = 0; render(); }
+}
+
+function selectEntry(id: string): void {
+  if (!id || id === selectedId) return;
+  selectedId = id;
+  imageMissing = false;
+  render({ preserveListScroll: true });
+}
+
+function navigateEntry(offset: -1 | 1): void {
+  const entries = filteredEntries();
+  const index = entries.findIndex(entry => entry.id === selectedId);
+  const target = entries[index + offset];
+  if (target) selectEntry(target.id);
+}
+
+function updateImagePath(value: string): void {
+  const entry = getSelected();
+  if (!entry) return;
+  entry.image_path = imageUrl(value);
+  imageMissing = false;
+  dirty = true;
+  const image = document.querySelector<HTMLImageElement>('#preview-image');
+  if (image) { image.hidden = false; image.src = entry.image_path; }
+  const code = document.querySelector<HTMLElement>('.image-debug code');
+  if (code) code.textContent = entry.image_path || '(empty path)';
+  const open = document.querySelector<HTMLAnchorElement>('.image-actions a');
+  if (open) open.href = entry.image_path;
+  setSaveState('Unsaved changes');
 }
 
 function updateStatus(status: MonariStatus): void {
@@ -260,15 +309,24 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
   const status = MONARI_STATUSES.includes(entry.status as MonariStatus) ? entry.status as MonariStatus : 'incoming';
   const ancientRarity = entry.rarity === 'Ancient';
   const legacyAbility = stringValue(entry.ability);
-  const notes = stringValue(entry.review_notes);
+  const originalElements = [stringValue(entry.element_1), stringValue(entry.element_2)];
+  const normalizedElements = originalElements.map(normalizeElement);
+  const elementMigrationNotes = originalElements.flatMap((element, index) => {
+    if (!element || element === 'None' || element === normalizedElements[index]) return [];
+    return [`${element} element normalized to ${normalizedElements[index]}.`];
+  });
+  const notes = [stringValue(entry.review_notes), ...elementMigrationNotes].filter(Boolean).join(' ');
+  const migratedTags = originalElements.includes('Shadow') && !stringValue(entry.tags).toLowerCase().split(',').map(tag => tag.trim()).includes('shadow')
+    ? [stringValue(entry.tags), 'shadow'].filter(Boolean).join(', ')
+    : stringValue(entry.tags);
   return {
     id: stringValue(entry.id, stringValue(entry.intake_id, `batch001-${String(index + 1).padStart(3, '0')}`)),
     approved_name: stringValue(entry.approved_name, 'Unnamed Monari'),
     slug: stringValue(entry.slug),
     status,
     rarity: ancientRarity ? 'Ultra Rare' : stringValue(entry.rarity),
-    element_1: stringValue(entry.element_1),
-    element_2: stringValue(entry.element_2) === 'None' ? '' : stringValue(entry.element_2),
+    element_1: normalizedElements[0] || 'Neutral',
+    element_2: originalElements[1] === 'None' ? '' : normalizedElements[1],
     taxonomy_primary: stringValue(entry.taxonomy_primary),
     taxonomy_secondary: stringValue(entry.taxonomy_secondary) === 'None' ? '' : stringValue(entry.taxonomy_secondary),
     role: stringValue(entry.role),
@@ -278,13 +336,13 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
     ability_name: stringValue(entry.ability_name, legacyAbility),
     ability_description: stringValue(entry.ability_description),
     ability_effect: stringValue(entry.ability_effect),
-    effect_tags: stringValue(entry.effect_tags),
+    ability_effect_tags: stringValue(entry.ability_effect_tags, stringValue(entry.effect_tags)),
     status_condition_suggestions: stringValue(entry.status_condition_suggestions),
     signature_moves: stringValue(entry.signature_moves),
     suggested_signature_moves: stringValue(entry.suggested_signature_moves, stringValue(entry.signature_moves)),
     suggested_learnable_moves: stringValue(entry.suggested_learnable_moves),
     description: stringValue(entry.description), habitat: stringValue(entry.habitat),
-    personality: stringValue(entry.personality), tags: stringValue(entry.tags),
+    personality: stringValue(entry.personality), tags: migratedTags,
     review_notes: ancientRarity && !notes.includes('Ancient rarity migrated to Ultra Rare')
       ? [notes, 'Ancient rarity migrated to Ultra Rare'].filter(Boolean).join(' ')
       : notes,
@@ -298,6 +356,13 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
     evolves_from: stringValue(entry.evolves_from), evolves_to: stringValue(entry.evolves_to),
     updated_at: stringValue(entry.updated_at, now),
   };
+}
+function normalizeElement(value: string): string {
+  if (value === 'Shadow') return 'Dark';
+  if (value === 'Gale') return 'Wind';
+  if (value === 'Crystal') return 'Aether';
+  if (value === 'Void' || value === 'Spirit') return 'Neutral';
+  return value;
 }
 function normalizeAssetStatus(value: unknown): string {
   const status = stringValue(value);
@@ -315,7 +380,7 @@ function imageUrl(value: string): string {
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
 function numberValue(value: unknown, fallback = 0): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function getSelected(): MonariEntry | undefined { return batch.entries.find(entry => entry.id === selectedId); }
-function bindFilter(id: string, assign: (value: string) => void): void { document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)?.addEventListener('input', event => { assign((event.target as HTMLInputElement).value); render(); }); }
+function bindFilter(id: string, assign: (value: string) => void): void { document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)?.addEventListener('input', event => { assign((event.target as HTMLInputElement).value); entryListScrollTop = 0; render(); }); }
 function setSaveState(text: string): void { const node = document.querySelector('#save-state'); if (node) node.textContent = text; }
 function showToast(text: string): void { const toast = document.querySelector<HTMLElement>('#toast'); if (!toast) return; toast.textContent = text; toast.classList.add('show'); window.setTimeout(() => toast.classList.remove('show'), 2200); }
 function renderEmpty(): string { return `<div class="empty-review"><span>✦</span><h2>Select a Monari</h2><p>Choose an intake row to begin review.</p></div>`; }

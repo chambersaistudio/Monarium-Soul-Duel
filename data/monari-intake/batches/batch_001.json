@@ -52,10 +52,10 @@
       "ability_name": "Lumen Focus",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Lumen Edge; Pulse Paw; Flash Step; Mirror Guard; Brightline Slash",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -102,10 +102,10 @@
       "ability_name": "Lumen Focus",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Lumen Edge; Pulse Paw; Flash Step; Mirror Guard; Brightline Slash",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -152,10 +152,10 @@
       "ability_name": "Rail Charge",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rail Dash; Thunder Slicer",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -202,10 +202,10 @@
       "ability_name": "Rail Charge",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rail Dash; Thunder Slicer",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -252,10 +252,10 @@
       "ability_name": "Rail Charge",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rail Dash; Thunder Slicer",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -302,10 +302,10 @@
       "ability_name": "Static Bloom",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Petal Volt; Storm Bloom",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -352,10 +352,10 @@
       "ability_name": "Static Bloom",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Petal Volt; Storm Bloom",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -402,10 +402,10 @@
       "ability_name": "Forest Heart",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Leaf Guard; Forest Blessing",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -452,10 +452,10 @@
       "ability_name": "Forest Heart",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Leaf Guard; Forest Blessing",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -502,10 +502,10 @@
       "ability_name": "Stormplate",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Volt Shell; High-Voltage Barrier",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -552,10 +552,10 @@
       "ability_name": "Stormplate",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Volt Shell; High-Voltage Barrier",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -576,7 +576,7 @@
       "evolves_from": null,
       "evolves_to": "noxvane",
       "rarity": "Super Rare",
-      "element_1": "Shadow",
+      "element_1": "Dark",
       "element_2": null,
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Wisp",
@@ -595,17 +595,17 @@
       "personality": "Quiet, guarded, intense",
       "tags": "rabbit, shadow, dark, assassin, bipedal, claws",
       "confidence": 0.55,
-      "review_notes": "No readable name/text on image; names/elements/stats are AI draft and need approval.",
+      "review_notes": "No readable name/text on image; names/elements/stats are AI draft and need approval. Shadow element normalized to Dark.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/3544C778-F2FF-4E32-A531-B992C1749E78_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/3544C778-F2FF-4E32-A531-B992C1749E78_1_102_o.jpeg",
       "intake_id": "batch001_012_duskhare",
       "ability_name": "Night Veil",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Shadow Step; Crescent Claw",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -626,7 +626,7 @@
       "evolves_from": "duskhare",
       "evolves_to": null,
       "rarity": "Super Rare",
-      "element_1": "Shadow",
+      "element_1": "Dark",
       "element_2": null,
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Wisp",
@@ -645,17 +645,17 @@
       "personality": "Quiet, guarded, intense",
       "tags": "rabbit, shadow, dark, assassin, bipedal, claws",
       "confidence": 0.55,
-      "review_notes": "No readable name/text on image; names/elements/stats are AI draft and need approval.",
+      "review_notes": "No readable name/text on image; names/elements/stats are AI draft and need approval. Shadow element normalized to Dark.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/3544C778-F2FF-4E32-A531-B992C1749E78_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/3544C778-F2FF-4E32-A531-B992C1749E78_1_102_o.jpeg",
       "intake_id": "batch001_013_noxvane",
       "ability_name": "Night Veil",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Shadow Step; Crescent Claw",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -702,10 +702,10 @@
       "ability_name": "Rift Runner",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rift Dig; Stone Crush",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -752,10 +752,10 @@
       "ability_name": "Rift Runner",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rift Dig; Stone Crush",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -802,10 +802,10 @@
       "ability_name": "Rift Runner",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Rift Dig; Stone Crush",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -852,10 +852,10 @@
       "ability_name": "Sunlit Step",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Gleam Dash; Solar Fang",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -902,10 +902,10 @@
       "ability_name": "Sunlit Step",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Gleam Dash; Solar Fang",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "needs_review",
@@ -926,7 +926,7 @@
       "evolves_from": null,
       "evolves_to": "prismaris-prime",
       "rarity": "Ultra Rare",
-      "element_1": "Crystal",
+      "element_1": "Aether",
       "element_2": null,
       "taxonomy_primary": "Astral",
       "taxonomy_secondary": "Golem",
@@ -945,17 +945,17 @@
       "personality": "Mysterious, calculating, calm",
       "tags": "crystal, floating, ancient, prism, control, special-attacker",
       "confidence": 0.82,
-      "review_notes": "Sheet names both forms Prismaris. Proposed final-form display name 'Prismaris Prime' needs approval. Ancient rarity migrated to Ultra Rare",
+      "review_notes": "Sheet names both forms Prismaris. Proposed final-form display name 'Prismaris Prime' needs approval. Ancient rarity migrated to Ultra Rare Crystal element normalized to Aether.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/59A3CB66-A241-4D04-9064-37081CD9D373_1_105_c.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/59A3CB66-A241-4D04-9064-37081CD9D373_1_105_c.jpeg",
       "intake_id": "batch001_019_prismaris",
       "ability_name": "Crystal Resonance",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Prism Field; Crystal Resonance",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "needs_review",
@@ -976,7 +976,7 @@
       "evolves_from": "prismaris",
       "evolves_to": null,
       "rarity": "Ultra Rare",
-      "element_1": "Crystal",
+      "element_1": "Aether",
       "element_2": null,
       "taxonomy_primary": "Astral",
       "taxonomy_secondary": "Golem",
@@ -995,17 +995,17 @@
       "personality": "Mysterious, calculating, calm",
       "tags": "crystal, floating, ancient, prism, control, special-attacker",
       "confidence": 0.82,
-      "review_notes": "Sheet names both forms Prismaris. Proposed final-form display name 'Prismaris Prime' needs approval. Ancient rarity migrated to Ultra Rare",
+      "review_notes": "Sheet names both forms Prismaris. Proposed final-form display name 'Prismaris Prime' needs approval. Ancient rarity migrated to Ultra Rare Crystal element normalized to Aether.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/59A3CB66-A241-4D04-9064-37081CD9D373_1_105_c.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/59A3CB66-A241-4D04-9064-37081CD9D373_1_105_c.jpeg",
       "intake_id": "batch001_020_prismaris-prime",
       "ability_name": "Crystal Resonance",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Prism Field; Crystal Resonance",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1052,10 +1052,10 @@
       "ability_name": "Magma Core",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Eruption Claw; Lava Wing",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1102,10 +1102,10 @@
       "ability_name": "Magma Core",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Eruption Claw; Lava Wing",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1152,10 +1152,10 @@
       "ability_name": "Magma Core",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Eruption Claw; Lava Wing",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1176,7 +1176,7 @@
       "evolves_from": null,
       "evolves_to": "galefang",
       "rarity": "Rare",
-      "element_1": "Gale",
+      "element_1": "Wind",
       "element_2": null,
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Tempest",
@@ -1195,17 +1195,17 @@
       "personality": "Playful, clever, quick",
       "tags": "ferret, gale, wind, speed, ambusher, quadruped",
       "confidence": 0.98,
-      "review_notes": null,
+      "review_notes": "Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "intake_id": "batch001_024_pufflet",
       "ability_name": "Tail Gale",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Wind Slash; Tail Gale",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1226,7 +1226,7 @@
       "evolves_from": "pufflet",
       "evolves_to": "tempestik",
       "rarity": "Rare",
-      "element_1": "Gale",
+      "element_1": "Wind",
       "element_2": null,
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Tempest",
@@ -1245,17 +1245,17 @@
       "personality": "Playful, clever, quick",
       "tags": "ferret, gale, wind, speed, ambusher, quadruped",
       "confidence": 0.98,
-      "review_notes": null,
+      "review_notes": "Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "intake_id": "batch001_025_galefang",
       "ability_name": "Tail Gale",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Wind Slash; Tail Gale",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1276,7 +1276,7 @@
       "evolves_from": "galefang",
       "evolves_to": null,
       "rarity": "Rare",
-      "element_1": "Gale",
+      "element_1": "Wind",
       "element_2": null,
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Tempest",
@@ -1290,22 +1290,22 @@
       "speed": 160,
       "stat_total": 730,
       "signature_moves": "Wind Slash; Tail Gale",
-      "description": "A master of the tempest that moves like the wind—silent, sudden, and gone before you can react.",
+      "description": "A master of the tempest that moves like the wind\u2014silent, sudden, and gone before you can react.",
       "habitat": "Windy grasslands, cliff paths, high routes",
       "personality": "Playful, clever, quick",
       "tags": "ferret, gale, wind, speed, ambusher, quadruped",
       "confidence": 0.98,
-      "review_notes": null,
+      "review_notes": "Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/92C71522-0CB3-44A0-BBE9-56D68D385B15_1_105_c.jpeg",
       "intake_id": "batch001_026_tempestik",
       "ability_name": "Tail Gale",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Wind Slash; Tail Gale",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1352,10 +1352,10 @@
       "ability_name": "Aether Flow",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Aether Whisper; Luminos Veil",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1402,10 +1402,10 @@
       "ability_name": "Aether Flow",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Aether Whisper; Luminos Veil",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1452,10 +1452,10 @@
       "ability_name": "Current Surge",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Reef Bolt; Flash Current",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1502,10 +1502,10 @@
       "ability_name": "Current Surge",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Reef Bolt; Flash Current",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1552,10 +1552,10 @@
       "ability_name": "Tidal Wool",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Water Ram; Tidal Crash",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1602,10 +1602,10 @@
       "ability_name": "Tidal Wool",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Water Ram; Tidal Crash",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1652,10 +1652,10 @@
       "ability_name": "Tidal Wool",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Water Ram; Tidal Crash",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1677,7 +1677,7 @@
       "evolves_to": "crestwave",
       "rarity": "Rare",
       "element_1": "Water",
-      "element_2": "Gale",
+      "element_2": "Wind",
       "taxonomy_primary": "Sylph",
       "taxonomy_secondary": "Tempest",
       "role": "Water Bird Chick",
@@ -1695,17 +1695,17 @@
       "personality": "Cheerful, elegant, evasive",
       "tags": "bird, water, gale, wings, mist, aerial",
       "confidence": 0.58,
-      "review_notes": "No names on sheet. Names are AI draft and should be reviewed.",
+      "review_notes": "No names on sheet. Names are AI draft and should be reviewed. Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "intake_id": "batch001_034_foamlet",
       "ability_name": "Mist Plume",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Aqua Wing; Torrent Glide",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1727,7 +1727,7 @@
       "evolves_to": "aqualume",
       "rarity": "Rare",
       "element_1": "Water",
-      "element_2": "Gale",
+      "element_2": "Wind",
       "taxonomy_primary": "Sylph",
       "taxonomy_secondary": "Tempest",
       "role": "Aerial Water Skirmisher",
@@ -1745,17 +1745,17 @@
       "personality": "Cheerful, elegant, evasive",
       "tags": "bird, water, gale, wings, mist, aerial",
       "confidence": 0.58,
-      "review_notes": "No names on sheet. Names are AI draft and should be reviewed.",
+      "review_notes": "No names on sheet. Names are AI draft and should be reviewed. Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "intake_id": "batch001_035_crestwave",
       "ability_name": "Mist Plume",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Aqua Wing; Torrent Glide",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1777,7 +1777,7 @@
       "evolves_to": null,
       "rarity": "Rare",
       "element_1": "Water",
-      "element_2": "Gale",
+      "element_2": "Wind",
       "taxonomy_primary": "Sylph",
       "taxonomy_secondary": "Tempest",
       "role": "Elegant Water-Gale Flyer",
@@ -1795,17 +1795,17 @@
       "personality": "Cheerful, elegant, evasive",
       "tags": "bird, water, gale, wings, mist, aerial",
       "confidence": 0.58,
-      "review_notes": "No names on sheet. Names are AI draft and should be reviewed.",
+      "review_notes": "No names on sheet. Names are AI draft and should be reviewed. Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/evolution_sheets/C9CB43BF-AE3B-4B6A-8789-508C288DEA40_1_102_o.jpeg",
       "intake_id": "batch001_036_aqualume",
       "ability_name": "Mist Plume",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Aqua Wing; Torrent Glide",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1852,10 +1852,10 @@
       "ability_name": "Moonlit Current",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Night Guide; Crescent Bolt",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1902,10 +1902,10 @@
       "ability_name": "Static Pounce",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Spark Pounce; Volt Tail",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1926,7 +1926,7 @@
       "evolves_from": null,
       "evolves_to": null,
       "rarity": "Super Rare",
-      "element_1": "Crystal",
+      "element_1": "Aether",
       "element_2": "Aether",
       "taxonomy_primary": "Drake",
       "taxonomy_secondary": "Astral",
@@ -1945,17 +1945,17 @@
       "personality": "Curious, intense, clever",
       "tags": "lizard, drake, crystal, aether, shards, special-attacker",
       "confidence": 0.62,
-      "review_notes": "Standalone image. May overlap visually with Prismaris/crystal family but not a clear duplicate.",
+      "review_notes": "Standalone image. May overlap visually with Prismaris/crystal family but not a clear duplicate. Crystal element normalized to Aether.",
       "image_path": "/assets/monari/_incoming/batch_001/standalone_images/7AB890B2-2E83-49BB-B27E-DAEB44393EEF_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/standalone_images/7AB890B2-2E83-49BB-B27E-DAEB44393EEF_1_102_o.jpeg",
       "intake_id": "batch001_039_gemora",
       "ability_name": "Crystal Heart",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Shard Pulse; Aether Claw",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "drafted",
@@ -1977,7 +1977,7 @@
       "evolves_to": null,
       "rarity": "Rare",
       "element_1": "Flora",
-      "element_2": "Gale",
+      "element_2": "Wind",
       "taxonomy_primary": "Feral",
       "taxonomy_secondary": "Drake",
       "role": "Agile Flora Striker",
@@ -1995,17 +1995,17 @@
       "personality": "Bright, adventurous, energetic",
       "tags": "flora, leaf, fern, lizard, agile, vines",
       "confidence": 0.66,
-      "review_notes": "AI-generated name. Standalone art; could be Stage 1 or mid-stage.",
+      "review_notes": "AI-generated name. Standalone art; could be Stage 1 or mid-stage. Gale element normalized to Wind.",
       "image_path": "/assets/monari/_incoming/batch_001/standalone_images/8E155EE5-E149-49F1-B72E-628FADD7D30C_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/standalone_images/8E155EE5-E149-49F1-B72E-628FADD7D30C_1_102_o.jpeg",
       "intake_id": "batch001_040_fernix",
       "ability_name": "Leaf Sprint",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Vine Rush; Fern Gale",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     },
     {
       "status": "needs_review",
@@ -2027,7 +2027,7 @@
       "evolves_to": null,
       "rarity": "Ultra Rare",
       "element_1": "Aether",
-      "element_2": "Crystal",
+      "element_2": "Aether",
       "taxonomy_primary": "Astral",
       "taxonomy_secondary": "Golem",
       "role": "Support / Battlefield Control",
@@ -2045,17 +2045,17 @@
       "personality": "Serene, mysterious, protective",
       "tags": "spirit, obsidian, crystal, aether, floating, support, control",
       "confidence": 0.64,
-      "review_notes": "Standalone image. Could be related to Prismaris or a separate Ancient line; needs review. Ancient rarity migrated to Ultra Rare",
+      "review_notes": "Standalone image. Could be related to Prismaris or a separate Ancient line; needs review. Ancient rarity migrated to Ultra Rare Crystal element normalized to Aether.",
       "image_path": "/assets/monari/_incoming/batch_001/standalone_images/9FF26B64-498C-4995-80C6-7F4657C1D9A9_1_102_o.jpeg",
       "source_path_repo": "public/assets/monari/_incoming/batch_001/standalone_images/9FF26B64-498C-4995-80C6-7F4657C1D9A9_1_102_o.jpeg",
       "intake_id": "batch001_041_obsidivine",
       "ability_name": "Obsidian Grace",
       "ability_description": "",
       "ability_effect": "",
-      "effect_tags": "",
       "status_condition_suggestions": "",
       "suggested_signature_moves": "Violet Sigil; Aether Mend",
-      "suggested_learnable_moves": ""
+      "suggested_learnable_moves": "",
+      "ability_effect_tags": ""
     }
   ]
 }
