@@ -17,7 +17,8 @@ declare global {
 const DATA_URL = '/data/monari-intake/batches/batch_001.json';
 const STORAGE_KEY = 'monarium:admin:monari-intake:batch_001';
 const ADMIN_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADMIN === 'true';
-const API_URL = import.meta.env.VITE_MONARIUM_ADMIN_API_URL?.replace(/\/$/, '') ?? '';
+const RAW_API_URL = import.meta.env.VITE_MONARIUM_ADMIN_API_URL?.trim() ?? '';
+const API_URL = normalizeApiUrl(RAW_API_URL);
 const BACKEND_MODE = Boolean(API_URL);
 const ADMIN_KEY_STORAGE = 'monarium:admin:session-key';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -37,6 +38,20 @@ let imageMissing = false;
 let dirty = false;
 let sourceSignature = '';
 let entryListScrollTop = 0;
+let backendHealthPassed = false;
+
+class BackendRequestError extends Error {
+  constructor(
+    message: string,
+    readonly method: string,
+    readonly url: string,
+    readonly status?: number,
+    readonly responseBody?: string,
+  ) {
+    super(message);
+    this.name = 'BackendRequestError';
+  }
+}
 
 const app = document.createElement('main');
 app.id = 'monari-admin';
@@ -59,7 +74,9 @@ async function start(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const noBatches = BACKEND_MODE && message.startsWith('No backend batches found');
-    app.innerHTML = `<section class="disabled"><span>${BACKEND_MODE ? 'BACKEND MODE' : 'DATA LOAD ERROR'}</span><h1>${noBatches ? 'No backend batches found' : BACKEND_MODE ? 'Backend connection failed' : 'Batch 001 unavailable'}</h1><p>${escapeHtml(noBatches ? 'Railway is connected, but no intake batches are available. Run the migration and Batch 001 import before reviewing entries.' : message)}</p><code>${BACKEND_MODE ? escapeHtml(shortUrl(API_URL)) : DATA_URL}</code>${BACKEND_MODE ? '<button class="button secondary" data-retry>Retry connection</button>' : ''}</section>`;
+    const requestError = error instanceof BackendRequestError ? error : undefined;
+    const healthFailure = requestError?.url === `${API_URL}/health`;
+    app.innerHTML = `<section class="disabled backend-error"><span>${BACKEND_MODE ? 'BACKEND MODE' : 'DATA LOAD ERROR'}</span><h1>${noBatches ? 'No backend batches found' : healthFailure ? 'Backend health check failed' : BACKEND_MODE ? 'Backend connection failed' : 'Batch 001 unavailable'}</h1><p>${escapeHtml(noBatches ? 'Railway is healthy, but no intake batches are available. Run the database migration and Batch 001 import.' : message)}</p>${BACKEND_MODE ? renderBackendDiagnostics(requestError) : `<code>${DATA_URL}</code>`}${BACKEND_MODE ? '<button class="button secondary" data-retry>Retry connection</button>' : ''}</section>`;
     document.querySelector('[data-retry]')?.addEventListener('click', () => void start());
   }
 }
@@ -71,6 +88,9 @@ async function loadLocalBatch(): Promise<IntakeBatch> {
 }
 
 async function loadBackendBatch(): Promise<IntakeBatch> {
+  backendHealthPassed = false;
+  await checkBackendHealth();
+  backendHealthPassed = true;
   const key = getAdminKey('Enter the Monarium admin key to load backend intake data.');
   if (!key) throw new Error('An admin key is required in backend mode.');
   const list = await apiRequest<{ batches: Array<{ batch_key: string }> }>('/api/intake/batches', {}, key);
@@ -102,7 +122,7 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
         </div>
         <div class="result-count"><span>${filteredEntries().length} Monari</span><button data-action="clear-filters">Clear filters</button></div>
         <nav class="entry-list" aria-label="Monari entries">${renderList()}</nav>
-        <section class="source-note"><b>${BACKEND_MODE ? 'Connected to Railway' : 'Local JSON source'}</b><code>${BACKEND_MODE ? escapeHtml(shortUrl(API_URL)) : 'data/monari-intake/batches/batch_001.json'}</code><p>${BACKEND_MODE ? 'Edits save to PostgreSQL and persist after refresh.' : 'Backend disabled. Export JSON is required for permanence.'}</p></section>
+        <section class="source-note"><b>${BACKEND_MODE ? 'Connected to Railway' : 'Local JSON source'}</b><code>${BACKEND_MODE ? escapeHtml(API_URL) : 'data/monari-intake/batches/batch_001.json'}</code><p>${BACKEND_MODE ? 'Health check passed. Edits save to PostgreSQL and persist after refresh.' : 'Backend disabled. Export JSON is required for permanence.'}</p></section>
       </aside>
       <section class="review-pane">
         ${renderPersistenceNotice()}
@@ -446,19 +466,49 @@ function getAdminKey(promptText: string): string {
   return entered;
 }
 async function apiRequest<T>(path: string, init: RequestInit = {}, key = getAdminKey('Enter the Monarium admin key.')): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': key, ...init.headers },
-  });
+  const method = init.method ?? 'GET';
+  const url = `${API_URL}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': key, ...init.headers },
+    });
+  } catch (error) {
+    throw new BackendRequestError(
+      `Could not reach the backend. This may be a network or CORS error: ${error instanceof Error ? error.message : 'request failed'}`,
+      method,
+      url,
+    );
+  }
   if (response.status === 401) {
     sessionStorage.removeItem(ADMIN_KEY_STORAGE);
-    throw new Error('Admin key rejected. Enter the correct key and try again.');
+    throw new BackendRequestError('Admin key rejected. Enter the correct key and try again.', method, url, 401, await response.text());
   }
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as { message?: string; error?: string };
-    throw new Error(payload.message ?? payload.error ?? `Backend request failed (${response.status})`);
+    const responseBody = await response.text();
+    const payload = parseErrorPayload(responseBody);
+    throw new BackendRequestError(payload ?? `Backend request failed (${response.status})`, method, url, response.status, responseBody);
   }
   return response.json() as Promise<T>;
+}
+async function checkBackendHealth(): Promise<void> {
+  const method = 'GET';
+  const url = `${API_URL}/health`;
+  let response: Response;
+  try {
+    response = await fetch(url, { method, headers: { Accept: 'application/json' } });
+  } catch (error) {
+    throw new BackendRequestError(
+      `Backend health check could not reach Railway. This may be a network or CORS error: ${error instanceof Error ? error.message : 'request failed'}`,
+      method,
+      url,
+    );
+  }
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new BackendRequestError(parseErrorPayload(responseBody) ?? `Backend health check failed (${response.status})`, method, url, response.status, responseBody);
+  }
 }
 function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
   const { id: _id, stage_number, confidence_score, signature_moves: _signatureMoves, updated_at: _updatedAt, ...fields } = entry;
@@ -506,9 +556,35 @@ function label(value: string): string { return value.replace(/_/g,' ').replace(/
 function formatDate(value: string): string { return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value)); }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char] ?? char)); }
 function escapeAttr(value: string): string { return escapeHtml(value); }
-function shortUrl(value: string): string {
-  try { const url = new URL(value); return `${url.host}${url.pathname === '/' ? '' : url.pathname}`; }
-  catch { return value; }
+function normalizeApiUrl(value: string): string {
+  if (!value) return '';
+  const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value.replace(/^\/+/, '')}`;
+  try {
+    const url = new URL(withProtocol);
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return withProtocol.replace(/\/+$/, '');
+  }
+}
+function parseErrorPayload(value: string): string | undefined {
+  try {
+    const payload = JSON.parse(value) as { message?: unknown; error?: unknown };
+    if (typeof payload.message === 'string') return payload.message;
+    if (typeof payload.error === 'string') return payload.error;
+  } catch {
+    if (value.trim()) return value.trim();
+  }
+  return undefined;
+}
+function renderBackendDiagnostics(error?: BackendRequestError): string {
+  return `<dl class="backend-diagnostics">
+    <div><dt>Backend API URL</dt><dd><code>${escapeHtml(API_URL)}</code></dd></div>
+    <div><dt>Backend health</dt><dd class="${backendHealthPassed ? 'diagnostic-ok' : 'diagnostic-failed'}">${backendHealthPassed ? 'OK' : 'FAILED'}</dd></div>
+    ${error ? `<div><dt>Failed request</dt><dd><code>${escapeHtml(`${error.method} ${error.url}`)}</code></dd></div>
+    <div><dt>Status</dt><dd>${error.status ?? 'No HTTP response'}</dd></div>
+    ${error.responseBody ? `<div><dt>Response</dt><dd><pre>${escapeHtml(error.responseBody)}</pre></dd></div>` : ''}
+    ${error.status === 404 ? '<div><dt>Meaning</dt><dd>Route missing or frontend/backend endpoint mismatch.</dd></div>' : ''}` : ''}
+  </dl>`;
 }
 function sanitizeFilename(value: string): string {
   const parts = value.trim().split('.');
