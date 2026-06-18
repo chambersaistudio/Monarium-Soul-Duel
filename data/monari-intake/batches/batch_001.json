@@ -1,0 +1,20 @@
+{
+  "id": "batch_001",
+  "name": "Batch 001",
+  "status": "in_review",
+  "imported_at": "2026-06-18T00:00:00.000Z",
+  "updated_at": "2026-06-18T00:00:00.000Z",
+  "source_filename": "Monarium_Master_Database_Batch001.xlsx",
+  "image_root": "/assets/monari/_incoming/batch_001/",
+  "entries": [
+    {
+      "id": "batch001-001", "approved_name": "Sproutodon", "slug": "sproutodon", "status": "drafted", "rarity": "starter", "element_1": "flora", "element_2": "stone", "taxonomy_primary": "Verdant", "taxonomy_secondary": "Ceratopsian", "role": "Guardian", "hp": 78, "aura": 62, "attack": 70, "special_attack": 55, "defense": 82, "special_defense": 74, "speed": 49, "ability": "Rooted Resolve", "signature_moves": "Bramble Rush, Grove Guard", "description": "A steadfast young Monari whose living frill hardens when protecting a bonded partner.", "habitat": "Sunlit groves", "personality": "Loyal, patient, brave", "tags": "starter, flora, guardian", "review_notes": "Confirm secondary element before final import.", "asset_status": "reference_ready", "confidence_score": 0.91, "image_path": "/assets/monari/sproutodon/reference/fullbody.png", "source_filename": "sproutodon_reference.png", "parent_sheet_filename": "Monarium_Master_Database_Batch001.xlsx", "evolution_line_id": "sproutodon_line", "stage_number": 1, "evolves_from": "", "evolves_to": "", "updated_at": "2026-06-18T00:00:00.000Z"
+    },
+    {
+      "id": "batch001-002", "approved_name": "Droplet", "slug": "droplet", "status": "needs_review", "rarity": "common", "element_1": "water", "element_2": "", "taxonomy_primary": "Aquatic", "taxonomy_secondary": "Spirit", "role": "Support", "hp": 58, "aura": 84, "attack": 46, "special_attack": 76, "defense": 51, "special_defense": 69, "speed": 72, "ability": "Tidal Rhythm", "signature_moves": "Water Wheel Smash", "description": "A playful water spirit that gathers momentum in bright, looping currents.", "habitat": "Freshwater springs", "personality": "Curious, buoyant, social", "tags": "water, spirit, support", "review_notes": "Review naming consistency with evolution line.", "asset_status": "temporary", "confidence_score": 0.76, "image_path": "/assets/monari/droplet/idle/frame_013.png", "source_filename": "droplet_evolution_sheet.png", "parent_sheet_filename": "Monarium_Master_Database_Batch001.xlsx", "evolution_line_id": "droplet_line", "stage_number": 1, "evolves_from": "", "evolves_to": "", "updated_at": "2026-06-18T00:00:00.000Z"
+    },
+    {
+      "id": "batch001-003", "approved_name": "Unnamed Emberling", "slug": "unnamed-emberling", "status": "incoming", "rarity": "rare", "element_1": "fire", "element_2": "aether", "taxonomy_primary": "Draconic", "taxonomy_secondary": "Celestial", "role": "Striker", "hp": 61, "aura": 77, "attack": 83, "special_attack": 88, "defense": 52, "special_defense": 59, "speed": 81, "ability": "", "signature_moves": "", "description": "Draft intake awaiting visual and taxonomy review.", "habitat": "Unknown", "personality": "Unreviewed", "tags": "incoming, fire", "review_notes": "Image reference was not included in source export.", "asset_status": "missing", "confidence_score": 0.42, "image_path": "/assets/monari/_incoming/batch_001/loose_unknown/missing.png", "source_filename": "emberling_unknown.png", "parent_sheet_filename": "Monarium_Master_Database_Batch001.xlsx", "evolution_line_id": "emberling_line", "stage_number": 1, "evolves_from": "", "evolves_to": "", "updated_at": "2026-06-18T00:00:00.000Z"
+    }
+  ]
+}
