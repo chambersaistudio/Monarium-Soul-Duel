@@ -13,6 +13,8 @@ import {
 import { setBootLoading } from '../ui/bootOverlay';
 import { hasActiveGameplayScene } from '../utils/sceneHygiene';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
+const PLAYER_OW_SAFE_IDLE_FRAMES = 2;
+const PLAYER_OW_SAFE_WALK_FRAMES = 4;
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
 
@@ -22,6 +24,13 @@ function naturalCompare(a: string, b: string): number {
 
 function playerOwKey(anim: string, stem: string): string {
   return `player_ow_${anim}_${stem}`;
+}
+
+function playerOwFramesFor(anim: string): string[] {
+  const frames = [...(PLAYER_OVERWORLD_MANIFEST[anim] ?? [])].sort(naturalCompare);
+  if (!SAFE_MODE) return frames;
+  const maxFrames = anim.startsWith('idle_') ? PLAYER_OW_SAFE_IDLE_FRAMES : PLAYER_OW_SAFE_WALK_FRAMES;
+  return thinFrames(frames, maxFrames);
 }
 
 function phaserKey(charId: string, folder: string, stem: string): string {
@@ -140,7 +149,7 @@ export class PreloadScene extends Phaser.Scene {
     // ── Player overworld animations (directional folders; missing dirs are safe) ──
     for (const [anim, frames] of Object.entries(PLAYER_OVERWORLD_MANIFEST)) {
       const [state, dir] = anim.split('_');
-      const sortedFrames = [...frames].sort(naturalCompare);
+      const sortedFrames = playerOwFramesFor(anim);
       for (const stem of sortedFrames) {
         this.load.image(playerOwKey(anim, stem), `${PLAYER_OVERWORLD_BASE}/${state}/${dir}/${stem}.png`);
       }
@@ -260,7 +269,7 @@ export class PreloadScene extends Phaser.Scene {
     ];
 
     for (const cfg of configs) {
-      const frames = [...(PLAYER_OVERWORLD_MANIFEST[cfg.anim] ?? [])].sort(naturalCompare);
+      const frames = playerOwFramesFor(cfg.anim);
       const loaded = frames
         .map(stem => playerOwKey(cfg.anim, stem))
         .filter(key => this.textures.exists(key) && !this.loadErrors.has(key))
@@ -274,7 +283,7 @@ export class PreloadScene extends Phaser.Scene {
       this.anims.create({ key: cfg.key, frames: loaded.map(key => ({ key })), frameRate: cfg.frameRate, repeat: cfg.repeat });
     }
 
-    const firstIdle = [...(PLAYER_OVERWORLD_MANIFEST.idle_down ?? [])].sort(naturalCompare)
+    const firstIdle = playerOwFramesFor('idle_down')
       .map(stem => this.normalizeToCanvas(playerOwKey('idle_down', stem)) ?? playerOwKey('idle_down', stem))
       .find(key => this.textures.exists(key) && !this.loadErrors.has(key));
     if (!firstIdle) console.warn('[PreloadScene] missing player overworld idle_down');
