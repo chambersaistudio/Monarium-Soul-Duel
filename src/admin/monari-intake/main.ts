@@ -9,6 +9,7 @@ declare global {
     readonly env: {
       readonly DEV: boolean;
       readonly VITE_ENABLE_ADMIN?: string;
+      readonly VITE_MONARIUM_ADMIN_API_URL?: string;
     };
   }
 }
@@ -16,6 +17,9 @@ declare global {
 const DATA_URL = '/data/monari-intake/batches/batch_001.json';
 const STORAGE_KEY = 'monarium:admin:monari-intake:batch_001';
 const ADMIN_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_ADMIN === 'true';
+const API_URL = import.meta.env.VITE_MONARIUM_ADMIN_API_URL?.replace(/\/$/, '') ?? '';
+const BACKEND_MODE = Boolean(API_URL);
+const ADMIN_KEY_STORAGE = 'monarium:admin:session-key';
 const stats = [
   ['hp', 'Health'], ['aura', 'Aura'], ['attack', 'Attack'], ['special_attack', 'Special Attack'],
   ['defense', 'Defense'], ['special_defense', 'Special Defense'], ['speed', 'Speed'],
@@ -46,17 +50,29 @@ if (!ADMIN_ENABLED) {
 async function start(): Promise<void> {
   app.innerHTML = `<section class="loading"><div class="spinner"></div><p>Loading Batch 001…</p></section>`;
   try {
-    const response = await fetch(DATA_URL);
-    if (!response.ok) throw new Error(`Batch request failed (${response.status})`);
-    const source = normalizeBatch(await response.json());
+    const source = BACKEND_MODE ? await loadBackendBatch() : await loadLocalBatch();
     sourceSignature = getBatchSignature(source);
-    const saved = localStorage.getItem(STORAGE_KEY);
-    batch = getSavedBatch(saved, source);
+    batch = BACKEND_MODE ? source : getSavedBatch(localStorage.getItem(STORAGE_KEY), source);
     selectedId = batch.entries[0]?.id ?? '';
     render();
   } catch (error) {
     app.innerHTML = `<section class="disabled"><span>DATA LOAD ERROR</span><h1>Batch 001 unavailable</h1><p>${escapeHtml(error instanceof Error ? error.message : 'Unknown error')}</p><code>${DATA_URL}</code></section>`;
   }
+}
+
+async function loadLocalBatch(): Promise<IntakeBatch> {
+  const response = await fetch(DATA_URL);
+  if (!response.ok) throw new Error(`Batch request failed (${response.status})`);
+  return normalizeBatch(await response.json());
+}
+
+async function loadBackendBatch(): Promise<IntakeBatch> {
+  const key = getAdminKey('Enter the Monarium admin key to load backend intake data.');
+  if (!key) throw new Error('An admin key is required in backend mode.');
+  const list = await apiRequest<{ batches: Array<{ batch_key: string }> }>('/api/intake/batches', {}, key);
+  const batchKey = list.batches[0]?.batch_key;
+  if (!batchKey) throw new Error('No intake batches are available in the backend.');
+  return normalizeBatch(await apiRequest(`/api/intake/batches/${encodeURIComponent(batchKey)}`, {}, key));
 }
 
 function render(options: { preserveListScroll?: boolean } = {}): void {
@@ -68,7 +84,7 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
     <header class="admin-header">
       <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>Intake Review</h1></div>
       <div class="batch-summary"><span class="live-dot"></span><div><b>${escapeHtml(batch.name)}</b><small>${escapeHtml(batch.status)} · ${batch.entries.length} entries</small></div></div>
-      <div class="header-actions"><span id="save-state">${dirty ? 'Unsaved changes' : 'Saved locally'}</span><button class="button secondary" data-action="export">Export Updated JSON</button></div>
+      <div class="header-actions"><span class="mode-indicator ${BACKEND_MODE ? 'backend' : 'local'}">${BACKEND_MODE ? 'Railway backend' : 'Local fallback'}</span><span id="save-state">${dirty ? 'Unsaved changes' : BACKEND_MODE ? 'Synced' : 'Saved locally'}</span><button class="button secondary" data-action="export">Export Updated JSON</button></div>
     </header>
       <div class="admin-layout">
       <aside class="library-panel">
@@ -82,7 +98,7 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
         </div>
         <div class="result-count"><span>${filteredEntries().length} Monari</span><button data-action="clear-filters">Clear filters</button></div>
         <nav class="entry-list" aria-label="Monari entries">${renderList()}</nav>
-        <section class="source-note"><b>Local JSON source</b><code>data/monari-intake/batches/batch_001.json</code><p>Google Sheet and Drive sync are reserved for Phase 2.</p></section>
+        <section class="source-note"><b>${BACKEND_MODE ? 'Railway API source' : 'Local JSON source'}</b><code>${BACKEND_MODE ? escapeHtml(API_URL) : 'data/monari-intake/batches/batch_001.json'}</code><p>${BACKEND_MODE ? 'Edits save to PostgreSQL. Export remains available as a backup.' : 'Backend is disabled; browser storage and JSON export remain active.'}</p></section>
       </aside>
       <section class="review-pane">
         ${renderPersistenceNotice()}
@@ -121,9 +137,9 @@ function renderEditor(entry: MonariEntry): string {
           <div class="image-grid"></div><img id="preview-image" src="${escapeAttr(imageUrl(entry.image_path))}" alt="${escapeAttr(entry.approved_name)} intake preview"><div class="placeholder"><span>✦</span><b>MONARIUM</b><small>Image preview unavailable</small></div>
           <span class="stage-chip">STAGE ${entry.stage_number}</span><span id="image-warning" class="image-warning">⚠ Image missing</span>
         </div>
-        <div class="image-debug"><span>Current image URL</span><code>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</code><div class="image-actions"><a class="button secondary" href="${escapeAttr(imageUrl(entry.image_path))}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">Change Image Path</button></div><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local review only. Export JSON and add the image file to repo/cloud storage to make this permanent online.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</b></p></div>
+        <div class="image-debug"><span>Current image URL</span><code>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</code><div class="image-actions"><a class="button secondary" href="${escapeAttr(imageUrl(entry.image_path))}" target="_blank" rel="noreferrer">Open Image</a><button class="button secondary" data-action="change-image">${BACKEND_MODE ? 'Upload New Image' : 'Change Image Path'}</button></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local review only. Export JSON and add the image file to repo/cloud storage to make this permanent online.</small></label><p class="image-failure">Failed URL: <b>${escapeHtml(imageUrl(entry.image_path) || '(empty path)')}</b></p></div>
         <div class="visual-meta"><span><small>ELEMENT</small><b>${escapeHtml(entry.element_1 || '—')}${entry.element_2 ? ` / ${escapeHtml(entry.element_2)}` : ''}</b></span><span><small>RARITY</small><b>${escapeHtml(entry.rarity || '—')}</b></span><span><small>ROLE</small><b>${escapeHtml(entry.role || '—')}</b></span></div>
-        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>Path-based replacement</b><small>No cloud upload yet. Path edits are saved locally and included in exported JSON.</small></div><button class="button secondary" data-action="change-image">Replace Profile Image</button></div>
+        <div class="future-tools"><div><p class="eyebrow">IMAGE WORKSPACE</p><b>${BACKEND_MODE ? 'Cloudflare R2 upload' : 'Path-based replacement'}</b><small>${BACKEND_MODE ? 'Images upload directly with a temporary signed URL; storage secrets remain on Railway.' : 'Local previews are not permanent online. Path edits are included in exported JSON.'}</small></div><button class="button secondary" data-action="change-image">Replace Profile Image</button></div>
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
       </article>
       <article class="editor-card">
@@ -142,9 +158,9 @@ function renderPersistenceNotice(): string {
   const sampleWarning = batch.data_status === 'sample'
     ? `<p class="sample-warning"><b>Sample data only:</b> ${batch.entries.length} of approximately ${batch.expected_entry_count ?? 41} expected Batch 001 rows are available. Replace the canonical file with the authoritative spreadsheet conversion before production review.</p>`
     : '';
-  return `<aside class="persistence-notice">
-    <div><b>Browser-only working copy</b><p>Save keeps edits only in this browser. Export Updated JSON is the safe, permanent copy.</p>${sampleWarning}</div>
-    <code>Replace: data/monari-intake/batches/batch_001.json</code>
+  return `<aside class="persistence-notice ${BACKEND_MODE ? 'backend' : ''}">
+    <div><b>${BACKEND_MODE ? 'Backend-connected review' : 'Browser-only working copy'}</b><p>${BACKEND_MODE ? 'Save writes this entry to Railway PostgreSQL. Export Updated JSON remains a portable backup.' : 'Save keeps edits only in this browser. Export Updated JSON is the safe, permanent copy.'}</p>${sampleWarning}</div>
+    <code>${BACKEND_MODE ? 'Storage: PostgreSQL + Cloudflare R2' : 'Replace: data/monari-intake/batches/batch_001.json'}</code>
   </aside>`;
 }
 
@@ -167,6 +183,10 @@ function bindEvents(): void {
   image?.addEventListener('error', () => { imageMissing = true; image.closest('.image-stage')?.classList.add('missing'); });
   image?.addEventListener('load', () => { imageMissing = false; image.closest('.image-stage')?.classList.remove('missing'); });
   document.querySelector<HTMLInputElement>('#image-path-input')?.addEventListener('input', event => updateImagePath((event.target as HTMLInputElement).value));
+  document.querySelector<HTMLInputElement>('#image-file-input')?.addEventListener('change', event => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) void uploadImage(file);
+  });
   const speaker = document.querySelector<HTMLButtonElement>('[data-action="speak"]');
   if (!('speechSynthesis' in window) && speaker) speaker.disabled = true;
   window.onbeforeunload = dirty ? () => 'You have unsaved intake edits.' : null;
@@ -191,15 +211,18 @@ function updateField(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
 }
 
 function handleAction(action: string): void {
-  if (action === 'save') saveLocal();
+  if (action === 'save') void saveChanges();
   if (action === 'export') exportJson();
   if (action === 'speak') speakName();
   if (action === 'copy-prompt') void copyPrompt();
   if (action === 'previous') navigateEntry(-1);
   if (action === 'next') navigateEntry(1);
   if (action === 'change-image') {
-    const field = document.querySelector<HTMLElement>('.image-path-field');
-    if (field) { field.hidden = false; field.querySelector<HTMLInputElement>('input')?.focus(); }
+    if (BACKEND_MODE) document.querySelector<HTMLInputElement>('#image-file-input')?.click();
+    else {
+      const field = document.querySelector<HTMLElement>('.image-path-field');
+      if (field) { field.hidden = false; field.querySelector<HTMLInputElement>('input')?.focus(); }
+    }
   }
   if (action === 'clear-filters') { query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = ''; entryListScrollTop = 0; render(); }
 }
@@ -235,7 +258,21 @@ function updateImagePath(value: string): void {
 
 function updateStatus(status: MonariStatus): void {
   const entry = getSelected(); if (!entry) return;
-  entry.status = status; dirty = true; saveLocal(); render(); showToast(`Marked ${label(status)}`);
+  entry.status = status; dirty = true; void saveChanges().then(() => { render(); showToast(`Marked ${label(status)}`); });
+}
+
+async function saveChanges(): Promise<void> {
+  if (!BACKEND_MODE) { saveLocal(); return; }
+  const entry = getSelected(); if (!entry) return;
+  const key = getAdminKey('Enter the Monarium admin key to save this entry.');
+  if (!key) { showToast('Save cancelled: admin key required'); return; }
+  setSaveState('Saving…');
+  try {
+    const payload = toBackendEntry(entry);
+    const result = await apiRequest<{ entry: Record<string, unknown> }>(`/api/intake/entries/${encodeURIComponent(entry.id)}`, { method: 'PATCH', body: JSON.stringify(payload) }, key);
+    Object.assign(entry, normalizeEntry(result.entry, 0, new Date().toISOString()));
+    dirty = false; window.onbeforeunload = null; setSaveState('Synced'); showToast('Entry saved to Railway');
+  } catch (error) { setSaveState('Save failed'); showToast(error instanceof Error ? error.message : 'Backend save failed'); }
 }
 
 function saveLocal(): void {
@@ -247,7 +284,7 @@ function saveLocal(): void {
 }
 
 function exportJson(): void {
-  saveLocal();
+  if (!BACKEND_MODE) saveLocal();
   batch = normalizeBatch(batch);
   const blob = new Blob([`${JSON.stringify(batch, null, 2)}\n`], { type: 'application/json' });
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'batch_001.json'; link.click(); URL.revokeObjectURL(link.href);
@@ -274,7 +311,8 @@ function normalizeBatch(value: unknown): IntakeBatch {
   if (!Array.isArray(source.entries)) throw new Error('Batch JSON must contain an entries array.');
   const now = new Date().toISOString();
   return {
-    id: stringValue(source.id, 'batch_001'),
+    id: stringValue(source.id, stringValue((source as Record<string, unknown>).batch_key, stringValue((source as Record<string, unknown>).batch_id, 'batch_001'))),
+    batch_key: stringValue((source as Record<string, unknown>).batch_key, stringValue((source as Record<string, unknown>).batch_id, 'batch_001')),
     name: stringValue(source.name, 'Batch 001'),
     status: stringValue(source.status, 'in_review'),
     data_status: source.data_status === 'sample' ? 'sample' : 'complete',
@@ -348,11 +386,11 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
       : notes,
     asset_status: normalizeAssetStatus(entry.asset_status),
     confidence_score: numberValue(entry.confidence_score, numberValue(entry.confidence)),
-    image_path: imageUrl(stringValue(entry.image_path, stringValue(entry.source_path))),
+    image_path: imageUrl(stringValue(entry.image_url, stringValue(entry.image_path, stringValue(entry.source_path)))),
     source_filename: stringValue(entry.source_filename),
     parent_sheet_filename: stringValue(entry.parent_sheet_filename),
     evolution_line_id: stringValue(entry.evolution_line_id),
-    stage_number: numberValue(entry.stage_number, 1),
+    stage_number: numberValue(entry.stage_number, numberValue(entry.stage, 1)),
     evolves_from: stringValue(entry.evolves_from), evolves_to: stringValue(entry.evolves_to),
     updated_at: stringValue(entry.updated_at, now),
   };
@@ -373,12 +411,54 @@ function normalizeAssetStatus(value: unknown): string {
 function imageUrl(value: string): string {
   const trimmed = value.trim().replace(/\\/g, '/');
   if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
   let publicPath = trimmed.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/?public\//i, '/');
   if (!publicPath.startsWith('/')) publicPath = `/${publicPath}`;
   return publicPath.split('/').map((part, index) => index === 0 ? '' : encodeURIComponent(decodeURIComponent(part))).join('/');
 }
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
 function numberValue(value: unknown, fallback = 0): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
+function getAdminKey(promptText: string): string {
+  const saved = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+  if (saved) return saved;
+  const entered = window.prompt(promptText)?.trim() ?? '';
+  if (entered) sessionStorage.setItem(ADMIN_KEY_STORAGE, entered);
+  return entered;
+}
+async function apiRequest<T>(path: string, init: RequestInit = {}, key = getAdminKey('Enter the Monarium admin key.')): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': key, ...init.headers },
+  });
+  if (response.status === 401) sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { message?: string; error?: string };
+    throw new Error(payload.message ?? payload.error ?? `Backend request failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
+function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
+  const { id: _id, stage_number, confidence_score, signature_moves: _signatureMoves, updated_at: _updatedAt, ...fields } = entry;
+  return { ...fields, stage: stage_number, confidence: confidence_score };
+}
+async function uploadImage(file: File): Promise<void> {
+  const entry = getSelected(); if (!entry) return;
+  const key = getAdminKey('Enter the Monarium admin key to upload this image.');
+  if (!key) { showToast('Upload cancelled: admin key required'); return; }
+  setSaveState('Uploading image…');
+  try {
+    const signed = await apiRequest<{ uploadUrl: string; method: string; objectKey: string; publicUrl: string }>('/api/uploads/r2-presign', {
+      method: 'POST', body: JSON.stringify({ entryId: entry.id, filename: file.name, contentType: file.type, assetKind: 'profile' }),
+    }, key);
+    const upload = await fetch(signed.uploadUrl, { method: signed.method, headers: { 'Content-Type': file.type }, body: file });
+    if (!upload.ok) throw new Error(`R2 upload failed (${upload.status})`);
+    await apiRequest(`/api/intake/entries/${encodeURIComponent(entry.id)}/asset`, {
+      method: 'POST', body: JSON.stringify({ objectKey: signed.objectKey, publicUrl: signed.publicUrl }),
+    }, key);
+    entry.image_path = signed.publicUrl; entry.asset_status = 'ready'; dirty = false;
+    render({ preserveListScroll: true }); showToast('Profile image uploaded to R2');
+  } catch (error) { setSaveState('Upload failed'); showToast(error instanceof Error ? error.message : 'Image upload failed'); }
+}
 function getSelected(): MonariEntry | undefined { return batch.entries.find(entry => entry.id === selectedId); }
 function bindFilter(id: string, assign: (value: string) => void): void { document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)?.addEventListener('input', event => { assign((event.target as HTMLInputElement).value); entryListScrollTop = 0; render(); }); }
 function setSaveState(text: string): void { const node = document.querySelector('#save-state'); if (node) node.textContent = text; }

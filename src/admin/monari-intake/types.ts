@@ -51,6 +51,7 @@ export interface MonariEntry {
 
 export interface IntakeBatch {
   id: string;
+  batch_key?: string;
   name: string;
   status: string;
   data_status?: 'sample' | 'complete';
