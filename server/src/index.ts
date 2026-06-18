@@ -8,7 +8,7 @@ import { uploadsRouter } from './routes/uploads.js';
 
 const app = express();
 app.disable('x-powered-by');
-app.use(cors({ origin(origin, callback) { callback(null, !origin || corsOrigins.includes(origin)); }, allowedHeaders: ['Content-Type','x-admin-secret'], methods: ['GET','POST','PUT','PATCH','OPTIONS'] }));
+app.use(cors({ origin(origin, callback) { callback(null, !origin || corsOrigins.some(pattern => originMatches(origin, pattern))); }, allowedHeaders: ['Content-Type','x-admin-secret'], methods: ['GET','POST','PUT','PATCH','OPTIONS'] }));
 app.use(express.json({ limit: '10mb' }));
 app.use('/health', healthRouter);
 app.use('/api/intake', intakeRouter);
@@ -20,3 +20,10 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   response.status(500).json({ error: 'Internal server error' });
 });
 app.listen(env.PORT, () => console.log(`Monarium Studio API listening on port ${env.PORT}`));
+
+function originMatches(origin: string, pattern: string): boolean {
+  if (origin === pattern) return true;
+  if (!pattern.includes('*')) return false;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`).test(origin);
+}
