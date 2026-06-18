@@ -17,8 +17,13 @@ From `server/`, prepare PostgreSQL and import Batch 001:
 
 ```sh
 npm run migrate
-npm run import:batch -- ../data/monari-intake/batches/batch_001.json
+npm run import:batch -- seed/batch_001.json
 ```
+
+Because Railway deploys with `server/` as `/app`, Batch 001 is duplicated at
+`server/seed/batch_001.json` so it is available inside the backend container. The
+canonical source remains `data/monari-intake/batches/batch_001.json`. The
+equivalent convenience command is `npm run import:batch001`.
 
 Imports upsert the batch by `batch_key` and entries by `(batch_id, entry_key)`, preserve each source row in `raw_json`, and normalize legacy rarity and element values.
 
