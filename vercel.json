@@ -1,5 +1,15 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_ENABLE_ADMIN=true npm run build",
   "outputDirectory": "dist",
-  "framework": null
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/admin/monari-intake",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/monari-intake/",
+      "destination": "/index.html"
+    }
+  ]
 }
