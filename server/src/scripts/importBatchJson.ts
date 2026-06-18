@@ -5,7 +5,23 @@ import { importBatch } from '../intakeData.js';
 
 const filename = process.argv[2];
 if (!filename) throw new Error('Usage: npm run import:batch -- path/to/batch.json');
-const payload = JSON.parse(await readFile(resolve(process.cwd(), filename), 'utf8')) as Record<string, unknown>;
+const cwd = process.cwd();
+const attemptedPath = resolve(cwd, filename);
+let source: string;
+try {
+  source = await readFile(attemptedPath, 'utf8');
+} catch (error) {
+  throw new Error(
+    [
+      `Unable to read batch import file.`,
+      `Current working directory: ${cwd}`,
+      `Attempted path: ${attemptedPath}`,
+      `For Railway deployments rooted at server/, use: npm run import:batch -- seed/batch_001.json`,
+    ].join('\n'),
+    { cause: error },
+  );
+}
+const payload = JSON.parse(source) as Record<string, unknown>;
 const client = await pool.connect();
 try { await client.query('BEGIN'); const result = await importBatch(client, payload); await client.query('COMMIT'); console.log(`Imported ${result.count} entries into ${result.batchKey}.`); }
 catch (error) { await client.query('ROLLBACK'); throw error; }
