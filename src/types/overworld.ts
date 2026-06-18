@@ -81,6 +81,7 @@ export interface ClassicBattleContext {
   enemyLevel?:    number;
   labMode?:       boolean;
   labDebug?:      boolean;
+  labSpecialTest?: boolean;
   playerStatOverrides?: BattleStatOverrides;
   enemyStatOverrides?:  BattleStatOverrides;
 }

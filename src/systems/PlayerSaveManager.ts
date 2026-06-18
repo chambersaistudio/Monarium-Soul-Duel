@@ -25,7 +25,7 @@ const BOND_LEVEL_CAP = 10;
 const DEFAULTS: OverworldSave = {
   starterMonariId: 'flarepaw',
   playerName: 'Amari',
-  monariLevel: 1,
+  monariLevel: 7,
   monariXp: 0,
   bondLevel: 1,
   bondXp: 0,
@@ -165,7 +165,8 @@ export class PlayerSaveManager {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return { ...DEFAULTS };
-      return { ...DEFAULTS, ...JSON.parse(raw) };
+      const parsed = { ...DEFAULTS, ...JSON.parse(raw) } as OverworldSave;
+      return { ...parsed, monariLevel: Math.max(7, parsed.monariLevel ?? 7) };
     } catch {
       return { ...DEFAULTS };
     }
@@ -180,7 +181,7 @@ export class PlayerSaveManager {
   static createFreshSave(
     starterMonariId: string,
     playerName: string,
-    level = 1,
+    level = 7,
   ): OverworldSave {
     return {
       starterMonariId,

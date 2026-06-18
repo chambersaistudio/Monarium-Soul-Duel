@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CHARACTERS_MANIFEST } from '../generated/characters-manifest';
+import { PLAYER_OVERWORLD_BASE, PLAYER_OVERWORLD_MANIFEST } from '../generated/player-overworld-manifest';
 import { ANIM_CONFIG, JUMP_PHASE_CONFIG, DEFAULT_ANIM_CONFIG } from '../config/animationConfig';
 import { CHARACTER_RENDER_CONFIG, DEFAULT_RENDER_CONFIG } from '../config/characterConfig';
 import { AUDIO_FILES } from '../config/audioConfig';
@@ -12,8 +13,25 @@ import {
 import { setBootLoading } from '../ui/bootOverlay';
 import { hasActiveGameplayScene } from '../utils/sceneHygiene';
 const NORM_BASE = 40;  // px of transparent space below feet in normalised canvas
+const PLAYER_OW_SAFE_IDLE_FRAMES = 2;
+const PLAYER_OW_SAFE_WALK_FRAMES = 4;
 
 type ManifestJSON = { character?: string; generated?: string; animations?: Record<string, string[]> };
+
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function playerOwKey(anim: string, stem: string): string {
+  return `player_ow_${anim}_${stem}`;
+}
+
+function playerOwFramesFor(anim: string): string[] {
+  const frames = [...(PLAYER_OVERWORLD_MANIFEST[anim] ?? [])].sort(naturalCompare);
+  if (!SAFE_MODE) return frames;
+  const maxFrames = anim.startsWith('idle_') ? PLAYER_OW_SAFE_IDLE_FRAMES : PLAYER_OW_SAFE_WALK_FRAMES;
+  return thinFrames(frames, maxFrames);
+}
 
 function phaserKey(charId: string, folder: string, stem: string): string {
   return `${charId}_${folder}_${stem}`;
@@ -127,6 +145,16 @@ export class PreloadScene extends Phaser.Scene {
       }
     }
 
+
+    // ── Player overworld animations (directional folders; missing dirs are safe) ──
+    for (const [anim, frames] of Object.entries(PLAYER_OVERWORLD_MANIFEST)) {
+      const [state, dir] = anim.split('_');
+      const sortedFrames = playerOwFramesFor(anim);
+      for (const stem of sortedFrames) {
+        this.load.image(playerOwKey(anim, stem), `${PLAYER_OVERWORLD_BASE}/${state}/${dir}/${stem}.png`);
+      }
+    }
+
     // ── Overworld backgrounds ──────────────────────────────────────────────
     // Load all 6 maps upfront so scene transitions are instant.
     const owBgs: Array<[string, string]> = [
@@ -201,6 +229,9 @@ export class PreloadScene extends Phaser.Scene {
       this.createCharacter(charId);
     }
 
+
+    this.createPlayerOverworldAnimations();
+
     // Sproutodon has no animation frames — use static fullbody image if it loaded
     if (!this.loadErrors.has('sproutodon_fullbody') && this.textures.exists('sproutodon_fullbody')) {
       this.registry.set('sproutodon_sprite_key', 'sproutodon_fullbody');
@@ -223,6 +254,40 @@ export class PreloadScene extends Phaser.Scene {
       return;
     }
     this.scene.start('TitleScene');
+  }
+
+
+  private createPlayerOverworldAnimations(): void {
+    const configs: Array<{ key: string; anim: string; frameRate: number; repeat: number; required?: boolean }> = [
+      { key: 'player_ow_idle_down',  anim: 'idle_down',  frameRate: 7,  repeat: -1, required: true },
+      { key: 'player_ow_walk_down',  anim: 'walk_down',  frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_walk_right', anim: 'walk_right', frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_walk_up',    anim: 'walk_up',    frameRate: 10, repeat: -1, required: true },
+      { key: 'player_ow_idle_up',    anim: 'idle_up',    frameRate: 7,  repeat: -1 },
+      { key: 'player_ow_idle_right', anim: 'idle_right', frameRate: 7,  repeat: -1 },
+      { key: 'player_ow_idle_left',  anim: 'idle_left',  frameRate: 7,  repeat: -1 },
+    ];
+
+    for (const cfg of configs) {
+      const frames = playerOwFramesFor(cfg.anim);
+      const loaded = frames
+        .map(stem => playerOwKey(cfg.anim, stem))
+        .filter(key => this.textures.exists(key) && !this.loadErrors.has(key))
+        .map(key => this.normalizeToCanvas(key) ?? key)
+        .filter(key => this.textures.exists(key));
+      if (loaded.length === 0) {
+        if (cfg.required) console.warn(`[PreloadScene] missing player overworld ${cfg.anim}`);
+        continue;
+      }
+      if (this.anims.exists(cfg.key)) this.anims.remove(cfg.key);
+      this.anims.create({ key: cfg.key, frames: loaded.map(key => ({ key })), frameRate: cfg.frameRate, repeat: cfg.repeat });
+    }
+
+    const firstIdle = playerOwFramesFor('idle_down')
+      .map(stem => this.normalizeToCanvas(playerOwKey('idle_down', stem)) ?? playerOwKey('idle_down', stem))
+      .find(key => this.textures.exists(key) && !this.loadErrors.has(key));
+    if (!firstIdle) console.warn('[PreloadScene] missing player overworld idle_down');
+    this.registry.set('player_ow_sprite_key', firstIdle ?? null);
   }
 
   private createCharacter(charId: string): void {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 export const MAX_RENDER_DPR = 2;
+export const MAX_MOBILE_RENDER_DPR = 1;
 
 let lastAppliedKey = '';
 let lastLoggedKey = '';
@@ -9,7 +10,11 @@ const DEBUG_ENABLED = typeof window !== 'undefined' && new URLSearchParams(windo
 export function getRenderDpr(): number {
   if (typeof window === 'undefined') return 1;
   const dpr = Number(window.devicePixelRatio) || 1;
-  return Math.max(1, Math.min(MAX_RENDER_DPR, dpr));
+  const params = new URLSearchParams(window.location.search);
+  const forceHighRes = params.has('hires');
+  const isMobileTouch = !forceHighRes && (navigator.maxTouchPoints ?? 0) > 0;
+  const maxDpr = isMobileTouch ? MAX_MOBILE_RENDER_DPR : MAX_RENDER_DPR;
+  return Math.max(1, Math.min(maxDpr, dpr));
 }
 
 export function viewportCssSize(): { width: number; height: number } {

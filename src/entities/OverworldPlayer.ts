@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 
 export class OverworldPlayer extends Phaser.GameObjects.Container {
   private gfx: Phaser.GameObjects.Graphics;
+  private sprite: Phaser.GameObjects.Sprite | null = null;
+  private facing: 'down' | 'up' | 'right' | 'left' = 'down';
   private shadow: Phaser.GameObjects.Ellipse;
   private phBody!: Phaser.Physics.Arcade.Body;
   readonly speed = 180;
@@ -13,8 +15,17 @@ export class OverworldPlayer extends Phaser.GameObjects.Container {
     scene.add.existing(this.shadow);
 
     this.gfx = scene.add.graphics();
-    this.drawCharacter(1);
-    this.add(this.gfx);
+    const spriteKey = scene.registry.get('player_ow_sprite_key') as string | null;
+    if (spriteKey && scene.textures.exists(spriteKey)) {
+      this.sprite = scene.add.sprite(0, 0, spriteKey).setOrigin(0.5, 1);
+      this.sprite.setDisplaySize(52, 70);
+      this.add(this.sprite);
+      this.playPlayerAnim('idle_down');
+      this.gfx.setVisible(false);
+    } else {
+      this.drawCharacter(1);
+      this.add(this.gfx);
+    }
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -55,11 +66,35 @@ export class OverworldPlayer extends Phaser.GameObjects.Container {
 
   move(dx: number, dy: number): void {
     this.phBody.setVelocity(dx * this.speed, dy * this.speed);
-    if (dx !== 0) this.drawCharacter(dx > 0 ? 1 : -1);
+    if (Math.abs(dx) > Math.abs(dy)) this.facing = dx > 0 ? 'right' : 'left';
+    else if (dy !== 0) this.facing = dy > 0 ? 'down' : 'up';
+
+    if (this.sprite) {
+      const animDir = this.facing === 'left' ? 'right' : this.facing;
+      this.sprite.setFlipX(this.facing === 'left');
+      this.playPlayerAnim(`walk_${animDir}`, 'idle_down');
+    } else if (dx !== 0) {
+      this.drawCharacter(dx > 0 ? 1 : -1);
+    }
   }
 
   stopMove(): void {
     this.phBody.setVelocity(0, 0);
+    if (this.sprite) {
+      const animDir = this.facing === 'left' ? 'right' : this.facing;
+      this.sprite.setFlipX(this.facing === 'left');
+      this.playPlayerAnim(`idle_${animDir}`, 'idle_down');
+    }
+  }
+
+  private playPlayerAnim(name: string, fallback = 'idle_down'): void {
+    if (!this.sprite) return;
+    const key = `player_ow_${name}`;
+    const fallbackKey = `player_ow_${fallback}`;
+    const animKey = this.scene.anims.exists(key) ? key : fallbackKey;
+    if (this.scene.anims.exists(animKey) && this.sprite.anims.currentAnim?.key !== animKey) {
+      this.sprite.play(animKey, true);
+    }
   }
 
   update(): void {

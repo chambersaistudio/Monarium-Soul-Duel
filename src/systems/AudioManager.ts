@@ -13,6 +13,7 @@ export class AudioManager {
   private readonly scene: Phaser.Scene;
   private bgmKey: string | null = null;
   private bgm:    Phaser.Sound.BaseSound | null = null;
+  private bgmVolume = 0.65;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -29,6 +30,7 @@ export class AudioManager {
     this.stopBgm();
     if (!this.has(key)) return;
     this.bgmKey = key;
+    this.bgmVolume = volume;
     this.bgm    = this.scene.sound.add(key, { loop: true, volume });
     this.bgm.play();
   }
@@ -55,6 +57,42 @@ export class AudioManager {
         this.playBgm(key, volume);
       }
     }, 50);
+  }
+
+  fadePauseBgm(duration = 320): Promise<void> {
+    const sound = this.bgm as (Phaser.Sound.BaseSound & { setVolume?: (volume: number) => void; pause?: () => void; volume?: number }) | null;
+    if (!sound) return Promise.resolve();
+    const startVolume = typeof sound.volume === 'number' ? sound.volume : this.bgmVolume;
+    return new Promise(resolve => {
+      this.scene.tweens.addCounter({
+        from: startVolume,
+        to: 0,
+        duration,
+        onUpdate: tween => {
+          try { sound.setVolume?.(tween.getValue() ?? 0); } catch { /* no-op */ }
+        },
+        onComplete: () => {
+          try { sound.pause?.(); } catch { /* no-op */ }
+          console.log('[battle-special] battle music faded/paused');
+          resolve();
+        },
+      });
+    });
+  }
+
+  resumeBgmFade(duration = 500): void {
+    const sound = this.bgm as (Phaser.Sound.BaseSound & { setVolume?: (volume: number) => void; resume?: () => void }) | null;
+    if (!sound) return;
+    try { sound.setVolume?.(0); sound.resume?.(); } catch { /* no-op */ }
+    this.scene.tweens.addCounter({
+      from: 0,
+      to: this.bgmVolume,
+      duration,
+      onUpdate: tween => {
+        try { sound.setVolume?.(tween.getValue() ?? 0); } catch { /* no-op */ }
+      },
+      onComplete: () => console.log('[battle-special] battle music resumed'),
+    });
   }
 
   /** Stop and destroy the current BGM (e.g. before a scene transition). */
