@@ -36,6 +36,7 @@ let taxonomyFilter = '';
 let elementFilter = '';
 let imageMissing = false;
 let dirty = false;
+let saveError = '';
 let sourceSignature = '';
 let entryListScrollTop = 0;
 let backendHealthPassed = false;
@@ -53,6 +54,7 @@ class BackendRequestError extends Error {
     readonly url: string,
     readonly status?: number,
     readonly responseBody?: string,
+    readonly field?: string,
   ) {
     super(message);
     this.name = 'BackendRequestError';
@@ -164,6 +166,7 @@ function renderEditor(entry: MonariEntry): string {
   const resolvedImage = resolveEntryImage(entry);
   return `
     <div class="review-toolbar"><div class="review-title"><p class="eyebrow">${escapeHtml(formatCodexNo(entry.codex_no))}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
+    ${saveError ? `<div class="save-error" role="alert">${saveError}</div>` : ''}
     <div class="review-grid">
       <article class="visual-card">
         <div class="image-stage ${imageMissing ? 'missing' : ''}">
@@ -171,7 +174,7 @@ function renderEditor(entry: MonariEntry): string {
           <span class="stage-chip">STAGE ${entry.stage_number}</span><span id="image-warning" class="image-warning">⚠ Image missing</span>
           ${BACKEND_MODE ? '<button class="image-replace-overlay" data-action="change-image" aria-label="Replace profile image"><span>↑</span> Replace Profile Image</button>' : ''}
         </div>
-        <div class="image-controls"><div class="image-actions"><button class="button primary" data-action="change-image">${BACKEND_MODE ? 'Replace Profile Image' : 'Change Image Path'}</button><a class="button secondary" href="${escapeAttr(resolvedImage)}" target="_blank" rel="noreferrer">Open Image</a></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden><label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/...">${BACKEND_MODE ? '' : '<small>Local preview only; this is not a permanent online upload. Export JSON and add the image file to repo/cloud storage to publish it.</small>'}</label><p class="image-failure">Image failed to load.</p></div>
+        <div class="image-controls"><div class="image-actions"><button class="button primary" data-action="change-image">${BACKEND_MODE ? 'Replace Profile Image' : 'Change Image Path'}</button><a class="button secondary" href="${escapeAttr(resolvedImage)}" target="_blank" rel="noreferrer" ${resolvedImage ? '' : 'aria-disabled="true"'}>Open Image</a></div><input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>${BACKEND_MODE ? '' : `<label class="image-path-field" hidden><span>Browser-visible image path</span><input id="image-path-input" value="${escapeAttr(entry.image_path)}" placeholder="/assets/monari/_incoming/batch_001/..."><small>Local preview only; export JSON and publish the image asset separately.</small></label>`}<p class="image-failure">Image failed to load.</p></div>
         <div class="visual-meta"><span><small>ELEMENT</small><b>${escapeHtml(entry.element_1 || '—')}${entry.element_2 ? ` / ${escapeHtml(entry.element_2)}` : ''}</b></span><span><small>RARITY</small><b>${escapeHtml(entry.rarity || '—')}</b></span><span><small>ROLE</small><b>${escapeHtml(entry.role || '—')}</b></span></div>
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
       </article>
@@ -183,7 +186,7 @@ function renderEditor(entry: MonariEntry): string {
         ${section('Lore & optional ability', `${textarea('description','Description / lore',entry.description)}<p class="section-note">Abilities are optional. Shared abilities suit most Monari; reserve signature abilities for select iconic or story-important designs.</p><div class="field-grid">${input('ability_name','Ability name (optional)',entry.ability_name)}${input('signature_moves','Signature moves (optional)',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description (optional)',entry.ability_description)}${textarea('ability_effect','In-game effect (optional)',entry.ability_effect)}<div class="field-grid">${textarea('ability_effect_tags','Ability effect tags (comma separated)',entry.ability_effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div><div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
         <details class="moveset-section"><summary>Learnable Moves / Moveset <span>Coming Soon</span></summary><div class="field-grid">${textarea('suggested_signature_moves','Suggested signature moves',entry.suggested_signature_moves)}${textarea('suggested_learnable_moves','Suggested learnable moves',entry.suggested_learnable_moves)}</div><p>Future recommendations will use element, taxonomy, tags, role, and evolution stage.</p></details>
         <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Save changes, or promote this reviewed entry to the official Codex.' : 'Update status, then save your local review.'}</span></div><div>${BACKEND_MODE ? '<button class="button approve" data-action="promote">Approve to Codex</button>' : ''}<button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
-        <details class="backup-tools"><summary>Advanced / Debug</summary><p>${BACKEND_MODE ? 'Technical identifiers, slug controls, source metadata, and portable backup tools.' : 'Local metadata and export tools. Export is required to keep a permanent copy outside this browser.'}</p><div class="advanced-grid">${input('slug','Slug',entry.slug)}${checkbox('slug_locked','Lock manual slug',entry.slug_locked)}${input('habitat','Habitat / search metadata',entry.habitat)}${input('personality','Personality notes (optional)',entry.personality)}</div><div class="advanced-metadata">${readField('Import Entry ID',entry.id)}${readField('Source filename',entry.source_filename || '—')}${readField('Parent sheet',entry.parent_sheet_filename || '—')}</div><div class="advanced-actions"><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div>${resolvedImage ? `<details><summary>Debug Image Path</summary><code>${escapeHtml(resolvedImage)}</code></details>` : ''}</details>
+        <details class="backup-tools"><summary>Advanced / Debug</summary><p>${BACKEND_MODE ? 'Technical identifiers, slug controls, source metadata, and portable backup tools.' : 'Local metadata and export tools. Export is required to keep a permanent copy outside this browser.'}</p><div class="advanced-grid">${input('slug','Slug',entry.slug)}${checkbox('slug_locked','Lock manual slug',entry.slug_locked)}${input('habitat','Habitat / search metadata',entry.habitat)}${input('personality','Personality notes (optional)',entry.personality)}</div><div class="advanced-metadata">${readField('Import Entry ID',entry.id)}${readField('Source filename',entry.source_filename || '—')}${readField('Parent sheet',entry.parent_sheet_filename || '—')}${readField('Image URL',entry.image_url || '—')}${readField('Image path / object key',entry.image_path || '—')}</div><div class="advanced-actions"><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div>${resolvedImage ? `<details><summary>Resolved Preview URL</summary><code>${escapeHtml(resolvedImage)}</code></details>` : ''}</details>
       </article>
     </div>`;
 }
@@ -290,6 +293,7 @@ function updateField(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
   const value = control.type === 'checkbox' ? (control as HTMLInputElement).checked : numeric ? (control.value ? Number(control.value) : null) : control.value;
   (entry as unknown as Record<string, unknown>)[field] = value;
   dirty = true;
+  saveError = '';
   if (stats.some(([key]) => key === field)) {
     const value = Math.max(0, Math.min(150, Number(control.value)));
     control.closest('.stat-row')?.querySelector<HTMLElement>('.stat-fill')?.style.setProperty('--stat-value', `${value / 1.5}%`);
@@ -449,12 +453,22 @@ async function saveChanges(): Promise<void> {
   const key = getAdminKey('Enter the Monarium admin key to save this entry.');
   if (!key) { showToast('Save cancelled: admin key required'); return; }
   setSaveState('Saving…');
+  saveError = '';
   try {
     const payload = toBackendEntry(entry);
     const result = await apiRequest<{ entry: Record<string, unknown> }>(`/api/intake/entries/${encodeURIComponent(entry.id)}`, { method: 'PATCH', body: JSON.stringify(payload) }, key);
     Object.assign(entry, normalizeEntry(result.entry, 0, new Date().toISOString()));
     dirty = false; window.onbeforeunload = null; setSaveState('Saved to Backend'); showToast('Saved to Backend');
-  } catch (error) { setSaveState('Save failed'); showToast(error instanceof Error ? error.message : 'Backend save failed'); }
+  } catch (error) {
+    setSaveState('Save failed');
+    const requestError = error instanceof BackendRequestError ? error : undefined;
+    const message = requestError?.status === 500 ? 'Backend save failed. Check Railway logs.' : error instanceof Error ? error.message : 'Backend save failed';
+    saveError = requestError
+      ? `<b>${escapeHtml(message)}</b><span><code>${escapeHtml(`${requestError.method} ${requestError.url}`)}</code> · Status ${requestError.status ?? 'No response'}${requestError.field ? ` · Field: <code>${escapeHtml(requestError.field)}</code>` : ''}</span>`
+      : `<b>${escapeHtml(message)}</b>`;
+    render({ preserveListScroll: true });
+    showToast(message);
+  }
 }
 
 function saveLocal(): void {
@@ -609,8 +623,14 @@ function imageUrl(value: string): string {
   return publicPath.split('/').map((part, index) => index === 0 ? '' : encodeURIComponent(decodeURIComponent(part))).join('/');
 }
 function resolveEntryImage(entry: Pick<MonariEntry, 'image_url' | 'image_path'>): string {
-  return imageUrl(entry.image_url) || imageUrl(entry.image_path);
+  const publicUrl = fullPublicImageUrl(entry.image_url);
+  if (publicUrl) return publicUrl;
+  const path = entry.image_path.trim().replace(/\\/g, '/');
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^\/(?:assets|data)\//i.test(path) || /^\/?public\/(?:assets|data)\//i.test(path)) return imageUrl(path);
+  return '';
 }
+function fullPublicImageUrl(value: string): string { return /^https?:\/\//i.test(value.trim()) ? value.trim() : ''; }
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
 function numberValue(value: unknown, fallback = 0): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function getAdminKey(promptText: string): string {
@@ -643,7 +663,7 @@ async function apiRequest<T>(path: string, init: RequestInit = {}, key = getAdmi
   if (!response.ok) {
     const responseBody = await response.text();
     const payload = parseErrorPayload(responseBody);
-    throw new BackendRequestError(payload ?? `Backend request failed (${response.status})`, method, url, response.status, responseBody);
+    throw new BackendRequestError(payload.message ?? `Backend request failed (${response.status})`, method, url, response.status, responseBody, payload.field);
   }
   return response.json() as Promise<T>;
 }
@@ -662,7 +682,7 @@ async function checkBackendHealth(): Promise<void> {
   }
   if (!response.ok) {
     const responseBody = await response.text();
-    throw new BackendRequestError(parseErrorPayload(responseBody) ?? `Backend health check failed (${response.status})`, method, url, response.status, responseBody);
+    throw new BackendRequestError(parseErrorPayload(responseBody).message ?? `Backend health check failed (${response.status})`, method, url, response.status, responseBody);
   }
 }
 function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
@@ -738,15 +758,16 @@ function normalizeApiUrl(value: string): string {
     return withProtocol.replace(/\/+$/, '');
   }
 }
-function parseErrorPayload(value: string): string | undefined {
+function parseErrorPayload(value: string): { message?: string; field?: string } {
   try {
-    const payload = JSON.parse(value) as { message?: unknown; error?: unknown };
-    if (typeof payload.message === 'string') return payload.message;
-    if (typeof payload.error === 'string') return payload.error;
+    const payload = JSON.parse(value) as { message?: unknown; error?: unknown; field?: unknown };
+    return {
+      message: typeof payload.message === 'string' ? payload.message : typeof payload.error === 'string' ? payload.error : undefined,
+      field: typeof payload.field === 'string' ? payload.field : undefined,
+    };
   } catch {
-    if (value.trim()) return value.trim();
+    return { message: value.trim() || undefined };
   }
-  return undefined;
 }
 function renderBackendDiagnostics(error?: BackendRequestError): string {
   return `<dl class="backend-diagnostics">
