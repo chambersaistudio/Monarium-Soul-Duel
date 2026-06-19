@@ -686,10 +686,22 @@ async function checkBackendHealth(): Promise<void> {
   }
 }
 function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
-  const { id: _id, stage_number, confidence_score, signature_moves: _signatureMoves, updated_at: _updatedAt, ...fields } = entry;
   const slug = entry.slug_locked && entry.slug ? entry.slug : slugify(entry.approved_name);
   entry.slug = slug;
-  return { ...fields, slug, stage: stage_number, confidence: confidence_score };
+  return {
+    approved_name: entry.approved_name, slug, codex_no: entry.codex_no, stage: entry.stage_number,
+    evolves_from: entry.evolves_from, evolves_to: entry.evolves_to, evolution_line_id: entry.evolution_line_id,
+    status: entry.status, rarity: entry.rarity, element_1: entry.element_1, element_2: entry.element_2,
+    taxonomy_primary: entry.taxonomy_primary, taxonomy_secondary: entry.taxonomy_secondary, role: entry.role,
+    hp: entry.hp, aura: entry.aura, attack: entry.attack, special_attack: entry.special_attack,
+    defense: entry.defense, special_defense: entry.special_defense, speed: entry.speed,
+    ability_name: entry.ability_name, ability_description: entry.ability_description, ability_effect: entry.ability_effect,
+    ability_effect_tags: entry.ability_effect_tags, status_condition_suggestions: entry.status_condition_suggestions,
+    suggested_signature_moves: entry.suggested_signature_moves, suggested_learnable_moves: entry.suggested_learnable_moves,
+    description: entry.description, habitat: entry.habitat, personality: entry.personality, tags: entry.tags,
+    confidence: entry.confidence_score, review_notes: entry.review_notes, asset_status: entry.asset_status,
+    image_url: entry.image_url, image_path: entry.image_path,
+  };
 }
 async function uploadImage(file: File): Promise<void> {
   const entry = getSelected(); if (!entry) return;

@@ -45,6 +45,13 @@ async function updateEntry(request: Request, response: Response, next: NextFunct
       constraint: databaseError.constraint,
       column: databaseError.column,
     });
+    if (databaseError.code === '42703') {
+      response.status(503).json({
+        error: 'Backend database schema is out of date. Redeploy the backend or run npm run migrate.',
+        field: databaseError.column,
+      });
+      return;
+    }
     if (databaseError.code?.startsWith('22') || databaseError.code?.startsWith('23')) {
       response.status(400).json({
         error: databaseError.constraint ? `Value violates ${databaseError.constraint}` : 'One or more fields contain an invalid value',
