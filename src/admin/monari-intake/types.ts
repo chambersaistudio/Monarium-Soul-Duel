@@ -73,6 +73,21 @@ export interface CodexEntry {
   evolution_line_id: string;
   image_url: string;
   image_path: string;
+  hp: number;
+  aura: number;
+  attack: number;
+  special_attack: number;
+  defense: number;
+  special_defense: number;
+  speed: number;
+  ability_name: string;
+  ability_description: string;
+  ability_effect: string;
+  signature_moves: string;
+  description: string;
+  habitat: string;
+  personality: string;
+  tags: string;
   asset_status: string;
   updated_at: string;
 }
