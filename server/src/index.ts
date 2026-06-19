@@ -6,8 +6,12 @@ import { healthRouter } from './routes/health.js';
 import { intakeRouter } from './routes/intake.js';
 import { uploadsRouter } from './routes/uploads.js';
 import { codexRouter } from './routes/codex.js';
+import { pool } from './db.js';
+import { applyMigrations } from './migrations.js';
 
 const app = express();
+const appliedMigrations = await applyMigrations(pool);
+console.log(`Database schema ready (${appliedMigrations.join(', ')})`);
 app.disable('x-powered-by');
 app.use(cors({ origin(origin, callback) { callback(null, !origin || corsOrigins.some(pattern => originMatches(origin, pattern))); }, allowedHeaders: ['Content-Type','x-admin-secret'], methods: ['GET','POST','PUT','PATCH','OPTIONS'] }));
 app.use(express.json({ limit: '10mb' }));
