@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 
 const officialElements = new Set(['Neutral','Fire','Water','Flora','Wind','Thunder','Stone','Steel','Light','Dark','Aether','Ice']);
 const editableColumns = new Set([
-  'status','image_path','image_url','pending_image_path','approved_name','slug','dex_no','stage','evolves_from','evolves_to','evolution_line_id',
+  'status','image_path','image_url','pending_image_path','approved_name','slug','slug_locked','codex_no','dex_no','stage','evolves_from','evolves_to','evolution_line_id',
   'rarity','element_1','element_2','taxonomy_primary','taxonomy_secondary','role','hp','aura','attack','special_attack','defense','special_defense','speed',
   'ability_name','ability_description','ability_effect','ability_effect_tags','status_condition_suggestions','suggested_signature_moves','suggested_learnable_moves',
   'description','habitat','personality','tags','confidence','review_notes','asset_status',
@@ -30,8 +30,8 @@ export function normalizeEntry(source: Record<string, unknown>, index: number): 
   const entryKey = text(source.entry_key) ?? text(source.id) ?? text(source.intake_id) ?? `entry_${String(index + 1).padStart(3, '0')}`;
   return {
     entry_key: entryKey, status: text(source.status) ?? 'incoming', source_filename: text(source.source_filename), parent_sheet_filename: text(source.parent_sheet_filename),
-    image_path: text(source.image_path) ?? text(source.source_path), image_url: text(source.image_url), pending_image_path: text(source.pending_image_path), approved_name: text(source.approved_name),
-    slug: text(source.slug), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
+    image_path: text(source.image_path) ?? text(source.source_path), image_url: text(source.image_url), pending_image_path: text(source.pending_image_path), approved_name: text(source.approved_name) ?? text(source.name),
+    slug: text(source.slug), codex_no: number(source.codex_no) ?? number(source.dex_no), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
     evolution_line_id: text(source.evolution_line_id), rarity, element_1: element1, element_2: element2, taxonomy_primary: text(source.taxonomy_primary), taxonomy_secondary: text(source.taxonomy_secondary),
     role: text(source.role), hp: number(source.hp) ?? number(source.health), aura: number(source.aura), attack: number(source.attack), special_attack: number(source.special_attack), defense: number(source.defense),
     special_defense: number(source.special_defense), speed: number(source.speed), ability_name: text(source.ability_name) ?? text(source.ability), ability_description: text(source.ability_description),

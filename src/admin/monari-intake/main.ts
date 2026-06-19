@@ -1,7 +1,7 @@
 import './styles.css';
 import {
   MONARI_ASSET_STATUSES, MONARI_ELEMENTS, MONARI_RARITIES, MONARI_STATUSES, MONARI_TAXONOMIES,
-  type IntakeBatch, type MonariEntry, type MonariStatus,
+  type CodexEntry, type IntakeBatch, type MonariEntry, type MonariStatus,
 } from './types';
 
 declare global {
@@ -39,6 +39,12 @@ let dirty = false;
 let sourceSignature = '';
 let entryListScrollTop = 0;
 let backendHealthPassed = false;
+let view: 'intake' | 'codex' = 'intake';
+let batches: Array<{ batch_key: string; name: string }> = [];
+let codexEntries: CodexEntry[] = [];
+let codexQuery = '';
+let codexStatus = '';
+let importPreview: { payload: Record<string, unknown>; warnings: string[]; errors: string[]; filename: string } | null = null;
 
 class BackendRequestError extends Error {
   constructor(
@@ -93,7 +99,8 @@ async function loadBackendBatch(): Promise<IntakeBatch> {
   backendHealthPassed = true;
   const key = getAdminKey('Enter the Monarium admin key to load backend intake data.');
   if (!key) throw new Error('An admin key is required in backend mode.');
-  const list = await apiRequest<{ batches: Array<{ batch_key: string }> }>('/api/intake/batches', {}, key);
+  const list = await apiRequest<{ batches: Array<{ batch_key: string; name: string }> }>('/api/intake/batches', {}, key);
+  batches = list.batches;
   const batchKey = list.batches[0]?.batch_key;
   if (!batchKey) throw new Error('No backend batches found. Run migration/import first.');
   return normalizeBatch(await apiRequest(`/api/intake/batches/${encodeURIComponent(batchKey)}`, {}, key));
@@ -106,13 +113,13 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
   const selected = getSelected();
   app.innerHTML = `
     <header class="admin-header">
-      <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>Intake Review</h1></div>
-      <div class="batch-summary"><span class="live-dot"></span><div><b>${escapeHtml(batch.name)}</b><small>${escapeHtml(batch.status)} · ${batch.entries.length} entries</small></div></div>
+      <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>${view === 'intake' ? 'Intake Review' : 'Live Codex'}</h1></div>
+      <nav class="admin-tabs"><button class="${view === 'intake' ? 'active' : ''}" data-view="intake">Intake Review</button><button class="${view === 'codex' ? 'active' : ''}" data-view="codex">Live Codex</button></nav>
       <div class="header-actions"><span class="mode-indicator ${BACKEND_MODE ? 'backend' : 'local'}">${BACKEND_MODE ? 'Backend Mode' : 'Local JSON Mode'}</span><span class="connection-state">${BACKEND_MODE ? '<i></i> Connected to Railway' : 'Backend disabled'}</span><span id="save-state">${dirty ? 'Unsaved changes' : BACKEND_MODE ? 'Changes persist after refresh' : 'Saved locally'}</span></div>
     </header>
-      <div class="admin-layout">
+    ${view === 'intake' ? `<div class="admin-layout">
       <aside class="library-panel">
-        <label class="batch-picker"><span>Active batch</span><select><option>${escapeHtml(batch.name)}</option></select><small>Imported ${formatDate(batch.imported_at)}</small></label>
+        <div class="batch-tools"><label class="batch-picker"><span>Active batch</span><select id="batch-select">${(batches.length ? batches : [{ batch_key: batch.batch_key ?? batch.id, name: batch.name }]).map(item => `<option value="${escapeAttr(item.batch_key)}" ${item.batch_key === batch.batch_key ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select><small>Imported ${formatDate(batch.imported_at)}</small></label>${BACKEND_MODE ? '<button class="button secondary" data-action="import-batch">Import Batch</button><input id="batch-file-input" type="file" accept="application/json,.json" hidden>' : ''}</div>
         <label class="search"><span>⌕</span><input id="search" type="search" value="${escapeAttr(query)}" placeholder="Search name, tag, ID…" /></label>
         <div class="filters">
           ${filterSelect('status-filter', 'All statuses', [...MONARI_STATUSES], statusFilter)}
@@ -128,7 +135,8 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
         ${renderPersistenceNotice()}
         ${selected ? renderEditor(selected) : renderEmpty()}
       </section>
-    </div>
+    </div>` : renderCodexView()}
+    ${importPreview ? renderImportPreview() : ''}
     <div id="toast" role="status" aria-live="polite"></div>`;
   bindEvents();
   const list = document.querySelector<HTMLElement>('.entry-list');
@@ -144,7 +152,7 @@ function renderList(): string {
   return entries.map(entry => `
     <button class="entry-item ${entry.id === selectedId ? 'selected' : ''}" data-select="${escapeAttr(entry.id)}">
       <span class="thumb"><img src="${escapeAttr(resolveEntryImage(entry))}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden title="${escapeAttr(resolveEntryImage(entry))}">✦</span></span>
-      <span class="entry-copy"><b>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</b><small>${escapeHtml(entry.id)} · Stage ${entry.stage_number}</small><span class="badges"><i class="badge status-${entry.status}">${label(entry.status)}</i><i class="badge rarity">${escapeHtml(entry.rarity || 'Unrated')}</i></span></span>
+      <span class="entry-copy"><b>${escapeHtml(formatCodexNo(entry.codex_no))} ${escapeHtml(entry.approved_name || 'Unnamed Monari')}</b><small>Stage ${entry.stage_number}</small><span class="badges"><i class="badge status-${entry.status}">${label(entry.status)}</i><i class="badge rarity">${escapeHtml(entry.rarity || 'Unrated')}</i></span></span>
       <span class="chevron">›</span>
     </button>`).join('');
 }
@@ -155,7 +163,7 @@ function renderEditor(entry: MonariEntry): string {
   const selectedIndex = entries.findIndex(candidate => candidate.id === entry.id);
   const resolvedImage = resolveEntryImage(entry);
   return `
-    <div class="review-toolbar"><div class="review-title"><p class="eyebrow">ENTRY ${escapeHtml(entry.id)}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
+    <div class="review-toolbar"><div class="review-title"><p class="eyebrow">${escapeHtml(formatCodexNo(entry.codex_no))}</p><h2>${escapeHtml(entry.approved_name || 'Unnamed Monari')}</h2></div><div class="entry-navigation"><button class="icon-button nav-button" data-action="previous" ${selectedIndex <= 0 ? 'disabled' : ''} aria-label="Previous entry">← <span>Previous</span></button><button class="icon-button nav-button" data-action="next" ${selectedIndex < 0 || selectedIndex >= entries.length - 1 ? 'disabled' : ''} aria-label="Next entry"><span>Next</span> →</button></div><div class="toolbar-actions"><button class="icon-button" data-action="speak" title="Pronounce name" aria-label="Pronounce name">◖))</button><select data-field="status" aria-label="Status">${options(MONARI_STATUSES, entry.status)}</select><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
     <div class="review-grid">
       <article class="visual-card">
         <div class="image-stage ${imageMissing ? 'missing' : ''}">
@@ -168,16 +176,62 @@ function renderEditor(entry: MonariEntry): string {
         <div class="ai-panel"><span>✦</span><div><p class="eyebrow">AI HELPER</p><b>AI Helper Coming Soon</b><small>Name, lore, taxonomy, and stat suggestions.</small></div><button class="button secondary" data-action="copy-prompt">Copy AI Rename Prompt</button></div>
       </article>
       <article class="editor-card">
-        ${section('Identity', `<div class="field-grid identity-grid">${input('approved_name','Approved name',entry.approved_name)}${input('slug','Slug',entry.slug)}${selectField('status','Review status',MONARI_STATUSES,entry.status)}${selectField('rarity','Rarity',MONARI_RARITIES,entry.rarity)}</div>`)}
+        ${section('Identity', `<div class="field-grid identity-grid">${input('approved_name','Approved name',entry.approved_name)}${numberInput('codex_no','Codex No.',entry.codex_no)}${selectField('status','Review status',MONARI_STATUSES,entry.status)}${selectField('rarity','Rarity',MONARI_RARITIES,entry.rarity)}</div>`)}
         ${section('Profile', `<div class="read-grid profile-summary">${readField('Stage',String(entry.stage_number))}${readField('Evolves from',entry.evolves_from || '—')}${readField('Evolves to',entry.evolves_to || '—')}${readField('Evolution line ID',entry.evolution_line_id || '—')}</div><div class="field-grid">${selectField('asset_status','Asset status',MONARI_ASSET_STATUSES,entry.asset_status)}</div>`)}
         ${section('Classification', `<div class="field-grid three">${selectField('element_1','Element 1',MONARI_ELEMENTS,entry.element_1)}${selectField('element_2','Element 2',['', ...MONARI_ELEMENTS],entry.element_2)}${inputWithHint('role','Role',entry.role,'Admin guidance for stat direction; not a hard player restriction.')}${selectField('taxonomy_primary','Primary taxonomy',MONARI_TAXONOMIES,entry.taxonomy_primary)}${selectField('taxonomy_secondary','Secondary taxonomy',['', ...MONARI_TAXONOMIES],entry.taxonomy_secondary)}</div>`)}
         ${section('Stats', `<div class="stat-head"><span>7 Monarium attributes</span><b>Total <strong id="stat-total">${total}</strong></b></div><div class="stats-grid">${stats.map(([key,name]) => statInput(key,name,entry[key])).join('')}</div>`)}
         ${section('Lore & optional ability', `${textarea('description','Description / lore',entry.description)}<p class="section-note">Abilities are optional. Shared abilities suit most Monari; reserve signature abilities for select iconic or story-important designs.</p><div class="field-grid">${input('ability_name','Ability name (optional)',entry.ability_name)}${input('signature_moves','Signature moves (optional)',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description (optional)',entry.ability_description)}${textarea('ability_effect','In-game effect (optional)',entry.ability_effect)}<div class="field-grid">${textarea('ability_effect_tags','Ability effect tags (comma separated)',entry.ability_effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div><div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
         <details class="moveset-section"><summary>Learnable Moves / Moveset <span>Coming Soon</span></summary><div class="field-grid">${textarea('suggested_signature_moves','Suggested signature moves',entry.suggested_signature_moves)}${textarea('suggested_learnable_moves','Suggested learnable moves',entry.suggested_learnable_moves)}</div><p>Future recommendations will use element, taxonomy, tags, role, and evolution stage.</p></details>
-        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Update status, then save the entry to PostgreSQL.' : 'Update status, then save your local review.'}</span></div><div><button class="button approve" data-status="approved">Approve</button><button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
-        <details class="backup-tools"><summary>Advanced / Backup</summary><p>${BACKEND_MODE ? 'Optional source metadata, image diagnostics, and portable backup tools.' : 'Local metadata and export tools. Export is required to keep a permanent copy outside this browser.'}</p><div class="advanced-grid">${input('habitat','Habitat / search metadata',entry.habitat)}${input('personality','Personality notes (optional)',entry.personality)}</div><div class="advanced-metadata">${readField('Source filename',entry.source_filename || '—')}${readField('Parent sheet',entry.parent_sheet_filename || '—')}</div><div class="advanced-actions"><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div>${resolvedImage ? `<details><summary>Debug Image Path</summary><code>${escapeHtml(resolvedImage)}</code></details>` : ''}</details>
+        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Save changes, or promote this reviewed entry to the official Codex.' : 'Update status, then save your local review.'}</span></div><div>${BACKEND_MODE ? '<button class="button approve" data-action="promote">Approve to Codex</button>' : ''}<button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
+        <details class="backup-tools"><summary>Advanced / Debug</summary><p>${BACKEND_MODE ? 'Technical identifiers, slug controls, source metadata, and portable backup tools.' : 'Local metadata and export tools. Export is required to keep a permanent copy outside this browser.'}</p><div class="advanced-grid">${input('slug','Slug',entry.slug)}${checkbox('slug_locked','Lock manual slug',entry.slug_locked)}${input('habitat','Habitat / search metadata',entry.habitat)}${input('personality','Personality notes (optional)',entry.personality)}</div><div class="advanced-metadata">${readField('Import Entry ID',entry.id)}${readField('Source filename',entry.source_filename || '—')}${readField('Parent sheet',entry.parent_sheet_filename || '—')}</div><div class="advanced-actions"><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div>${resolvedImage ? `<details><summary>Debug Image Path</summary><code>${escapeHtml(resolvedImage)}</code></details>` : ''}</details>
       </article>
     </div>`;
+}
+
+function renderCodexView(): string {
+  const visible = codexEntries.filter(entry => {
+    const term = codexQuery.trim().toLowerCase();
+    const matchesSearch = !term || [
+      entry.name, entry.slug, entry.rarity, entry.element_1, entry.element_2,
+      entry.taxonomy_primary, entry.taxonomy_secondary, String(entry.codex_no ?? ''),
+    ].some(value => value.toLowerCase().includes(term.replace(/^#/, '')));
+    return matchesSearch && (codexStatus ? entry.status === codexStatus : entry.status !== 'hidden');
+  });
+  const numbered = visible.filter(entry => entry.codex_no !== null);
+  const unnumbered = visible.filter(entry => entry.codex_no === null);
+  return `<section class="codex-page">
+    <div class="codex-heading"><div><p class="eyebrow">OFFICIAL MONARIUM REGISTRY</p><h2>Live Codex</h2><p>Approved entries are ordered by their official Codex number. Hidden entries only appear when explicitly filtered.</p></div><div class="codex-filters"><label class="search"><span>⌕</span><input id="codex-search" type="search" value="${escapeAttr(codexQuery)}" placeholder="Search name, #, element, rarity, taxonomy…"></label>${filterSelect('codex-status', 'Active entries', ['published','approved','needs_review','hidden'], codexStatus)}</div></div>
+    ${!BACKEND_MODE ? '<div class="persistence-notice"><b>Live Codex requires Backend Mode.</b></div>' : ''}
+    <div class="codex-table-wrap"><table class="codex-table"><thead><tr><th>Codex</th><th>Monari</th><th>Rarity</th><th>Elements</th><th>Taxonomy</th><th>Stage / Evolution</th><th>Status</th><th>Asset</th><th>Actions</th></tr></thead><tbody>
+      ${numbered.map(renderCodexRow).join('') || '<tr><td colspan="9" class="empty-list">No numbered Codex entries match.</td></tr>'}
+      ${unnumbered.length ? `<tr class="unnumbered-heading"><th colspan="9">Unnumbered</th></tr>${unnumbered.map(renderCodexRow).join('')}` : ''}
+    </tbody></table></div>
+  </section>`;
+}
+
+function renderCodexRow(entry: CodexEntry): string {
+  const image = imageUrl(entry.image_url) || imageUrl(entry.image_path);
+  return `<tr data-codex-row="${escapeAttr(entry.id)}">
+    <td><input class="codex-number-edit" data-codex-field="codex_no" type="number" min="1" value="${entry.codex_no ?? ''}" aria-label="Codex number for ${escapeAttr(entry.name)}"><b>${formatCodexNo(entry.codex_no)}</b></td>
+    <td><div class="codex-monari"><span class="thumb"><img src="${escapeAttr(image)}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden>✦</span></span><input data-codex-field="name" value="${escapeAttr(entry.name)}"></div></td>
+    <td>${escapeHtml(entry.rarity || '—')}</td><td>${escapeHtml([entry.element_1, entry.element_2].filter(Boolean).join(' / ') || '—')}</td>
+    <td>${escapeHtml([entry.taxonomy_primary, entry.taxonomy_secondary].filter(Boolean).join(' / ') || '—')}</td>
+    <td>Stage ${entry.stage || '—'}<small>${escapeHtml(entry.evolution_line_id || 'No evolution line')}</small></td>
+    <td><select data-codex-field="status">${options(['draft','approved','published','needs_review','hidden'], entry.status)}</select></td>
+    <td><span class="badge">${escapeHtml(label(entry.asset_status || 'missing'))}</span></td>
+    <td><div class="row-actions"><button class="button secondary" data-codex-action="save" data-id="${entry.id}">Save</button><button class="button needs-edit" data-codex-action="send-back" data-id="${entry.id}">Send Back</button><button class="button secondary" data-codex-action="hide" data-id="${entry.id}">Hide</button></div></td>
+  </tr>`;
+}
+
+function renderImportPreview(): string {
+  const entries = Array.isArray(importPreview!.payload.entries) ? importPreview!.payload.entries as Array<Record<string, unknown>> : [];
+  return `<div class="modal-backdrop"><section class="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><p class="eyebrow">JSON VALIDATION</p><h2 id="import-title">Import Batch Preview</h2>
+    <dl><div><dt>File</dt><dd>${escapeHtml(importPreview!.filename)}</dd></div><div><dt>Batch</dt><dd>${escapeHtml(stringValue(importPreview!.payload.name, stringValue(importPreview!.payload.batch_key, 'Generated batch key')))}</dd></div><div><dt>Entries</dt><dd>${entries.length}</dd></div></dl>
+    <div class="import-samples">${entries.slice(0, 5).map((entry, index) => `<span>${formatCodexNo(numberOrNull(entry.codex_no))} ${escapeHtml(stringValue(entry.approved_name, stringValue(entry.name, `Entry ${index + 1}`)))}</span>`).join('')}</div>
+    ${importPreview!.errors.length ? `<div class="validation errors"><b>Errors</b>${importPreview!.errors.map(message => `<p>${escapeHtml(message)}</p>`).join('')}</div>` : ''}
+    ${importPreview!.warnings.length ? `<div class="validation warnings"><b>Warnings</b>${importPreview!.warnings.map(message => `<p>${escapeHtml(message)}</p>`).join('')}</div>` : '<div class="validation valid"><b>Ready to import</b><p>No validation warnings.</p></div>'}
+    <div class="modal-actions"><button class="button secondary" data-action="cancel-import">Cancel</button><button class="button primary" data-action="confirm-import" ${importPreview!.errors.length ? 'disabled' : ''}>Import as New Batch</button></div>
+  </section></div>`;
 }
 
 function renderPersistenceNotice(): string {
@@ -192,6 +246,15 @@ function renderPersistenceNotice(): string {
 }
 
 function bindEvents(): void {
+  document.querySelectorAll<HTMLElement>('[data-view]').forEach(node => node.addEventListener('click', () => void changeView(node.dataset.view as 'intake' | 'codex')));
+  document.querySelector<HTMLSelectElement>('#batch-select')?.addEventListener('change', event => void switchBatch((event.target as HTMLSelectElement).value));
+  document.querySelector<HTMLInputElement>('#batch-file-input')?.addEventListener('change', event => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) void previewImport(file);
+  });
+  document.querySelector<HTMLInputElement>('#codex-search')?.addEventListener('input', event => { codexQuery = (event.target as HTMLInputElement).value; render(); });
+  document.querySelector<HTMLSelectElement>('#codex-status')?.addEventListener('change', event => { codexStatus = (event.target as HTMLSelectElement).value; render(); });
+  document.querySelectorAll<HTMLElement>('[data-codex-action]').forEach(node => node.addEventListener('click', () => void handleCodexAction(node.dataset.codexAction ?? '', node.dataset.id ?? '')));
   const list = document.querySelector<HTMLElement>('.entry-list');
   list?.addEventListener('scroll', () => { entryListScrollTop = list.scrollTop; }, { passive: true });
   document.querySelectorAll<HTMLElement>('[data-select]').forEach(node => node.addEventListener('click', () => selectEntry(node.dataset.select ?? '')));
@@ -224,7 +287,8 @@ function updateField(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
   const field = control.dataset.field as keyof MonariEntry;
   if (!entry || !field) return;
   const numeric = control.type === 'number' || control.type === 'range';
-  (entry as unknown as Record<string, string | number>)[field] = numeric ? Number(control.value) : control.value;
+  const value = control.type === 'checkbox' ? (control as HTMLInputElement).checked : numeric ? (control.value ? Number(control.value) : null) : control.value;
+  (entry as unknown as Record<string, unknown>)[field] = value;
   dirty = true;
   if (stats.some(([key]) => key === field)) {
     const value = Math.max(0, Math.min(150, Number(control.value)));
@@ -233,7 +297,10 @@ function updateField(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
     const totalNode = document.querySelector('#stat-total'); if (totalNode) totalNode.textContent = String(total);
   }
   if (field === 'confidence_score') { const output = document.querySelector('#confidence-output'); if (output) output.textContent = `${Math.round(Number(control.value) * 100)}%`; }
-  if (field === 'approved_name') { const title = document.querySelector('.review-toolbar h2'); if (title) title.textContent = control.value || 'Unnamed Monari'; }
+  if (field === 'approved_name') {
+    const title = document.querySelector('.review-toolbar h2'); if (title) title.textContent = control.value || 'Unnamed Monari';
+    if (!entry.slug_locked) entry.slug = slugify(control.value);
+  }
   setSaveState('Unsaved changes');
 }
 
@@ -245,6 +312,10 @@ function handleAction(action: string): void {
   if (action === 'copy-image-url') void copyImageUrl();
   if (action === 'previous') navigateEntry(-1);
   if (action === 'next') navigateEntry(1);
+  if (action === 'promote') void promoteSelected();
+  if (action === 'import-batch') document.querySelector<HTMLInputElement>('#batch-file-input')?.click();
+  if (action === 'cancel-import') { importPreview = null; render(); }
+  if (action === 'confirm-import') void confirmImport();
   if (action === 'change-image') {
     if (BACKEND_MODE) document.querySelector<HTMLInputElement>('#image-file-input')?.click();
     else {
@@ -253,6 +324,88 @@ function handleAction(action: string): void {
     }
   }
   if (action === 'clear-filters') { query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = ''; entryListScrollTop = 0; render(); }
+}
+
+async function changeView(next: 'intake' | 'codex'): Promise<void> {
+  if (next === view) return;
+  if (dirty && !window.confirm('You have unsaved intake changes. Leave this view?')) return;
+  view = next;
+  if (view === 'codex' && BACKEND_MODE) {
+    try {
+      const result = await apiRequest<{ entries: CodexEntry[] }>('/api/codex/entries');
+      codexEntries = result.entries.map(normalizeCodexEntry);
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Could not load Live Codex'); }
+  }
+  render();
+}
+
+async function switchBatch(batchKey: string): Promise<void> {
+  if (!BACKEND_MODE || batchKey === batch.batch_key) return;
+  try {
+    batch = normalizeBatch(await apiRequest(`/api/intake/batches/${encodeURIComponent(batchKey)}`));
+    selectedId = batch.entries[0]?.id ?? '';
+    query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = '';
+    dirty = false; render();
+  } catch (error) { showToast(error instanceof Error ? error.message : 'Could not open batch'); }
+}
+
+async function promoteSelected(): Promise<void> {
+  const entry = getSelected(); if (!entry) return;
+  if (dirty) await saveChanges();
+  const allowUnnumbered = entry.codex_no === null && window.confirm('This entry has no Codex number. Promote it as Unnumbered?');
+  if (entry.codex_no === null && !allowUnnumbered) { showToast('Assign a Codex No. or confirm Unnumbered'); return; }
+  try {
+    await apiRequest(`/api/codex/promote-intake/${encodeURIComponent(entry.id)}`, {
+      method: 'POST', body: JSON.stringify({ allow_unnumbered: allowUnnumbered }),
+    });
+    entry.status = 'approved'; dirty = false;
+    showToast(`${formatCodexNo(entry.codex_no)} ${entry.approved_name} approved to Codex`);
+  } catch (error) { showToast(error instanceof Error ? error.message : 'Codex promotion failed'); }
+}
+
+async function handleCodexAction(action: string, id: string): Promise<void> {
+  const entry = codexEntries.find(item => item.id === id); if (!entry) return;
+  try {
+    if (action === 'save') {
+      const row = document.querySelector<HTMLElement>(`[data-codex-row="${CSS.escape(id)}"]`);
+      const patch: Record<string, unknown> = {};
+      row?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-codex-field]').forEach(control => {
+        patch[control.dataset.codexField!] = control.type === 'number' ? (control.value ? Number(control.value) : null) : control.value;
+      });
+      const result = await apiRequest<{ entry: CodexEntry }>(`/api/codex/entries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      Object.assign(entry, normalizeCodexEntry(result.entry)); showToast('Codex entry saved');
+    } else {
+      const endpoint = action === 'send-back' ? 'send-back' : 'hide';
+      const result = await apiRequest<{ entry: CodexEntry }>(`/api/codex/entries/${encodeURIComponent(id)}/${endpoint}`, { method: 'POST', body: '{}' });
+      Object.assign(entry, normalizeCodexEntry(result.entry));
+      showToast(action === 'send-back' ? 'Sent back to Intake Review' : 'Codex entry hidden');
+    }
+    render();
+  } catch (error) { showToast(error instanceof Error ? error.message : 'Codex update failed'); }
+}
+
+async function previewImport(file: File): Promise<void> {
+  try {
+    const payload = JSON.parse(await file.text()) as Record<string, unknown>;
+    const result = validateImport(payload);
+    importPreview = { payload: result.payload, warnings: result.warnings, errors: result.errors, filename: file.name };
+    render();
+  } catch (error) {
+    showToast(error instanceof SyntaxError ? 'The selected file is not valid JSON' : 'Could not read import file');
+  }
+}
+
+async function confirmImport(): Promise<void> {
+  if (!importPreview || importPreview.errors.length) return;
+  try {
+    const result = await apiRequest<{ batchKey: string; count: number }>('/api/intake/import-json', { method: 'POST', body: JSON.stringify(importPreview.payload) });
+    const warnings = importPreview.warnings.length;
+    importPreview = null;
+    const list = await apiRequest<{ batches: Array<{ batch_key: string; name: string }> }>('/api/intake/batches');
+    batches = list.batches;
+    await switchBatch(result.batchKey);
+    showToast(`Batch imported successfully · ${result.count} entries${warnings ? ` · ${warnings} warnings` : ''}`);
+  } catch (error) { showToast(error instanceof Error ? error.message : 'Batch import failed'); }
 }
 
 function selectEntry(id: string): void {
@@ -396,6 +549,8 @@ function normalizeEntry(value: unknown, index: number, now: string): MonariEntry
     id: stringValue(entry.id, stringValue(entry.intake_id, `batch001-${String(index + 1).padStart(3, '0')}`)),
     approved_name: stringValue(entry.approved_name, 'Unnamed Monari'),
     slug: stringValue(entry.slug),
+    slug_locked: Boolean(entry.slug_locked),
+    codex_no: numberOrNull(entry.codex_no ?? entry.dex_no),
     status,
     rarity: ancientRarity ? 'Ultra Rare' : stringValue(entry.rarity),
     element_1: normalizedElements[0] || 'Neutral',
@@ -512,7 +667,9 @@ async function checkBackendHealth(): Promise<void> {
 }
 function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
   const { id: _id, stage_number, confidence_score, signature_moves: _signatureMoves, updated_at: _updatedAt, ...fields } = entry;
-  return { ...fields, stage: stage_number, confidence: confidence_score };
+  const slug = entry.slug_locked && entry.slug ? entry.slug : slugify(entry.approved_name);
+  entry.slug = slug;
+  return { ...fields, slug, stage: stage_number, confidence: confidence_score };
 }
 async function uploadImage(file: File): Promise<void> {
   const entry = getSelected(); if (!entry) return;
@@ -555,6 +712,8 @@ function showToast(text: string): void { const toast = document.querySelector<HT
 function renderEmpty(): string { return `<div class="empty-review"><span>✦</span><h2>Select a Monari</h2><p>Choose an intake row to begin review.</p></div>`; }
 function section(title: string, content: string): string { return `<section class="form-section"><h3>${title}</h3>${content}</section>`; }
 function input(field: keyof MonariEntry, title: string, value: string): string { return `<label><span>${title}</span><input data-field="${field}" value="${escapeAttr(value)}"></label>`; }
+function numberInput(field: keyof MonariEntry, title: string, value: number | null): string { return `<label><span>${title}</span><input data-field="${field}" type="number" min="1" step="1" value="${value ?? ''}" placeholder="#001"><small class="field-hint">${formatCodexNo(value)}</small></label>`; }
+function checkbox(field: keyof MonariEntry, title: string, checked: boolean): string { return `<label class="checkbox-field"><input data-field="${field}" type="checkbox" ${checked ? 'checked' : ''}><span>${title}</span></label>`; }
 function inputWithHint(field: keyof MonariEntry, title: string, value: string, hint: string): string { return `<label><span>${title}</span><input data-field="${field}" value="${escapeAttr(value)}"><small class="field-hint">${escapeHtml(hint)}</small></label>`; }
 function textarea(field: keyof MonariEntry, title: string, value: string): string { return `<label><span>${title}</span><textarea data-field="${field}">${escapeHtml(value)}</textarea></label>`; }
 function selectField(field: keyof MonariEntry, title: string, values: readonly string[], value: string): string { return `<label><span>${title}</span><select data-field="${field}">${options(values,value)}</select></label>`; }
@@ -604,4 +763,63 @@ function sanitizeFilename(value: string): string {
   const extension = parts.length > 1 ? `.${parts.pop()!.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
   const stem = parts.join('.').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
   return `${stem.slice(0, 100)}${extension}`;
+}
+
+function formatCodexNo(value: number | null): string {
+  return value === null || !Number.isFinite(value) ? 'Unnumbered ·' : `#${String(value).padStart(3, '0')}`;
+}
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+function slugify(value: string): string {
+  return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
+}
+function normalizeCodexEntry(value: CodexEntry): CodexEntry {
+  return { ...value, codex_no: numberOrNull(value.codex_no), stage: numberValue(value.stage, 1) };
+}
+function validateImport(source: Record<string, unknown>): { payload: Record<string, unknown>; warnings: string[]; errors: string[] } {
+  const payload = structuredClone(source);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  if (!stringValue(payload.batch_key)) {
+    payload.batch_key = `batch_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${slugify(stringValue(payload.name, 'import'))}`;
+    warnings.push(`No batch_key was supplied; generated ${payload.batch_key}.`);
+  }
+  if (!Array.isArray(payload.entries) || !payload.entries.length) {
+    errors.push('The JSON must contain a non-empty entries array.');
+    return { payload, warnings, errors };
+  }
+  const seenNumbers = new Map<number, number>();
+  payload.entries.forEach((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { errors.push(`Entry ${index + 1} is not an object.`); return; }
+    const entry = item as Record<string, unknown>;
+    if (!stringValue(entry.approved_name, stringValue(entry.name))) errors.push(`Entry ${index + 1} needs approved_name or name.`);
+    if (entry.rarity === 'Ancient') { entry.rarity = 'Ultra Rare'; warnings.push(`Entry ${index + 1}: Ancient normalized to Ultra Rare.`); }
+    const rarity = stringValue(entry.rarity);
+    if (rarity && !MONARI_RARITIES.includes(rarity as typeof MONARI_RARITIES[number])) warnings.push(`Entry ${index + 1}: ${rarity} is not an official rarity.`);
+    if (entry.element_1 === 'Shadow') { entry.element_1 = 'Dark'; warnings.push(`Entry ${index + 1}: Shadow normalized to Dark.`); }
+    for (const field of ['element_1', 'element_2']) {
+      const element = stringValue(entry[field]);
+      if (element && !MONARI_ELEMENTS.includes(element as typeof MONARI_ELEMENTS[number])) warnings.push(`Entry ${index + 1}: ${element} is not an official element and will require review.`);
+    }
+    const taxonomy = stringValue(entry.taxonomy_primary);
+    if (taxonomy && !MONARI_TAXONOMIES.includes(taxonomy as typeof MONARI_TAXONOMIES[number])) warnings.push(`Entry ${index + 1}: ${taxonomy} is not an official taxonomy.`);
+    for (const field of stats.map(([key]) => key)) {
+      if (entry[field] !== undefined && !Number.isFinite(Number(entry[field]))) errors.push(`Entry ${index + 1}: ${field} must be numeric.`);
+    }
+    const suppliedStats = stats.map(([key]) => Number(entry[key])).filter(Number.isFinite);
+    if (suppliedStats.length === stats.length) {
+      const total = suppliedStats.reduce((sum, value) => sum + value, 0);
+      if (total < 140 || total > 1050) warnings.push(`Entry ${index + 1}: total stats (${total}) are outside the expected review range.`);
+    }
+    const codexNo = numberOrNull(entry.codex_no);
+    if (codexNo !== null) {
+      if (seenNumbers.has(codexNo)) warnings.push(`Codex ${formatCodexNo(codexNo)} is duplicated in entries ${seenNumbers.get(codexNo)! + 1} and ${index + 1}.`);
+      seenNumbers.set(codexNo, index);
+    }
+  });
+  return { payload, warnings, errors };
 }

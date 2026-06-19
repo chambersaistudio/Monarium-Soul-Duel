@@ -10,6 +10,8 @@ export interface MonariEntry {
   id: string;
   approved_name: string;
   slug: string;
+  slug_locked: boolean;
+  codex_no: number | null;
   status: MonariStatus;
   rarity: string;
   element_1: string;
@@ -48,6 +50,30 @@ export interface MonariEntry {
   stage_number: number;
   evolves_from: string;
   evolves_to: string;
+  updated_at: string;
+}
+
+export type CodexStatus = 'draft' | 'approved' | 'published' | 'needs_review' | 'hidden';
+export interface CodexEntry {
+  id: string;
+  intake_entry_id: string | null;
+  codex_no: number | null;
+  name: string;
+  slug: string;
+  status: CodexStatus;
+  rarity: string;
+  element_1: string;
+  element_2: string;
+  taxonomy_primary: string;
+  taxonomy_secondary: string;
+  role: string;
+  stage: number;
+  evolves_from: string;
+  evolves_to: string;
+  evolution_line_id: string;
+  image_url: string;
+  image_path: string;
+  asset_status: string;
   updated_at: string;
 }
 
