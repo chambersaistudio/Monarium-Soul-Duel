@@ -22,11 +22,20 @@ export class IntakeValidationError extends Error {
 
 function text(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null; }
 function number(value: unknown): number | null { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : null; }
-function codexNumber(value: unknown): number | null {
-  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
-  const normalized = typeof value === 'string' ? value.trim().replace(/^#\s*/, '') : value;
-  const parsed = typeof normalized === 'number' ? normalized : Number(normalized);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+export function normalizeCodexNo(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'unnumbered') return null;
+    const parsed = Number(trimmed.replace(/^#\s*/, ''));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
+  return null;
+}
+
+function hasCodexNumber(value: unknown): boolean {
+  return !(value === null || value === undefined || (typeof value === 'string' && !value.trim()));
 }
 function append(value: string | null, addition: string): string { return [value, addition].filter(Boolean).join(' '); }
 function addTag(value: string | null, tag: string): string { const tags = (value ?? '').split(',').map(item => item.trim()).filter(Boolean); if (!tags.some(item => item.toLowerCase() === tag.toLowerCase())) tags.push(tag); return tags.join(', '); }
@@ -49,7 +58,7 @@ export function normalizeEntry(source: Record<string, unknown>, index: number): 
   return {
     entry_key: entryKey, status: text(source.status) ?? 'incoming', source_filename: text(source.source_filename), parent_sheet_filename: text(source.parent_sheet_filename),
     image_path: text(source.image_path) ?? text(source.source_path), image_url: text(source.image_url), pending_image_path: text(source.pending_image_path), approved_name: text(source.approved_name) ?? text(source.name),
-    slug: text(source.slug), codex_no: codexNumber(source.codex_no) ?? codexNumber(source.dex_no), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
+    slug: text(source.slug), codex_no: hasCodexNumber(source.codex_no) ? normalizeCodexNo(source.codex_no) : normalizeCodexNo(source.dex_no), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
     evolution_line_id: text(source.evolution_line_id), rarity, element_1: element1, element_2: element2, taxonomy_primary: text(source.taxonomy_primary), taxonomy_secondary: text(source.taxonomy_secondary),
     role: text(source.role), hp: number(source.hp) ?? number(source.health), aura: number(source.aura), attack: number(source.attack), special_attack: number(source.special_attack), defense: number(source.defense),
     special_defense: number(source.special_defense), speed: number(source.speed), ability_name: text(source.ability_name) ?? text(source.ability), ability_description: text(source.ability_description),
@@ -69,8 +78,13 @@ export function editablePatch(body: unknown): Record<string, unknown> {
     if (numericColumns.has(key)) {
       if (value === null) { patch[key] = null; continue; }
       if (key === 'codex_no') {
-        const parsed = codexNumber(value);
-        if (parsed === null) throw new IntakeValidationError(key, 'codex_no must be a positive whole number (for example 1, 001, or #001) or blank');
+        const parsed = normalizeCodexNo(value);
+        if (parsed === null) {
+          const numericValue = typeof value === 'number' ? value : Number(typeof value === 'string' ? value.trim().replace(/^#\s*/, '') : value);
+          if (Number.isFinite(numericValue) && numericValue === 0) { patch[key] = null; continue; }
+          if (typeof value === 'string' && value.trim().toLowerCase() === 'unnumbered') { patch[key] = null; continue; }
+          throw new IntakeValidationError(key, 'Codex No. must be empty or greater than 0.');
+        }
         patch[key] = parsed;
         continue;
       }
