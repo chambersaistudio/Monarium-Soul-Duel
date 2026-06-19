@@ -847,10 +847,15 @@ function formatCodexNo(value: number | null): string {
   return value === null || !Number.isFinite(value) ? 'Unnumbered ·' : `#${String(value).padStart(3, '0')}`;
 }
 function numberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const normalized = typeof value === 'string' ? value.trim().replace(/^#\s*/, '') : value;
-  const parsed = Number(normalized);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'unnumbered') return null;
+    const parsed = Number(trimmed.replace(/^#\s*/, ''));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
+  return null;
 }
 function slugify(value: string): string {
   return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')

@@ -34,7 +34,7 @@ async function updateEntry(request: Request, response: Response, next: NextFunct
     response.json({ entry: result.rows[0] });
   } catch (error) {
     if (error instanceof IntakeValidationError) {
-      response.status(400).json({ error: error.message, field: error.field });
+      response.status(400).json({ error: 'Validation error', field: error.field, message: error.message });
       return;
     }
     const databaseError = error as { code?: string; constraint?: string; column?: string };
