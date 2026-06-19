@@ -127,6 +127,8 @@ async function updateEntry(request: Request, response: Response, next: NextFunct
 codexRouter.patch('/entries/:id', updateEntry);
 codexRouter.post('/entries/:id/send-back', async (request, response, next) => setStatus(request, response, next, 'needs_review', true));
 codexRouter.post('/entries/:id/hide', async (request, response, next) => setStatus(request, response, next, 'hidden', false));
+codexRouter.post('/entries/:id/restore', async (request, response, next) => setStatus(request, response, next, 'approved', false));
+codexRouter.post('/entries/:id/remove', async (request, response, next) => setStatus(request, response, next, 'draft', false));
 
 async function setStatus(request: Request, response: Response, next: NextFunction, status: string, sendBack: boolean): Promise<void> {
   const client = await pool.connect();

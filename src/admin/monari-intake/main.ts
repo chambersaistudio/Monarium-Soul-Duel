@@ -46,6 +46,7 @@ let codexEntries: CodexEntry[] = [];
 let codexQuery = '';
 let codexStatus = '';
 let importPreview: { payload: Record<string, unknown>; warnings: string[]; errors: string[]; filename: string } | null = null;
+let codexPreviewId = '';
 
 class BackendRequestError extends Error {
   constructor(
@@ -198,17 +199,18 @@ function renderCodexView(): string {
       entry.name, entry.slug, entry.rarity, entry.element_1, entry.element_2,
       entry.taxonomy_primary, entry.taxonomy_secondary, String(entry.codex_no ?? ''),
     ].some(value => value.toLowerCase().includes(term.replace(/^#/, '')));
-    return matchesSearch && (codexStatus ? entry.status === codexStatus : entry.status !== 'hidden');
+    return matchesSearch && (codexStatus ? entry.status === codexStatus : !['hidden', 'draft'].includes(entry.status));
   });
   const numbered = visible.filter(entry => entry.codex_no !== null);
   const unnumbered = visible.filter(entry => entry.codex_no === null);
   return `<section class="codex-page">
-    <div class="codex-heading"><div><p class="eyebrow">OFFICIAL MONARIUM REGISTRY</p><h2>Live Codex</h2><p>Approved entries are ordered by their official Codex number. Hidden entries only appear when explicitly filtered.</p></div><div class="codex-filters"><label class="search"><span>⌕</span><input id="codex-search" type="search" value="${escapeAttr(codexQuery)}" placeholder="Search name, #, element, rarity, taxonomy…"></label>${filterSelect('codex-status', 'Active entries', ['published','approved','needs_review','hidden'], codexStatus)}</div></div>
+    <div class="codex-heading"><div><p class="eyebrow">OFFICIAL MONARIUM REGISTRY</p><h2>Live Codex</h2><p>Approved entries are ordered by their official Codex number. Hidden entries only appear when explicitly filtered.</p></div><div class="codex-filters"><label class="search"><span>⌕</span><input id="codex-search" type="search" value="${escapeAttr(codexQuery)}" placeholder="Search name, #, element, rarity, taxonomy…"></label>${filterSelect('codex-status', 'Active entries', ['published','approved','needs_review','draft','hidden'], codexStatus)}</div></div>
     ${!BACKEND_MODE ? '<div class="persistence-notice"><b>Live Codex requires Backend Mode.</b></div>' : ''}
     <div class="codex-table-wrap"><table class="codex-table"><thead><tr><th>Codex</th><th>Monari</th><th>Rarity</th><th>Elements</th><th>Taxonomy</th><th>Stage / Evolution</th><th>Status</th><th>Asset</th><th>Actions</th></tr></thead><tbody>
       ${numbered.map(renderCodexRow).join('') || '<tr><td colspan="9" class="empty-list">No numbered Codex entries match.</td></tr>'}
       ${unnumbered.length ? `<tr class="unnumbered-heading"><th colspan="9">Unnumbered</th></tr>${unnumbered.map(renderCodexRow).join('')}` : ''}
     </tbody></table></div>
+    ${codexPreviewId ? renderCodexPreview(codexEntries.find(entry => entry.id === codexPreviewId)) : ''}
   </section>`;
 }
 
@@ -222,8 +224,29 @@ function renderCodexRow(entry: CodexEntry): string {
     <td>Stage ${entry.stage || '—'}<small>${escapeHtml(entry.evolution_line_id || 'No evolution line')}</small></td>
     <td><select data-codex-field="status">${options(['draft','approved','published','needs_review','hidden'], entry.status)}</select></td>
     <td><span class="badge">${escapeHtml(label(entry.asset_status || 'missing'))}</span></td>
-    <td><div class="row-actions"><button class="button secondary" data-codex-action="save" data-id="${entry.id}">Save</button><button class="button needs-edit" data-codex-action="send-back" data-id="${entry.id}">Send Back</button><button class="button secondary" data-codex-action="hide" data-id="${entry.id}">Hide</button></div></td>
+    <td><div class="row-actions"><button class="button primary" data-codex-action="view" data-id="${entry.id}">View</button><button class="button secondary" data-codex-action="edit" data-id="${entry.id}">Edit</button><button class="button needs-edit" data-codex-action="send-back" data-id="${entry.id}">Send Back to Review</button><button class="button reject" data-codex-action="remove" data-id="${entry.id}">Remove from Live Codex</button>${entry.status === 'hidden' ? `<button class="button approve" data-codex-action="restore" data-id="${entry.id}">Restore</button>` : ''}</div></td>
   </tr>`;
+}
+
+
+function renderCodexPreview(entry: CodexEntry | undefined): string {
+  if (!entry) return '';
+  const image = imageUrl(entry.image_url) || imageUrl(entry.image_path);
+  const elementText = [entry.element_1, entry.element_2].filter(Boolean).join(' / ') || '—';
+  const taxonomyText = [entry.taxonomy_primary, entry.taxonomy_secondary].filter(Boolean).join(' / ') || '—';
+  const evolutionText = [entry.evolves_from && `From ${entry.evolves_from}`, entry.evolves_to && `To ${entry.evolves_to}`].filter(Boolean).join(' · ') || entry.evolution_line_id || 'Standalone line';
+  const statRows = stats.map(([key, title]) => {
+    const value = Number(entry[key] || 0);
+    const pct = Math.max(0, Math.min(100, value / 1.5));
+    return `<div class="codex-preview-stat"><span>${title}</span><i><b style="--stat-value:${pct}%"></b></i><strong>${value || '—'}</strong></div>`;
+  }).join('');
+  const ability = [entry.ability_name, entry.ability_description, entry.ability_effect].filter(Boolean).join(' — ');
+  return `<div class="modal-backdrop"><section class="codex-preview-modal" role="dialog" aria-modal="true" aria-labelledby="codex-preview-title">
+    <button class="icon-button codex-preview-close" data-codex-action="close-preview" data-id="${escapeAttr(entry.id)}" aria-label="Close preview">×</button>
+    <div class="codex-preview-hero"><div><p class="eyebrow">PLAYER CODEX PREVIEW</p><h2 id="codex-preview-title">${escapeHtml(formatCodexNo(entry.codex_no))} ${escapeHtml(entry.name || 'Unnamed Monari')}</h2><div class="codex-preview-badges"><span>${escapeHtml(entry.rarity || 'Unrated')}</span><span>${escapeHtml(elementText)}</span><span>${escapeHtml(taxonomyText)}</span></div></div><small>${escapeHtml(label(entry.status))}${entry.asset_status ? ` · Asset ${escapeHtml(label(entry.asset_status))}` : ''}</small></div>
+    <div class="codex-preview-body"><figure class="codex-preview-image"><img src="${escapeAttr(image)}" alt="${escapeAttr(entry.name)} profile image" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><figcaption hidden>✦</figcaption></figure>
+    <div class="codex-preview-details"><section><h3>Profile</h3><dl><div><dt>Stage</dt><dd>${entry.stage || '—'}</dd></div><div><dt>Evolution</dt><dd>${escapeHtml(evolutionText)}</dd></div><div><dt>Habitat</dt><dd>${escapeHtml(entry.habitat || 'Unknown')}</dd></div><div><dt>Tags</dt><dd>${escapeHtml(entry.tags || '—')}</dd></div></dl></section><section><h3>Stats</h3><div class="codex-preview-stats">${statRows}</div></section><section><h3>Ability</h3><p>${escapeHtml(ability || 'No ability recorded yet.')}</p>${entry.signature_moves ? `<p><b>Signature:</b> ${escapeHtml(entry.signature_moves)}</p>` : ''}</section><section><h3>Lore</h3><p>${escapeHtml(entry.description || 'No Codex lore recorded yet.')}</p></section></div></div>
+  </section></div>`;
 }
 
 function renderImportPreview(): string {
@@ -372,7 +395,12 @@ async function promoteSelected(): Promise<void> {
 }
 
 async function handleCodexAction(action: string, id: string): Promise<void> {
-  const entry = codexEntries.find(item => item.id === id); if (!entry) return;
+  const entry = codexEntries.find(item => item.id === id);
+  if (action === 'close-preview') { codexPreviewId = ''; render(); return; }
+  if (!entry) return;
+  if (action === 'view') { codexPreviewId = id; render(); return; }
+  if (action === 'edit') { editCodexEntry(entry); return; }
+  if (action === 'remove' && !window.confirm(`Remove ${entry.name} from the default Live Codex list? The original intake entry will not be deleted.`)) return;
   try {
     if (action === 'save') {
       const row = document.querySelector<HTMLElement>(`[data-codex-row="${CSS.escape(id)}"]`);
@@ -383,10 +411,10 @@ async function handleCodexAction(action: string, id: string): Promise<void> {
       const result = await apiRequest<{ entry: CodexEntry }>(`/api/codex/entries/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
       Object.assign(entry, normalizeCodexEntry(result.entry)); showToast('Codex entry saved');
     } else {
-      const endpoint = action === 'send-back' ? 'send-back' : 'hide';
+      const endpoint = action === 'send-back' ? 'send-back' : action === 'restore' ? 'restore' : 'remove';
       const result = await apiRequest<{ entry: CodexEntry }>(`/api/codex/entries/${encodeURIComponent(id)}/${endpoint}`, { method: 'POST', body: '{}' });
       Object.assign(entry, normalizeCodexEntry(result.entry));
-      showToast(action === 'send-back' ? 'Sent back to Intake Review' : 'Codex entry hidden');
+      showToast(action === 'send-back' ? 'Sent back to Intake Review' : action === 'restore' ? 'Codex entry restored' : 'Removed from default Live Codex');
     }
     render();
   } catch (error) { showToast(error instanceof Error ? error.message : 'Codex update failed'); }
@@ -414,6 +442,17 @@ async function confirmImport(): Promise<void> {
     await switchBatch(result.batchKey);
     showToast(`Batch imported successfully · ${result.count} entries${warnings ? ` · ${warnings} warnings` : ''}`);
   } catch (error) { showToast(error instanceof Error ? error.message : 'Batch import failed'); }
+}
+
+function editCodexEntry(entry: CodexEntry): void {
+  if (entry.intake_entry_id && batch.entries.some(item => item.id === entry.intake_entry_id)) {
+    selectedId = entry.intake_entry_id;
+    view = 'intake';
+    codexPreviewId = '';
+    render();
+    return;
+  }
+  showToast('Matching intake entry is not in the active batch. Use row fields, then Save.');
 }
 
 function selectEntry(id: string): void {
@@ -818,7 +857,7 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120);
 }
 function normalizeCodexEntry(value: CodexEntry): CodexEntry {
-  return { ...value, codex_no: numberOrNull(value.codex_no), stage: numberValue(value.stage, 1) };
+  return { ...value, codex_no: numberOrNull(value.codex_no), stage: numberValue(value.stage, 1), hp: numberValue(value.hp), aura: numberValue(value.aura), attack: numberValue(value.attack), special_attack: numberValue(value.special_attack), defense: numberValue(value.defense), special_defense: numberValue(value.special_defense), speed: numberValue(value.speed) };
 }
 function validateImport(source: Record<string, unknown>): { payload: Record<string, unknown>; warnings: string[]; errors: string[] } {
   const payload = structuredClone(source);
