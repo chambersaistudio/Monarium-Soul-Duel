@@ -22,6 +22,12 @@ export class IntakeValidationError extends Error {
 
 function text(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null; }
 function number(value: unknown): number | null { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function codexNumber(value: unknown): number | null {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
+  const normalized = typeof value === 'string' ? value.trim().replace(/^#\s*/, '') : value;
+  const parsed = typeof normalized === 'number' ? normalized : Number(normalized);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 function append(value: string | null, addition: string): string { return [value, addition].filter(Boolean).join(' '); }
 function addTag(value: string | null, tag: string): string { const tags = (value ?? '').split(',').map(item => item.trim()).filter(Boolean); if (!tags.some(item => item.toLowerCase() === tag.toLowerCase())) tags.push(tag); return tags.join(', '); }
 function normalizeElement(value: unknown, state: { tags: string | null; notes: string | null }): string | null {
@@ -43,7 +49,7 @@ export function normalizeEntry(source: Record<string, unknown>, index: number): 
   return {
     entry_key: entryKey, status: text(source.status) ?? 'incoming', source_filename: text(source.source_filename), parent_sheet_filename: text(source.parent_sheet_filename),
     image_path: text(source.image_path) ?? text(source.source_path), image_url: text(source.image_url), pending_image_path: text(source.pending_image_path), approved_name: text(source.approved_name) ?? text(source.name),
-    slug: text(source.slug), codex_no: number(source.codex_no) ?? number(source.dex_no), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
+    slug: text(source.slug), codex_no: codexNumber(source.codex_no) ?? codexNumber(source.dex_no), dex_no: number(source.dex_no), stage: number(source.stage) ?? number(source.stage_number), evolves_from: text(source.evolves_from), evolves_to: text(source.evolves_to),
     evolution_line_id: text(source.evolution_line_id), rarity, element_1: element1, element_2: element2, taxonomy_primary: text(source.taxonomy_primary), taxonomy_secondary: text(source.taxonomy_secondary),
     role: text(source.role), hp: number(source.hp) ?? number(source.health), aura: number(source.aura), attack: number(source.attack), special_attack: number(source.special_attack), defense: number(source.defense),
     special_defense: number(source.special_defense), speed: number(source.speed), ability_name: text(source.ability_name) ?? text(source.ability), ability_description: text(source.ability_description),
@@ -62,11 +68,16 @@ export function editablePatch(body: unknown): Record<string, unknown> {
     const value = supplied === '' || supplied === undefined ? null : supplied;
     if (numericColumns.has(key)) {
       if (value === null) { patch[key] = null; continue; }
+      if (key === 'codex_no') {
+        const parsed = codexNumber(value);
+        if (parsed === null) throw new IntakeValidationError(key, 'codex_no must be a positive whole number (for example 1, 001, or #001) or blank');
+        patch[key] = parsed;
+        continue;
+      }
       const parsed = typeof value === 'number' ? value : Number(value);
       if (!Number.isFinite(parsed) || (integerColumns.has(key) && !Number.isInteger(parsed))) {
         throw new IntakeValidationError(key, `${key} must be ${integerColumns.has(key) ? 'a whole number' : 'a number'} or blank`);
       }
-      if (key === 'codex_no' && parsed <= 0) throw new IntakeValidationError(key, 'codex_no must be greater than zero or blank');
       if (key === 'confidence' && (parsed < 0 || parsed > 1)) throw new IntakeValidationError(key, 'confidence must be between 0 and 1');
       patch[key] = parsed;
       continue;

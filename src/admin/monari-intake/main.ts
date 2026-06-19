@@ -290,7 +290,11 @@ function updateField(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelec
   const field = control.dataset.field as keyof MonariEntry;
   if (!entry || !field) return;
   const numeric = control.type === 'number' || control.type === 'range';
-  const value = control.type === 'checkbox' ? (control as HTMLInputElement).checked : numeric ? (control.value ? Number(control.value) : null) : control.value;
+  const value = control.type === 'checkbox'
+    ? (control as HTMLInputElement).checked
+    : field === 'codex_no'
+      ? numberOrNull(control.value)
+      : numeric ? (control.value ? Number(control.value) : null) : control.value;
   (entry as unknown as Record<string, unknown>)[field] = value;
   dirty = true;
   saveError = '';
@@ -687,9 +691,11 @@ async function checkBackendHealth(): Promise<void> {
 }
 function toBackendEntry(entry: MonariEntry): Record<string, unknown> {
   const slug = entry.slug_locked && entry.slug ? entry.slug : slugify(entry.approved_name);
+  const codexNo = numberOrNull(entry.codex_no);
   entry.slug = slug;
+  entry.codex_no = codexNo;
   return {
-    approved_name: entry.approved_name, slug, codex_no: entry.codex_no, stage: entry.stage_number,
+    approved_name: entry.approved_name, slug, codex_no: codexNo, stage: entry.stage_number,
     evolves_from: entry.evolves_from, evolves_to: entry.evolves_to, evolution_line_id: entry.evolution_line_id,
     status: entry.status, rarity: entry.rarity, element_1: entry.element_1, element_2: entry.element_2,
     taxonomy_primary: entry.taxonomy_primary, taxonomy_secondary: entry.taxonomy_secondary, role: entry.role,
@@ -744,7 +750,7 @@ function showToast(text: string): void { const toast = document.querySelector<HT
 function renderEmpty(): string { return `<div class="empty-review"><span>✦</span><h2>Select a Monari</h2><p>Choose an intake row to begin review.</p></div>`; }
 function section(title: string, content: string): string { return `<section class="form-section"><h3>${title}</h3>${content}</section>`; }
 function input(field: keyof MonariEntry, title: string, value: string): string { return `<label><span>${title}</span><input data-field="${field}" value="${escapeAttr(value)}"></label>`; }
-function numberInput(field: keyof MonariEntry, title: string, value: number | null): string { return `<label><span>${title}</span><input data-field="${field}" type="number" min="1" step="1" value="${value ?? ''}" placeholder="#001"><small class="field-hint">${formatCodexNo(value)}</small></label>`; }
+function numberInput(field: keyof MonariEntry, title: string, value: number | null): string { return `<label><span>${title}</span><input data-field="${field}" type="text" inputmode="numeric" value="${value ?? ''}" placeholder="#001"><small class="field-hint">${formatCodexNo(value)}</small></label>`; }
 function checkbox(field: keyof MonariEntry, title: string, checked: boolean): string { return `<label class="checkbox-field"><input data-field="${field}" type="checkbox" ${checked ? 'checked' : ''}><span>${title}</span></label>`; }
 function inputWithHint(field: keyof MonariEntry, title: string, value: string, hint: string): string { return `<label><span>${title}</span><input data-field="${field}" value="${escapeAttr(value)}"><small class="field-hint">${escapeHtml(hint)}</small></label>`; }
 function textarea(field: keyof MonariEntry, title: string, value: string): string { return `<label><span>${title}</span><textarea data-field="${field}">${escapeHtml(value)}</textarea></label>`; }
@@ -803,7 +809,8 @@ function formatCodexNo(value: number | null): string {
 }
 function numberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
+  const normalized = typeof value === 'string' ? value.trim().replace(/^#\s*/, '') : value;
+  const parsed = Number(normalized);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 function slugify(value: string): string {

@@ -40,7 +40,7 @@ async function updateEntry(request: Request, response: Response, next: NextFunct
     const databaseError = error as { code?: string; constraint?: string; column?: string };
     console.error('Intake update failed', {
       entryId: request.params.entryId,
-      fields: Object.keys(request.body && typeof request.body === 'object' ? editablePatch(request.body) : {}),
+      fields: request.body && typeof request.body === 'object' && !Array.isArray(request.body) ? Object.keys(request.body) : [],
       code: databaseError.code,
       constraint: databaseError.constraint,
       column: databaseError.column,
