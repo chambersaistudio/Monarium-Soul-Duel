@@ -5,6 +5,7 @@ import { corsOrigins, env } from './env.js';
 import { healthRouter } from './routes/health.js';
 import { intakeRouter } from './routes/intake.js';
 import { uploadsRouter } from './routes/uploads.js';
+import { codexRouter } from './routes/codex.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -13,6 +14,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/health', healthRouter);
 app.use('/api/intake', intakeRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/codex', codexRouter);
 app.use((_request, response) => response.status(404).json({ error: 'Not found' }));
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   console.error(error);
