@@ -1,12 +1,24 @@
 import type { PoolClient } from 'pg';
 
 const officialElements = new Set(['Neutral','Fire','Water','Flora','Wind','Thunder','Stone','Steel','Light','Dark','Aether','Ice']);
+const officialRarities = new Set(['Common','Rare','Super Rare','Ultra Rare','Legendary']);
+const officialTaxonomies = new Set(['Wisp','Drake','Feral','Sylph','Golem','Seraph','Brute','Tempest','Chitin','Astral','Curio']);
+const officialStatuses = new Set(['incoming','drafted','needs_review','approved','in_game','rejected','archive']);
+const numericColumns = new Set(['codex_no','stage','hp','aura','attack','special_attack','defense','special_defense','speed','confidence']);
+const integerColumns = new Set(['codex_no','stage','hp','aura','attack','special_attack','defense','special_defense','speed']);
 const editableColumns = new Set([
-  'status','image_path','image_url','pending_image_path','approved_name','slug','slug_locked','codex_no','dex_no','stage','evolves_from','evolves_to','evolution_line_id',
+  'status','image_path','image_url','approved_name','slug','codex_no','stage','evolves_from','evolves_to','evolution_line_id',
   'rarity','element_1','element_2','taxonomy_primary','taxonomy_secondary','role','hp','aura','attack','special_attack','defense','special_defense','speed',
   'ability_name','ability_description','ability_effect','ability_effect_tags','status_condition_suggestions','suggested_signature_moves','suggested_learnable_moves',
   'description','habitat','personality','tags','confidence','review_notes','asset_status',
 ]);
+
+export class IntakeValidationError extends Error {
+  constructor(readonly field: string, message: string) {
+    super(message);
+    this.name = 'IntakeValidationError';
+  }
+}
 
 function text(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value.trim() : null; }
 function number(value: unknown): number | null { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : null; }
@@ -44,7 +56,28 @@ export function normalizeEntry(source: Record<string, unknown>, index: number): 
 
 export function editablePatch(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return {};
-  return Object.fromEntries(Object.entries(body).filter(([key]) => editableColumns.has(key)).map(([key, value]) => [key, value === '' ? null : value]));
+  const patch: Record<string, unknown> = {};
+  for (const [key, supplied] of Object.entries(body)) {
+    if (!editableColumns.has(key)) continue;
+    const value = supplied === '' || supplied === undefined ? null : supplied;
+    if (numericColumns.has(key)) {
+      if (value === null) { patch[key] = null; continue; }
+      const parsed = typeof value === 'number' ? value : Number(value);
+      if (!Number.isFinite(parsed) || (integerColumns.has(key) && !Number.isInteger(parsed))) {
+        throw new IntakeValidationError(key, `${key} must be ${integerColumns.has(key) ? 'a whole number' : 'a number'} or blank`);
+      }
+      if (key === 'codex_no' && parsed <= 0) throw new IntakeValidationError(key, 'codex_no must be greater than zero or blank');
+      if (key === 'confidence' && (parsed < 0 || parsed > 1)) throw new IntakeValidationError(key, 'confidence must be between 0 and 1');
+      patch[key] = parsed;
+      continue;
+    }
+    if (key === 'rarity' && value !== null && !officialRarities.has(String(value))) throw new IntakeValidationError(key, `rarity must be one of: ${[...officialRarities].join(', ')}`);
+    if ((key === 'element_1' || key === 'element_2') && value !== null && !officialElements.has(String(value))) throw new IntakeValidationError(key, `${key} must be an official element`);
+    if ((key === 'taxonomy_primary' || key === 'taxonomy_secondary') && value !== null && !officialTaxonomies.has(String(value))) throw new IntakeValidationError(key, `${key} must be an official taxonomy`);
+    if (key === 'status' && value !== null && !officialStatuses.has(String(value))) throw new IntakeValidationError(key, 'status is not recognized');
+    patch[key] = value;
+  }
+  return patch;
 }
 
 export async function importBatch(client: PoolClient, payload: Record<string, unknown>): Promise<{ batchKey: string; count: number }> {
