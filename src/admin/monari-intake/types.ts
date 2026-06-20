@@ -53,7 +53,7 @@ export interface MonariEntry {
   updated_at: string;
 }
 
-export type CodexStatus = 'draft' | 'approved' | 'published' | 'needs_review' | 'hidden';
+export type CodexStatus = 'draft' | 'active' | 'approved' | 'published' | 'needs_review' | 'hidden' | 'removed';
 export interface CodexEntry {
   id: string;
   intake_entry_id: string | null;

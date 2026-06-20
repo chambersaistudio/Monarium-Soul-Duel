@@ -407,7 +407,7 @@
   <script type="module">
     const adminPath = window.location.pathname.replace(/\/+$/, '') === '/admin/monari-intake';
     if (adminPath) {
-      document.title = 'Monarium · Intake Review';
+      document.title = 'Monarium · Review Queue';
       import('/src/admin/monari-intake/main.ts');
     } else {
       import('/src/main.ts');
