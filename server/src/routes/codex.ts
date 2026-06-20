@@ -17,9 +17,13 @@ codexRouter.use(requireAdmin);
 
 codexRouter.get('/entries', async (_request, response, next) => {
   try {
+    const status = typeof _request.query.status === 'string' ? _request.query.status : '';
+    const params = status ? [status] : [];
     const result = await pool.query(
       `SELECT * FROM monari_codex_entries
+       ${status ? 'WHERE status=$1' : ''}
        ORDER BY codex_no ASC NULLS LAST, lower(name), created_at`,
+      params,
     );
     response.json({ entries: result.rows });
   } catch (error) { next(error); }
@@ -49,8 +53,8 @@ codexRouter.post('/promote-intake/:entryId', async (request, response, next) => 
       ['rarity', entry.rarity],
       ['element_1', entry.element_1],
       ['taxonomy_primary', entry.taxonomy_primary],
+      ['stage', entry.stage],
       ['profile image', entry.image_url || entry.image_path],
-      ['asset_status', entry.asset_status],
     ].filter(([, value]) => !value).map(([field]) => field);
     if (!entry.codex_no && !allowUnnumbered) missing.push('codex_no');
     if (missing.length) {
@@ -128,7 +132,7 @@ codexRouter.patch('/entries/:id', updateEntry);
 codexRouter.post('/entries/:id/send-back', async (request, response, next) => setStatus(request, response, next, 'needs_review', true));
 codexRouter.post('/entries/:id/hide', async (request, response, next) => setStatus(request, response, next, 'hidden', false));
 codexRouter.post('/entries/:id/restore', async (request, response, next) => setStatus(request, response, next, 'approved', false));
-codexRouter.post('/entries/:id/remove', async (request, response, next) => setStatus(request, response, next, 'draft', false));
+codexRouter.post('/entries/:id/remove', async (request, response, next) => setStatus(request, response, next, 'removed', false));
 
 async function setStatus(request: Request, response: Response, next: NextFunction, status: string, sendBack: boolean): Promise<void> {
   const client = await pool.connect();

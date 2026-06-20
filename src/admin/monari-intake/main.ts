@@ -116,8 +116,8 @@ function render(options: { preserveListScroll?: boolean } = {}): void {
   const selected = getSelected();
   app.innerHTML = `
     <header class="admin-header">
-      <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>${view === 'intake' ? 'Intake Review' : 'Live Codex'}</h1></div>
-      <nav class="admin-tabs"><button class="${view === 'intake' ? 'active' : ''}" data-view="intake">Intake Review</button><button class="${view === 'codex' ? 'active' : ''}" data-view="codex">Live Codex</button></nav>
+      <div><p class="eyebrow">MONARIUM STUDIO · PRIVATE DEV TOOL</p><h1>${view === 'intake' ? 'Review Queue' : 'Live Codex'}</h1></div>
+      <nav class="admin-tabs"><button class="${view === 'intake' ? 'active' : ''}" data-view="intake">Review Queue</button><button class="${view === 'codex' ? 'active' : ''}" data-view="codex">Live Codex</button></nav>
       <div class="header-actions"><span class="mode-indicator ${BACKEND_MODE ? 'backend' : 'local'}">${BACKEND_MODE ? 'Backend Mode' : 'Local JSON Mode'}</span><span class="connection-state">${BACKEND_MODE ? '<i></i> Connected to Railway' : 'Backend disabled'}</span><span id="save-state">${dirty ? 'Unsaved changes' : BACKEND_MODE ? 'Changes persist after refresh' : 'Saved locally'}</span></div>
     </header>
     ${view === 'intake' ? `<div class="admin-layout">
@@ -186,7 +186,7 @@ function renderEditor(entry: MonariEntry): string {
         ${section('Stats', `<div class="stat-head"><span>7 Monarium attributes</span><b>Total <strong id="stat-total">${total}</strong></b></div><div class="stats-grid">${stats.map(([key,name]) => statInput(key,name,entry[key])).join('')}</div>`)}
         ${section('Lore & optional ability', `${textarea('description','Description / lore',entry.description)}<p class="section-note">Abilities are optional. Shared abilities suit most Monari; reserve signature abilities for select iconic or story-important designs.</p><div class="field-grid">${input('ability_name','Ability name (optional)',entry.ability_name)}${input('signature_moves','Signature moves (optional)',entry.signature_moves)}</div>${textarea('ability_description','Ability flavor description (optional)',entry.ability_description)}${textarea('ability_effect','In-game effect (optional)',entry.ability_effect)}<div class="field-grid">${textarea('ability_effect_tags','Ability effect tags (comma separated)',entry.ability_effect_tags)}${textarea('status_condition_suggestions','Status condition suggestions',entry.status_condition_suggestions)}</div><div class="field-grid">${textarea('tags','Tags (comma separated)',entry.tags)}${textarea('review_notes','Review notes',entry.review_notes)}</div><label class="confidence"><span>Confidence score</span><div><input data-field="confidence_score" type="range" min="0" max="1" step="0.01" value="${entry.confidence_score}"><output id="confidence-output">${Math.round(entry.confidence_score * 100)}%</output></div></label>`)}
         <details class="moveset-section"><summary>Learnable Moves / Moveset <span>Coming Soon</span></summary><div class="field-grid">${textarea('suggested_signature_moves','Suggested signature moves',entry.suggested_signature_moves)}${textarea('suggested_learnable_moves','Suggested learnable moves',entry.suggested_learnable_moves)}</div><p>Future recommendations will use element, taxonomy, tags, role, and evolution stage.</p></details>
-        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Save changes, or promote this reviewed entry to the official Codex.' : 'Update status, then save your local review.'}</span></div><div>${BACKEND_MODE ? '<button class="button approve" data-action="promote">Approve to Codex</button>' : ''}<button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
+        <div class="decision-bar"><div><p class="eyebrow">REVIEW DECISION</p><span>${BACKEND_MODE ? 'Save changes, or promote this reviewed entry to the official Codex.' : 'Update status, then save your local review.'}</span></div><div>${BACKEND_MODE ? '<button class="button approve" data-action="promote">Approve to Live Codex</button>' : ''}<button class="button needs-edit" data-status="needs_review">Needs Edit</button><button class="button reject" data-status="rejected">Reject</button><button class="button primary" data-action="save">${BACKEND_MODE ? 'Save to Backend' : 'Save Locally'}</button></div></div>
         <details class="backup-tools"><summary>Advanced / Debug</summary><p>${BACKEND_MODE ? 'Technical identifiers, slug controls, source metadata, and portable backup tools.' : 'Local metadata and export tools. Export is required to keep a permanent copy outside this browser.'}</p><div class="advanced-grid">${input('slug','Slug',entry.slug)}${checkbox('slug_locked','Lock manual slug',entry.slug_locked)}${input('habitat','Habitat / search metadata',entry.habitat)}${input('personality','Personality notes (optional)',entry.personality)}</div><div class="advanced-metadata">${readField('Import Entry ID',entry.id)}${readField('Source filename',entry.source_filename || '—')}${readField('Parent sheet',entry.parent_sheet_filename || '—')}${readField('Image URL',entry.image_url || '—')}${readField('Image path / object key',entry.image_path || '—')}</div><div class="advanced-actions"><button class="button secondary" data-action="export">${BACKEND_MODE ? 'Export JSON Backup' : 'Export Updated JSON'}</button><button class="button secondary" data-action="copy-image-url" ${resolvedImage ? '' : 'disabled'}>Copy Image URL</button></div>${resolvedImage ? `<details><summary>Resolved Preview URL</summary><code>${escapeHtml(resolvedImage)}</code></details>` : ''}</details>
       </article>
     </div>`;
@@ -199,12 +199,12 @@ function renderCodexView(): string {
       entry.name, entry.slug, entry.rarity, entry.element_1, entry.element_2,
       entry.taxonomy_primary, entry.taxonomy_secondary, String(entry.codex_no ?? ''),
     ].some(value => value.toLowerCase().includes(term.replace(/^#/, '')));
-    return matchesSearch && (codexStatus ? entry.status === codexStatus : !['hidden', 'draft'].includes(entry.status));
+    return matchesSearch && (codexStatus ? entry.status === codexStatus : ['active', 'approved', 'published'].includes(entry.status));
   });
   const numbered = visible.filter(entry => entry.codex_no !== null);
   const unnumbered = visible.filter(entry => entry.codex_no === null);
   return `<section class="codex-page">
-    <div class="codex-heading"><div><p class="eyebrow">OFFICIAL MONARIUM REGISTRY</p><h2>Live Codex</h2><p>Approved entries are ordered by their official Codex number. Hidden entries only appear when explicitly filtered.</p></div><div class="codex-filters"><label class="search"><span>⌕</span><input id="codex-search" type="search" value="${escapeAttr(codexQuery)}" placeholder="Search name, #, element, rarity, taxonomy…"></label>${filterSelect('codex-status', 'Active entries', ['published','approved','needs_review','draft','hidden'], codexStatus)}</div></div>
+    <div class="codex-heading"><div><p class="eyebrow">OFFICIAL MONARIUM REGISTRY</p><h2>Live Codex</h2><p>Approved entries are ordered by their official Codex number. Active, approved, and published entries show by default. Hidden entries can be restored from the status filter.</p></div><div class="codex-filters"><label class="search"><span>⌕</span><input id="codex-search" type="search" value="${escapeAttr(codexQuery)}" placeholder="Search name, #, element, rarity, taxonomy…"></label>${filterSelect('codex-status', 'Active entries', ['active','published','approved','hidden','needs_review','draft','removed'], codexStatus)}</div></div>
     ${!BACKEND_MODE ? '<div class="persistence-notice"><b>Live Codex requires Backend Mode.</b></div>' : ''}
     <div class="codex-table-wrap"><table class="codex-table"><thead><tr><th>Codex</th><th>Monari</th><th>Rarity</th><th>Elements</th><th>Taxonomy</th><th>Stage / Evolution</th><th>Status</th><th>Asset</th><th>Actions</th></tr></thead><tbody>
       ${numbered.map(renderCodexRow).join('') || '<tr><td colspan="9" class="empty-list">No numbered Codex entries match.</td></tr>'}
@@ -222,9 +222,9 @@ function renderCodexRow(entry: CodexEntry): string {
     <td>${escapeHtml(entry.rarity || '—')}</td><td>${escapeHtml([entry.element_1, entry.element_2].filter(Boolean).join(' / ') || '—')}</td>
     <td>${escapeHtml([entry.taxonomy_primary, entry.taxonomy_secondary].filter(Boolean).join(' / ') || '—')}</td>
     <td>Stage ${entry.stage || '—'}<small>${escapeHtml(entry.evolution_line_id || 'No evolution line')}</small></td>
-    <td><select data-codex-field="status">${options(['draft','approved','published','needs_review','hidden'], entry.status)}</select></td>
+    <td><select data-codex-field="status">${options(['active','draft','approved','published','needs_review','hidden','removed'], entry.status)}</select></td>
     <td><span class="badge">${escapeHtml(label(entry.asset_status || 'missing'))}</span></td>
-    <td><div class="row-actions"><button class="button primary" data-codex-action="view" data-id="${entry.id}">View</button><button class="button secondary" data-codex-action="edit" data-id="${entry.id}">Edit</button><button class="button needs-edit" data-codex-action="send-back" data-id="${entry.id}">Send Back to Review</button><button class="button reject" data-codex-action="remove" data-id="${entry.id}">Remove from Live Codex</button>${entry.status === 'hidden' ? `<button class="button approve" data-codex-action="restore" data-id="${entry.id}">Restore</button>` : ''}</div></td>
+    <td><div class="row-actions"><button class="button primary" data-codex-action="view" data-id="${entry.id}">View</button><button class="button secondary" data-codex-action="edit" data-id="${entry.id}">Quick Edit</button><button class="button needs-edit" data-codex-action="send-back" data-id="${entry.id}">Send Back to Review Queue</button><button class="button reject" data-codex-action="remove" data-id="${entry.id}">Remove from Live Codex</button>${entry.status === 'hidden' ? `<button class="button approve" data-codex-action="restore" data-id="${entry.id}">Restore</button>` : ''}</div></td>
   </tr>`;
 }
 
@@ -357,14 +357,19 @@ function handleAction(action: string): void {
   if (action === 'clear-filters') { query = ''; statusFilter = ''; rarityFilter = ''; taxonomyFilter = ''; elementFilter = ''; entryListScrollTop = 0; render(); }
 }
 
+async function refreshCodexEntries(): Promise<void> {
+  if (!BACKEND_MODE) return;
+  const result = await apiRequest<{ entries: CodexEntry[] }>('/api/codex/entries');
+  codexEntries = result.entries.map(normalizeCodexEntry);
+}
+
 async function changeView(next: 'intake' | 'codex'): Promise<void> {
   if (next === view) return;
   if (dirty && !window.confirm('You have unsaved intake changes. Leave this view?')) return;
   view = next;
   if (view === 'codex' && BACKEND_MODE) {
     try {
-      const result = await apiRequest<{ entries: CodexEntry[] }>('/api/codex/entries');
-      codexEntries = result.entries.map(normalizeCodexEntry);
+      await refreshCodexEntries();
     } catch (error) { showToast(error instanceof Error ? error.message : 'Could not load Live Codex'); }
   }
   render();
@@ -382,7 +387,13 @@ async function switchBatch(batchKey: string): Promise<void> {
 
 async function promoteSelected(): Promise<void> {
   const entry = getSelected(); if (!entry) return;
-  if (dirty) await saveChanges();
+  const validation = validatePromotion(entry);
+  if (validation.length) { showToast(`Cannot promote: ${validation.join(', ')}`); return; }
+  if (BACKEND_MODE || dirty) {
+    const hadUnsavedChanges = dirty;
+    await saveChanges();
+    if (hadUnsavedChanges && dirty) return;
+  }
   const allowUnnumbered = entry.codex_no === null && window.confirm('This entry has no Codex number. Promote it as Unnumbered?');
   if (entry.codex_no === null && !allowUnnumbered) { showToast('Assign a Codex No. or confirm Unnumbered'); return; }
   try {
@@ -390,7 +401,8 @@ async function promoteSelected(): Promise<void> {
       method: 'POST', body: JSON.stringify({ allow_unnumbered: allowUnnumbered }),
     });
     entry.status = 'approved'; dirty = false;
-    showToast(`${formatCodexNo(entry.codex_no)} ${entry.approved_name} approved to Codex`);
+    await refreshCodexEntries();
+    showToast('Added to Live Codex');
   } catch (error) { showToast(error instanceof Error ? error.message : 'Codex promotion failed'); }
 }
 
@@ -414,10 +426,22 @@ async function handleCodexAction(action: string, id: string): Promise<void> {
       const endpoint = action === 'send-back' ? 'send-back' : action === 'restore' ? 'restore' : 'remove';
       const result = await apiRequest<{ entry: CodexEntry }>(`/api/codex/entries/${encodeURIComponent(id)}/${endpoint}`, { method: 'POST', body: '{}' });
       Object.assign(entry, normalizeCodexEntry(result.entry));
-      showToast(action === 'send-back' ? 'Sent back to Intake Review' : action === 'restore' ? 'Codex entry restored' : 'Removed from default Live Codex');
+      showToast(action === 'send-back' ? 'Sent back to Review Queue' : action === 'restore' ? 'Codex entry restored' : 'Removed from default Live Codex');
     }
     render();
   } catch (error) { showToast(error instanceof Error ? error.message : 'Codex update failed'); }
+}
+
+function validatePromotion(entry: MonariEntry): string[] {
+  const missing: string[] = [];
+  if (!entry.approved_name.trim()) missing.push('approved name');
+  if (entry.codex_no !== null && (!Number.isInteger(entry.codex_no) || entry.codex_no <= 0)) missing.push('Codex No. must be blank or greater than 0');
+  if (!entry.rarity.trim()) missing.push('rarity');
+  if (!entry.element_1.trim()) missing.push('element 1');
+  if (!entry.taxonomy_primary.trim()) missing.push('primary taxonomy');
+  if (!Number.isFinite(Number(entry.stage_number)) || Number(entry.stage_number) <= 0) missing.push('stage');
+  if (!resolveEntryImage(entry)) missing.push('profile image or placeholder path');
+  return missing;
 }
 
 async function previewImport(file: File): Promise<void> {
