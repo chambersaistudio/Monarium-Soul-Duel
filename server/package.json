@@ -10,7 +10,9 @@
     "dev": "tsx watch src/index.ts",
     "migrate": "tsx src/scripts/migrate.ts",
     "import:batch": "tsx src/scripts/importBatchJson.ts",
-    "import:batch001": "tsx src/scripts/importBatchJson.ts seed/batch_001.json"
+    "import:batch001": "tsx src/scripts/importBatchJson.ts seed/batch_001.json",
+    "validate:seed-codex": "tsx src/scripts/validateSeedCodex.ts",
+    "test": "npm run validate:seed-codex"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.821.0",

@@ -4,7 +4,15 @@ ALTER TABLE monari_intake_entries
   ADD COLUMN IF NOT EXISTS promoted_to_codex_at TIMESTAMPTZ;
 
 UPDATE monari_intake_entries
-SET codex_no = dex_no
+SET codex_no = NULL
+WHERE codex_no IS NOT NULL AND codex_no <= 0;
+
+UPDATE monari_intake_entries
+SET codex_no = CASE
+  WHEN dex_no IS NULL THEN NULL
+  WHEN dex_no <= 0 THEN NULL
+  ELSE dex_no
+END
 WHERE codex_no IS NULL AND dex_no IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS monari_codex_entries (
